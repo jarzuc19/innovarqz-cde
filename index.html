@@ -1,1 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CDE | InnovArqZ S.A.S. (ISO 19650)</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <header class="cde-header">
+        <div class="logo">Innov<span>ArqZ</span> CDE</div>
+        <div id="userInfo" class="user-info">Cargando usuario...</div>
+    </header>
 
+    <main class="cde-container">
+        <!-- Banner de regla de 30 días para clientes -->
+        <div id="expirationBanner" class="alert-banner" style="display: none;">
+            ⚠️ <strong>Período de Gracia Activo:</strong> Su acceso de descarga estará activo por 30 días posteriores al Acta de Recibo a Satisfacción.
+        </div>
+
+        <section class="controls-panel">
+            <label for="projectSelect">Proyecto Activo:</label>
+            <select id="projectSelect" onchange="cargarArchivosProyecto()">
+                <option value="">Seleccione un proyecto...</option>
+            </select>
+        </section>
+
+        <!-- Estados ISO 19650 -->
+        <nav class="iso-tabs">
+            <button class="tab-btn active" onclick="cambiarEstadoISO('01_WIP')">01 WIP (Trabajo en Curso)</button>
+            <button class="tab-btn" onclick="cambiarEstadoISO('02_SHARED')">02 SHARED (Compartido)</button>
+            <button class="tab-btn" onclick="cambiarEstadoISO('03_PUBLISHED')">03 PUBLISHED (Publicado)</button>
+            <button class="tab-btn" onclick="cambiarEstadoISO('04_ARCHIVED')">04 ARCHIVED (Archivado)</button>
+        </nav>
+
+        <section class="files-table-container">
+            <table class="files-table">
+                <thead>
+                    <tr>
+                        <th>Nombre del Archivo</th>
+                        <th>Versión</th>
+                        <th>Disciplina</th>
+                        <th>Acción ISO 19650</th>
+                    </tr>
+                </thead>
+                <tbody id="filesTableBody">
+                    <tr>
+                        <td colspan="4" style="text-align: center;">Seleccione un proyecto para cargar archivos...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>
