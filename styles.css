@@ -1,1 +1,44 @@
+:root {
+    --bg-dark: #0f172a;
+    --bg-card: #1e293b;
+    --accent-copper: #d97706;
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --border-color: #334155;
+    --success-color: #10b981;
+}
 
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: sans-serif; }
+body { background-color: var(--bg-dark); color: var(--text-main); line-height: 1.6; }
+
+.cde-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 1rem 2rem; background: var(--bg-card); border-bottom: 1px solid var(--border-color);
+}
+.logo { font-size: 1.4rem; font-weight: 800; }
+.logo span { color: var(--accent-copper); }
+
+.cde-container { padding: 2rem; max-width: 1200px; margin: 0 auto; }
+
+.alert-banner {
+    background: rgba(217, 119, 6, 0.15); border: 1px solid var(--accent-copper);
+    color: var(--text-main); padding: 0.8rem 1.2rem; border-radius: 8px; margin-bottom: 1.5rem;
+}
+
+.controls-panel { margin-bottom: 1.5rem; }
+.controls-panel select {
+    background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color);
+    padding: 0.6rem 1rem; border-radius: 6px; outline: none;
+}
+
+.iso-tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+.tab-btn {
+    background: var(--bg-card); color: var(--text-muted); border: 1px solid var(--border-color);
+    padding: 0.6rem 1.2rem; border-radius: 6px; cursor: pointer;
+}
+.tab-btn.active { color: var(--text-main); border-color: var(--accent-copper); background: rgba(217, 119, 6, 0.1); }
+
+.files-table-container { background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden; }
+.files-table { width: 100%; border-collapse: collapse; text-align: left; }
+.files-table th, .files-table td { padding: 0.8rem 1.2rem; border-bottom: 1px solid var(--border-color); }
+.files-table th { background: rgba(0,0,0,0.2); color: var(--text-muted); font-size: 0.85rem; }
