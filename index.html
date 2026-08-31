@@ -5,8 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CDE | InnovArqZ Soluciones Integrales S.A.S.</title>
     <link rel="stylesheet" href="styles.css">
+    
+    <!-- SDK de Supabase & PDF.js -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+
+    <!-- Motor de Renderizado 3D WebGL para Archivos IFC (OpenBIM) -->
+    <script src="https://unpkg.com/three@0.135.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/web-ifc@0.0.34/web-ifc-api.js"></script>
+    <script src="https://unpkg.com/web-ifc-viewer@1.0.207/web-ifc-viewer.js"></script>
 </head>
 <body>
     <header class="navbar">
@@ -59,11 +66,16 @@
                 </table>
             </div>
 
-            <!-- CONTENEDOR DE VISORES -->
-            <div id="viewerContainer" class="card viewer-card hidden">
-                <button class="close-viewer" onclick="closeViewer()">X</button>
-                <div id="pdfViewerCanvas"></div>
-                <iframe id="ifcViewerFrame" src="" frameborder="0"></iframe>
+            <!-- CONTENEDOR MULTIMEDIA DE VISORES (PDF, IMÁGENES & IFC 3D) -->
+            <div id="viewerContainer" class="card viewer-card hidden" style="position: relative;">
+                <button class="close-viewer" onclick="closeViewer()" style="position: absolute; top: 12px; right: 12px; z-index: 1000; cursor: pointer;">✕</button>
+                
+                <!-- Visor 2D (Iframe para PDFs e Imágenes) -->
+                <div id="pdfViewerCanvas" style="display: none;"></div>
+                <iframe id="ifcViewerFrame" src="" frameborder="0" style="width: 100%; height: 550px; border: none; display: none;"></iframe>
+                
+                <!-- Lienzo WebGL para Renderizado 3D de Modelos IFC -->
+                <div id="threeCanvasContainer" style="width: 100%; height: 550px; display: none; background-color: #0f172a; border-radius: 8px; overflow: hidden;"></div>
             </div>
         </div>
     </div>
