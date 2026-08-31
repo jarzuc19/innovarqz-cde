@@ -1,35 +1,28 @@
 // ==============================================================================
-// VISOR MULTIMEDIA Y RENDERIZADOR 3D OPENBIM (IFC.js) - INNOVARQZ S.A.S.
+// GESTOR DE VISUALIZACIÓN Y DESCARGA CDE ISO 19650 — INNOVARQZ S.A.S.
 // ==============================================================================
 
-let ifcViewerInstance = null;
-
-async function openViewer(driveUrl, nombreArchivo) {
+function openViewer(driveUrl, nombreArchivo) {
     if (!driveUrl) {
-        alert("⚠️ No hay una URL válida asociada a este entregable.");
+        alert("⚠️ No hay una URL de archivo válida asociada a este entregable.");
         return;
     }
 
     const extension = nombreArchivo.split('.').pop().toLowerCase();
     const viewerContainer = document.getElementById("viewerContainer");
     const ifcFrame = document.getElementById("ifcViewerFrame");
-    const canvasContainer = document.getElementById("threeCanvasContainer");
 
-    if (!viewerContainer || !ifcFrame || !canvasContainer) return;
-
-    // Extraer File ID de Google Drive
+    // Extraer el File ID de Google Drive
     let fileId = "";
     const fileIdMatch = driveUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
     if (fileIdMatch && fileIdMatch[1]) {
         fileId = fileIdMatch[1];
     }
 
-    // --------------------------------------------------------------------------
-    // 1. CASO DOCUMENTOS 2D E IMÁGENES (.pdf, .png, .jpg)
-    // --------------------------------------------------------------------------
+    // 1. ARCHIVOS 2D E IMÁGENES (.pdf, .png, .jpg) -> Previsualización en Modal
     if (["pdf", "png", "jpg", "jpeg"].includes(extension)) {
-        canvasContainer.style.display = "none";
-        
+        if (!viewerContainer || !ifcFrame) return;
+
         const embedUrl = fileId ? `https://drive.google.com/file/d/${fileId}/preview` : driveUrl;
         
         ifcFrame.src = embedUrl;
@@ -37,60 +30,28 @@ async function openViewer(driveUrl, nombreArchivo) {
 
         viewerContainer.classList.remove("hidden");
         viewerContainer.style.display = "block";
+        viewerContainer.scrollIntoView({ behavior: "smooth" });
     } 
-    // --------------------------------------------------------------------------
-    // 2. CASO MODELO 3D IFC (.ifc) -> Renderizado 3D con IFC.js / WebGL
-    // --------------------------------------------------------------------------
-    else if (extension === "ifc") {
-        ifcFrame.style.display = "none";
-        canvasContainer.style.display = "block";
-        canvasContainer.innerHTML = ""; // Limpiar lienzo anterior
+    // 2. MODELOS 3D E INTERCHANGE (.ifc, .rvt, .dwg) -> Descarga Directa
+    else if (["ifc", "rvt", "dwg", "nwd"].includes(extension)) {
+        if (viewerContainer) closeViewer();
 
-        viewerContainer.classList.remove("hidden");
-        viewerContainer.style.display = "block";
-
-        try {
-            // Inicializar el visor WebGL de IFC.js
-            const container = document.getElementById("threeCanvasContainer");
-            ifcViewerInstance = new IFCViewerAPI.IfcViewerAPI({ container, backgroundColor: new THREE.Color(0x0f172a) });
-            ifcViewerInstance.axes.setAxes();
-            ifcViewerInstance.grid.setGrid();
-
-            // Configurar WASM para el decodificador nativo
-            ifcViewerInstance.IFC.setWasmPath("https://unpkg.com/web-ifc@0.0.34/");
-
-            // URL de descarga directa desde Google Drive
-            const directDownloadUrl = fileId 
-                ? `https://drive.google.com/uc?export=download&id=${fileId}` 
-                : driveUrl;
-
-            // Descargar el modelo en segundo plano y cargarlo en el lienzo 3D
-            const response = await fetch(directDownloadUrl);
-            const blob = await response.blob();
-            const file = new File([blob], nombreArchivo);
-
-            await ifcViewerInstance.IFC.loadIfc(file, true);
-        } catch (error) {
-            console.error("Error cargando el modelo IFC:", error);
-            alert("⚠️ No se pudo procesar la geometría 3D directamente desde Drive. Utilice el botón 'Descargar' para abrirlo localmente.");
-        }
+        const downloadUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : driveUrl;
+        
+        // Descarga inmediata del archivo para revisión en software de escritorio
+        window.location.href = downloadUrl;
     } 
-    // --------------------------------------------------------------------------
-    // 3. ARCHIVOS NATIVOS (.rvt, .dwg)
-    // --------------------------------------------------------------------------
+    // 3. OTROS FORMATOS
     else {
-        alert(`ℹ️ Los modelos nativos (.${extension}) no se pueden procesar directamente en el navegador de forma gratuita.\n\nUtilice el botón 'Descargar' para inspeccionarlo en Revit o AutoCAD.`);
+        window.open(driveUrl, "_blank");
     }
 }
 
 function closeViewer() {
     const viewerContainer = document.getElementById("viewerContainer");
     const ifcFrame = document.getElementById("ifcViewerFrame");
-    const canvasContainer = document.getElementById("threeCanvasContainer");
     
     if (ifcFrame) ifcFrame.src = "";
-    if (canvasContainer) canvasContainer.innerHTML = "";
-    
     if (viewerContainer) {
         viewerContainer.classList.add("hidden");
         viewerContainer.style.display = "none";
