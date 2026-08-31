@@ -10,6 +10,7 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Variables de Estado de la Aplicación
 let currentUser = null;
+let userPermissions = null; // Matriz de permisos del usuario activo
 let activeProjectId = null;
 let activeProjectCode = null;
 let activeTab = "01_WIP";
@@ -47,7 +48,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 // ==============================================================================
-// AUTENTICACIÓN
+// AUTENTICACIÓN Y EVALUACIÓN DE ROLES
 // ==============================================================================
 async function handleLogin(e) {
     e.preventDefault();
@@ -83,7 +84,7 @@ async function handleLogin(e) {
     document.getElementById("dashboardView").style.display = "block";
 
     const btnNewProject = document.getElementById("btnNewProject");
-    if (btnNewProject && user.cargo && (user.cargo.includes("BIM Manager") || user.cargo.includes("Director General"))) {
+    if (btnNewProject && user.cargo && (user.cargo.includes("BIM Manager") || user.cargo.includes("Director General") || user.cargo.includes("SUPER_ADMIN"))) {
         btnNewProject.style.display = "block";
     }
 
@@ -91,7 +92,7 @@ async function handleLogin(e) {
 }
 
 // ==============================================================================
-// GESTIÓN DE PROYECTOS
+// GESTIÓN DE PROYECTOS Y CONTROL DE PERMISOS
 // ==============================================================================
 async function loadProjects() {
     const { data: proyectos } = await supabaseClient
@@ -119,11 +120,57 @@ async function loadProjects() {
     }
 }
 
-function handleProjectChange(e) {
+async function handleProjectChange(e) {
     const selectedOption = e.target.options[e.target.selectedIndex];
     activeProjectId = e.target.value;
     activeProjectCode = selectedOption ? selectedOption.getAttribute("data-code") : null;
+
+    if (!activeProjectId) return;
+
+    // Consultar permisos específicos del usuario para el proyecto seleccionado
+    const { data: permisos } = await supabaseClient
+        .from("permisos_proyecto")
+        .select("*")
+        .eq("usuario_id", currentUser.id)
+        .eq("proyecto_id", activeProjectId)
+        .single();
+
+    // Si es SuperAdmin registrado directamente o tiene todos los permisos activos por defecto
+    if (!permisos && (currentUser.cargo === "SUPER_ADMIN" || currentUser.cargo?.includes("Director General"))) {
+        userPermissions = { permiso_wip: true, permiso_shared: true, permiso_published: true };
+    } else {
+        userPermissions = permisos || { permiso_wip: false, permiso_shared: false, permiso_published: true };
+    }
+
+    aplicarRestriccionPestanas();
     loadFiles();
+}
+
+// Oculta o muestra dinámicamente las pestañas según la matriz de permisos
+function aplicarRestriccionPestanas() {
+    const tabWip = document.querySelector('.tab-btn[data-tab="01_WIP"]');
+    const tabShared = document.querySelector('.tab-btn[data-tab="02_SHARED"]');
+    const tabPublished = document.querySelector('.tab-btn[data-tab="03_PUBLISHED"]');
+    const tabArchived = document.querySelector('.tab-btn[data-tab="04_ARCHIVED"]');
+
+    if (tabWip) tabWip.style.display = userPermissions.permiso_wip ? "inline-block" : "none";
+    if (tabShared) tabShared.style.display = userPermissions.permiso_shared ? "inline-block" : "none";
+    if (tabPublished) tabPublished.style.display = userPermissions.permiso_published ? "inline-block" : "none";
+    if (tabArchived) tabArchived.style.display = userPermissions.permiso_wip ? "inline-block" : "none";
+
+    // Redirección inteligente de pestaña activa si no tiene permiso en WIP
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+
+    if (!userPermissions.permiso_wip && userPermissions.permiso_published) {
+        activeTab = "03_PUBLISHED";
+        if (tabPublished) tabPublished.classList.add("active");
+    } else if (!userPermissions.permiso_wip && userPermissions.permiso_shared) {
+        activeTab = "02_SHARED";
+        if (tabShared) tabShared.classList.add("active");
+    } else {
+        activeTab = "01_WIP";
+        if (tabWip) tabWip.classList.add("active");
+    }
 }
 
 // ==============================================================================
