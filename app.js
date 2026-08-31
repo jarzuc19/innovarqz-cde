@@ -5,8 +5,10 @@ const SUPABASE_URL = "https://bjlqtzrcrofpqlmyvoob.supabase.co";
 const SUPABASE_KEY = "sb_publishable_htPtQvL-1wrLfu7ACHBg1w_epAZsu1E";
 const WEBHOOK_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbzMjRSmC_Lcqy6HuqOOMpTezhFXd1RsaIiA16HhLMlfIjWI_fuW42xpm26g4ZjKwyBDjw/exec";
 
+// Inicialización del cliente de Supabase
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// Variables de Estado de la Aplicación
 let currentUser = null;
 let userPermissions = null;
 let activeProjectId = null;
@@ -32,6 +34,7 @@ document.addEventListener("DOMContentLoaded", () => {
     setupDropdownWithOther("ubicacionSelect", "ubicacionOtherInput");
     setupDropdownWithOther("tipoSelect", "tipoOtherInput");
 
+    // Navegación fluida por pestañas ISO 19650
     document.querySelectorAll(".tab-btn").forEach(btn => {
         btn.addEventListener("click", (e) => {
             document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
@@ -48,9 +51,17 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 });
 
+// ==============================================================================
+// AUTENTICACIÓN Y EVALUACIÓN DE ROLES
+// ==============================================================================
 async function handleLogin(e) {
     e.preventDefault();
     const email = document.getElementById("emailInput").value.trim();
+
+    if (!email) {
+        alert("Por favor ingrese su correo electrónico.");
+        return;
+    }
 
     const { data: user, error } = await supabaseClient
         .from("usuarios")
@@ -65,10 +76,13 @@ async function handleLogin(e) {
 
     currentUser = user;
 
-    document.getElementById("userInfo").innerHTML = `
-        <strong>${user.nombre_completo}</strong><br>
-        <small style="color: var(--accent-copper);">${user.cargo || 'SuperAdmin'}</small>
-    `;
+    const userInfo = document.getElementById("userInfo");
+    if (userInfo) {
+        userInfo.innerHTML = `
+            <strong>${user.nombre_completo}</strong><br>
+            <small style="color: var(--accent-copper);">${user.cargo || 'SuperAdmin'}</small>
+        `;
+    }
 
     document.getElementById("loginView").style.display = "none";
     document.getElementById("dashboardView").style.display = "block";
@@ -86,6 +100,9 @@ async function handleLogin(e) {
     loadProjects();
 }
 
+// ==============================================================================
+// GESTIÓN DE PROYECTOS Y CONTROL DE PERMISOS
+// ==============================================================================
 async function loadProjects() {
     let proyectosVisibles = [];
 
@@ -110,6 +127,7 @@ async function loadProjects() {
 
     if (proyectosVisibles.length > 0) {
         const proyectosUnicos = new Map();
+
         proyectosVisibles.forEach(p => {
             if (p.codigo_proyecto && !proyectosUnicos.has(p.codigo_proyecto)) {
                 proyectosUnicos.set(p.codigo_proyecto, p);
@@ -191,7 +209,7 @@ async function cargarTimelineActividad() {
         if (l.archivo_nombre.startsWith("NOTA_TECNICA_")) {
             html += `<li style='color: #ef4444;'><strong>${fecha}</strong> — ⚠️ <strong>${l.drive_file_url}</strong></li>`;
         } else {
-            html += `<li><strong>${fecha}</strong> — Entregable: <em>${l.archivo_nombre}</em> en <span class="badge" style="font-size:0.75rem;">${l.estado_destino}</span></li>`;
+            html += `<li><strong>${fecha}</strong> — Entregable: <em>${l.archivo_nombre}</em> en <span class="badge" style="font-size:0.75rem;">${l.estado_destino || l.estado_origen}</span></li>`;
         }
     });
     html += "</ul>";
@@ -199,7 +217,7 @@ async function cargarTimelineActividad() {
 }
 
 // ==============================================================================
-// SUBIDA DE ARCHIVOS CON REGLA ESTRICTA DE NOMENCLATURA ISO 19650
+// SUBIDA DE ARCHIVOS Y CONTROL DE ISO 19650
 // ==============================================================================
 function openUploadModal() {
     const modal = document.getElementById("uploadModal");
@@ -211,7 +229,6 @@ function closeUploadModal() {
     if (modal) modal.className = "modal-hidden";
 }
 
-// VALIDADOR ESTRICTO DE NOMENCLATURA ISO 19650 ([PROY]_[ORIG]_[ZONA]_[TIPO]_[DISC]_[EST])
 function validarNomenclaturaISO19650(nombreArchivo) {
     const nombreSinExt = nombreArchivo.split('.').slice(0, -1).join('.');
     const partes = nombreSinExt.split('_');
@@ -232,7 +249,6 @@ async function handleFileUpload(e) {
 
     const file = fileInput.files[0];
 
-    // REGLA FUNDAMENTAL ISO 19650: Bloqueo de subida si no cumple la nomenclatura
     if (!validarNomenclaturaISO19650(file.name) && !file.name.endsWith(".html")) {
         alert(`❌ REGLA ISO 19650 INCUMPLIDA:\n\nEl archivo "${file.name}" no cumple con el estándar de denominación:\n[PROYECTO]_[ORIGINADOR]_[ZONA]_[TIPO]_[DISCIPLINA]_[ESTADO]\n\nEjemplo válido: PRY2026-001_INNOVARQZ_ZZ_M3_ARQ_S1.ifc\n\nPor favor renómbrelo localmente antes de volver a subirlo.`);
         return;
@@ -402,7 +418,7 @@ async function generarPDFActaRecibo(observaciones) {
 
     page.drawText("Lista de Archivos Recibidos a Satisfacción:", { x: 50, y: 610, size: 11, font });
 
-    const { data: files } = await supabaseClient.from("audit_logs").select("*").eq("proyecto_id", activeProjectId).eq("estado_destino", "03_PUBLISHED");
+    const { data: files } = await supabaseClient.from("audit_logs").select("*").eq("proyecto_id", activeProjectId).or(`estado_destino.eq.03_PUBLISHED,estado_origen.eq.03_PUBLISHED`);
 
     let yPos = 585;
     if (files) {
@@ -423,17 +439,18 @@ async function generarPDFActaRecibo(observaciones) {
 }
 
 // ==============================================================================
-// RENDERIZADO DE ENTREGABLES (MOSTRANDO TODAS LAS RE-SUBIDAS CON SU HORA)
+// RENDERIZADO DE ENTREGABLES (CONSULTA FLEXIBLE ORIGEN / DESTINO)
 // ==============================================================================
 async function loadFiles() {
     const tbody = document.getElementById("filesTableBody");
     if (!tbody || !activeProjectId) return;
 
+    // Consulta flexible para resolver discrepancias entre estado_destino y estado_origen
     const { data: files, error } = await supabaseClient
         .from("audit_logs")
         .select("*")
         .eq("proyecto_id", activeProjectId)
-        .eq("estado_destino", activeTab)
+        .or(`estado_destino.eq.${activeTab},estado_origen.eq.${activeTab}`)
         .order("created_at", { ascending: false });
 
     tbody.innerHTML = "";
@@ -444,7 +461,6 @@ async function loadFiles() {
     }
 
     files.forEach(f => {
-        // Ignorar las notas técnicas internas en la lista principal
         if (f.archivo_nombre.startsWith("ACTA_DECISION_CLIENTE") || f.archivo_nombre.startsWith("NOTA_TECNICA_")) {
             return;
         }
