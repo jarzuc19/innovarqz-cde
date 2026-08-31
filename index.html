@@ -61,16 +61,10 @@
                 </table>
             </div>
 
-            <!-- CONTENEDOR MULTIMEDIA DE VISORES (PDF, IMÁGENES & VIDEOS) -->
+            <!-- CONTENEDOR DE VISOR DEDICADO A PDF E IMÁGENES -->
             <div id="viewerContainer" class="card viewer-card hidden" style="position: relative;">
                 <button class="close-viewer" onclick="closeViewer()" style="position: absolute; top: 12px; right: 12px; z-index: 1000; cursor: pointer;">✕</button>
-                
-                <!-- Visor 2D (Iframe para PDFs e Imágenes) -->
-                <div id="pdfViewerCanvas" style="display: none;"></div>
                 <iframe id="ifcViewerFrame" src="" frameborder="0" style="width: 100%; height: 550px; border: none; display: none;"></iframe>
-                
-                <!-- Reproductor de Video Nativo (.mp4, .webm) -->
-                <video id="videoViewerTag" controls style="width: 100%; height: 550px; background: #000; display: none; border-radius: 8px;"></video>
             </div>
         </div>
     </div>
