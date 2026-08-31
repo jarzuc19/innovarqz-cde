@@ -260,13 +260,12 @@ async function loadFiles() {
         return;
     }
 
-    // Consulta directa por el UUID del proyecto y la pestaña ISO seleccionada
+    // Consulta simplificada para evitar fallos de columnas de fecha inexistentes
     const { data: files, error } = await supabaseClient
         .from("audit_logs")
         .select("*")
         .eq("proyecto_id", activeProjectId)
-        .eq("estado_destino", activeTab)
-        .order("creado_en", { ascending: false });
+        .eq("estado_destino", activeTab);
 
     tbody.innerHTML = "";
 
