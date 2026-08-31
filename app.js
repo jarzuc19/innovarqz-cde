@@ -297,7 +297,7 @@ async function loadFiles() {
                     <td><span class="badge">${estadoISO}</span></td>
                     <td>${f.version || 'V1.0'}</td>
                     <td>
-                        <button class="btn-secondary" onclick="openViewer('${f.drive_file_url}')">Ver</button>
+                        <button class="btn-secondary" onclick="openViewer('${f.drive_file_url}', '${nombreCompleto}')">Ver</button>
                         <a href="${f.drive_file_url}" target="_blank" class="btn-primary" style="text-decoration:none; font-size: 0.8rem; padding: 0.4rem 0.8rem;">Descargar</a>
                     </td>
                 </tr>
