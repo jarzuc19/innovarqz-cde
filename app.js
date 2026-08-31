@@ -5,13 +5,18 @@ const SUPABASE_URL = "https://bjlqtzrcrofpqlmyvoob.supabase.co";
 const SUPABASE_KEY = "sb_publishable_htPtQvL-1wrLfu7ACHBg1w_epAZsu1E";
 const WEBHOOK_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbyrLMTUnmYqkABhNTFQpQNGvmc0MpspzjvEv2EqUNklQ5a2jMxpRtytzuPwPwPwoyCWtQ/exec";
 
+// Inicialización del cliente de Supabase
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// Variables de Estado de la Aplicación
 let currentUser = null;
 let activeProjectId = null;
 let activeProjectCode = null;
 let activeTab = "01_WIP";
 
+// ==============================================================================
+// INICIALIZACIÓN Y EVENT LISTENERS
+// ==============================================================================
 document.addEventListener("DOMContentLoaded", () => {
     const loginForm = document.getElementById("loginForm");
     if (loginForm) loginForm.addEventListener("submit", handleLogin);
@@ -30,6 +35,7 @@ document.addEventListener("DOMContentLoaded", () => {
     setupDropdownWithOther("ubicacionSelect", "ubicacionOtherInput");
     setupDropdownWithOther("tipoSelect", "tipoOtherInput");
 
+    // Navegación por pestañas ISO 19650
     document.querySelectorAll(".tab-btn").forEach(btn => {
         btn.addEventListener("click", (e) => {
             document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
@@ -40,6 +46,9 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 });
 
+// ==============================================================================
+// AUTENTICACIÓN
+// ==============================================================================
 async function handleLogin(e) {
     e.preventDefault();
     const email = document.getElementById("emailInput").value.trim();
@@ -81,6 +90,9 @@ async function handleLogin(e) {
     loadProjects();
 }
 
+// ==============================================================================
+// GESTIÓN DE PROYECTOS
+// ==============================================================================
 async function loadProjects() {
     const { data: proyectos } = await supabaseClient
         .from("proyectos")
@@ -114,6 +126,9 @@ function handleProjectChange(e) {
     loadFiles();
 }
 
+// ==============================================================================
+// MODAL DE CREACIÓN DE PROYECTOS
+// ==============================================================================
 async function prepareAndOpenProjectModal() {
     const yearCurrent = new Date().getFullYear();
     const prefix = `PRY${yearCurrent}`;
@@ -233,6 +248,9 @@ function closeProjectModal() {
     if (modal) modal.className = "modal-hidden";
 }
 
+// ==============================================================================
+// CARGA Y RENDERIZADO DE ENTREGABLES ISO 19650
+// ==============================================================================
 async function loadFiles() {
     const tbody = document.getElementById("filesTableBody");
     if (!tbody) return;
@@ -242,34 +260,23 @@ async function loadFiles() {
         return;
     }
 
+    // Consulta directa por el UUID del proyecto y la pestaña ISO seleccionada
     const { data: files, error } = await supabaseClient
         .from("audit_logs")
         .select("*")
+        .eq("proyecto_id", activeProjectId)
         .eq("estado_destino", activeTab)
         .order("creado_en", { ascending: false });
 
     tbody.innerHTML = "";
 
     if (error || !files || files.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5">No hay entregables en la pestaña <strong>${activeTab}</strong>.</td></tr>`;
-        return;
-    }
-
-    const archivosFiltrados = files.filter(f => {
-        if (!f.proyecto_id && !f.codigo_proyecto) return true;
-        return f.proyecto_id === activeProjectId || 
-               f.proyecto_id === activeProjectCode || 
-               f.codigo_proyecto === activeProjectCode ||
-               f.codigo_proyecto === activeProjectId;
-    });
-
-    if (archivosFiltrados.length === 0) {
         tbody.innerHTML = `<tr><td colspan="5">No hay entregables en la pestaña <strong>${activeTab}</strong> para este proyecto.</td></tr>`;
         return;
     }
 
     const archivosUnicos = new Map();
-    archivosFiltrados.forEach(f => {
+    files.forEach(f => {
         if (!archivosUnicos.has(f.archivo_nombre)) {
             archivosUnicos.set(f.archivo_nombre, f);
         }
