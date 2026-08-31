@@ -260,7 +260,6 @@ async function loadFiles() {
         return;
     }
 
-    // Consulta simplificada para evitar fallos de columnas de fecha inexistentes
     const { data: files, error } = await supabaseClient
         .from("audit_logs")
         .select("*")
@@ -289,6 +288,10 @@ async function loadFiles() {
         const disciplina = esValidoISO ? parts[4] : "SIN_FORMATO";
         const estadoISO = esValidoISO ? parts[5].split(".")[0] : activeTab;
 
+        // Validar si la extensión permite vista previa (Ver)
+        const ext = nombreCompleto.split('.').pop().toLowerCase();
+        const esVisualizable = ["pdf", "png", "jpg", "jpeg", "mp4", "webm", "mov"].includes(ext);
+
         if (esValidoISO) {
             tbody.innerHTML += `
                 <tr>
@@ -297,7 +300,7 @@ async function loadFiles() {
                     <td><span class="badge">${estadoISO}</span></td>
                     <td>${f.version || 'V1.0'}</td>
                     <td>
-                        <button class="btn-secondary" onclick="openViewer('${f.drive_file_url}', '${nombreCompleto}')">Ver</button>
+                        ${esVisualizable ? `<button class="btn-secondary" onclick="openViewer('${f.drive_file_url}', '${nombreCompleto}')">Ver</button>` : ''}
                         <a href="${f.drive_file_url}" target="_blank" class="btn-primary" style="text-decoration:none; font-size: 0.8rem; padding: 0.4rem 0.8rem;">Descargar</a>
                     </td>
                 </tr>
