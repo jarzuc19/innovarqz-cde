@@ -22,7 +22,7 @@ function openViewer(driveUrl, nombreArchivo) {
         fileId = fileIdMatch[1];
     }
 
-    // 1. CASO DOCUMENTOS 2D E IMÁGENES (PDF, PNG, JPG) -> Vista Previa Nativa en iframe
+    // 1. CASO DOCUMENTOS 2D E IMÁGENES (PDF, PNG, JPG) -> Vista Previa Integrada
     if (["pdf", "png", "jpg", "jpeg"].includes(extension)) {
         if (pdfCanvas) pdfCanvas.style.display = "none";
         
@@ -37,20 +37,39 @@ function openViewer(driveUrl, nombreArchivo) {
         viewerContainer.style.display = "block";
         viewerContainer.scrollIntoView({ behavior: "smooth" });
     } 
-    // 2. CASO MODELOS B3D / IFC -> Redirección a Visor OpenBIM WebGL
+    // 2. CASO MODELOS 3D IFC -> Redirección limpia a descarga/inspección
     else if (extension === "ifc") {
-        // Opción A: Abrir el visualizador 3D OpenBIM online especializado
-        const directDownloadUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : driveUrl;
-        const bimViewerUrl = `https://ifcviewer.com/`;
+        if (viewerContainer) {
+            viewerContainer.classList.add("hidden");
+            viewerContainer.style.display = "none";
+        }
 
-        alert("ℹ️ Los modelos IFC 3D requieren un motor de renderizado WebGL.\n\nSe abrirá el archivo en el visor OpenBIM. Si prefiere trabajar localmente, utilice el botón 'Descargar'.");
-        
-        // Copiar o abrir enlace en nueva pestaña para inspección 3D
-        window.open(driveUrl, "_blank");
+        const downloadUrl = fileId 
+            ? `https://drive.google.com/uc?export=download&id=${fileId}` 
+            : driveUrl;
+
+        // Abrir ventana directa de descarga/inspección sin pasar por la vista previa gris de Drive
+        const confirmDownload = confirm(
+            `📦 Modelo IFC detectado: ${nombreArchivo}\n\n` +
+            `Google Drive no posee renderizador 3D nativo.\n` +
+            `¿Desea descargar el archivo directamente para abrirlo en Solibri, BIMvision o su visor OpenBIM local?`
+        );
+
+        if (confirmDownload) {
+            window.location.href = downloadUrl;
+        }
     } 
     // 3. CASO MODELOS NATIVOS (RVT, DWG) -> Notificación Pedagógica
     else {
-        alert(`ℹ️ Los archivos nativos (.${extension}) no poseen previsualización 3D en el navegador.\n\nUtilice el botón 'Descargar' para abrirlos en su software de escritorio (Revit, Civil 3D, AutoCAD).`);
+        if (viewerContainer) {
+            viewerContainer.classList.add("hidden");
+            viewerContainer.style.display = "none";
+        }
+        
+        alert(
+            `ℹ️ Archivo nativo (.${extension}).\n\n` +
+            `Utilice el botón 'Descargar' para abrirlo en su software de escritorio (Revit, Civil 3D, AutoCAD).`
+        );
     }
 }
 
