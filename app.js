@@ -5,17 +5,17 @@ const SUPABASE_URL = "https://bjlqtzrcrofpqlmyvoob.supabase.co";
 const SUPABASE_KEY = "sb_publishable_htPtQvL-1wrLfu7ACHBg1w_epAZsu1E";
 const WEBHOOK_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbyrLMTUnmYqkABhNTFQpQNGvmc0MpspzjvEv2EqUNklQ5a2jMxpRtytzuPwPwPwoyCWtQ/exec";
 
-// Inicialización del cliente de Supabase
+// Inicialización del cliente de Supabase (Evita colisión de identificadores con la librería global)
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Variables globales de estado
+// Variables globales de estado de la aplicación
 let currentUser = null;
 let activeProjectId = null;
 let activeProjectCode = null;
 let activeTab = "01_WIP";
 
 // ==============================================================================
-// INICIALIZACIÓN DE EVENTOS
+// INICIALIZACIÓN DE EVENTOS AL CREGAR EL DOM
 // ==============================================================================
 document.addEventListener("DOMContentLoaded", () => {
     const loginForm = document.getElementById("loginForm");
@@ -34,6 +34,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const createProjectForm = document.getElementById("createProjectForm");
     if (createProjectForm) createProjectForm.addEventListener("submit", handleCreateProject);
 
+    // Navegación interactiva por pestañas normativas ISO 19650
     document.querySelectorAll(".tab-btn").forEach(btn => {
         btn.addEventListener("click", (e) => {
             document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
@@ -45,7 +46,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 // ==============================================================================
-// AUTENTICACIÓN
+// AUTENTICACIÓN Y ACCESO AL PORTAL CDE
 // ==============================================================================
 async function handleLogin(e) {
     e.preventDefault();
@@ -77,9 +78,11 @@ async function handleLogin(e) {
         `;
     }
 
+    // Transición de pantallas (Formulario de Login -> Panel CDE)
     document.getElementById("loginView").style.display = "none";
     document.getElementById("dashboardView").style.display = "block";
 
+    // Habilitar la creación autónoma de proyectos para BIM Manager / Director General
     const btnNewProject = document.getElementById("btnNewProject");
     if (btnNewProject && user.cargo && (user.cargo.includes("BIM Manager") || user.cargo.includes("Director General"))) {
         btnNewProject.style.display = "block";
@@ -89,13 +92,18 @@ async function handleLogin(e) {
 }
 
 // ==============================================================================
-// GESTIÓN DE PROYECTOS (DESDUPLICACIÓN DE MENÚ)
+// GESTIÓN DE PROYECTOS Y DESDUPLICACIÓN
 // ==============================================================================
 async function loadProjects() {
-    const { data: proyectos, error } = await supabaseClient.from("proyectos").select("*");
+    // Consulta los proyectos filtrados por su estado 'activo' en Supabase
+    const { data: proyectos, error } = await supabaseClient
+        .from("proyectos")
+        .select("*")
+        .eq("activo", true);
+
     const select = document.getElementById("projectSelect");
-    
     if (!select) return;
+    
     select.innerHTML = '<option value="">-- Seleccionar Proyecto --</option>';
 
     if (proyectos && proyectos.length > 0) {
@@ -155,7 +163,7 @@ function closeProjectModal() {
 }
 
 // ==============================================================================
-// RENDERIZADO DE ENTREGABLES (FILTRADO ROBUSCO POR PROYECTO Y PESTAÑA)
+// RENDERIZADO DE ENTREGABLES ISO 19650 Y VISUALIZACIÓN
 // ==============================================================================
 async function loadFiles() {
     const tbody = document.getElementById("filesTableBody");
@@ -166,7 +174,7 @@ async function loadFiles() {
         return;
     }
 
-    // Consulta flexible: busca coincidencias por proyecto_id (UUID) O por el nombre/código en audit_logs
+    // Consulta flexible en la tabla de auditoría para la pestaña seleccionada
     const { data: files, error } = await supabaseClient
         .from("audit_logs")
         .select("*")
@@ -180,9 +188,9 @@ async function loadFiles() {
         return;
     }
 
-    // Filtra los archivos pertenecientes al proyecto seleccionado o los que no tengan id asignado explícito
+    // Filtrar los entregables asociados al proyecto activo
     const archivosFiltrados = files.filter(f => {
-        if (!f.proyecto_id) return true; // Si no está asociado a un ID específico, lo muestra por defecto
+        if (!f.proyecto_id) return true;
         return f.proyecto_id === activeProjectId || f.proyecto_id === activeProjectCode;
     });
 
@@ -191,7 +199,7 @@ async function loadFiles() {
         return;
     }
 
-    // Filtro para mostrar solo la versión más reciente por nombre de archivo
+    // Filtrado de duplicados para mantener la última versión de cada entregable
     const archivosUnicos = new Map();
     archivosFiltrados.forEach(f => {
         if (!archivosUnicos.has(f.archivo_nombre)) {
