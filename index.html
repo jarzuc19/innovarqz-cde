@@ -6,9 +6,10 @@
     <title>CDE | InnovArqZ Soluciones Integrales S.A.S.</title>
     <link rel="stylesheet" href="styles.css">
     
-    <!-- SDK de Supabase & PDF.js -->
+    <!-- SDK de Supabase, PDF.js & Generador PDF (pdf-lib) -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
 </head>
 <body>
     <header class="navbar">
@@ -47,20 +48,26 @@
                 <button class="tab-btn" data-tab="04_ARCHIVED">04_ARCHIVED (Archivado)</button>
             </div>
 
-            <!-- MÓDULO EXCLUSIVO DE APROBACIÓN Y CONTEO DE 30 DÍAS (CLIENTE) -->
+            <!-- CONTENEDOR DINÁMICO DE ACTIVIDAD Y NOTAS TÉCNICAS (AUDITORÍA) -->
+            <div id="activityTimeline" class="card" style="display: none; background: rgba(15, 23, 42, 0.6); padding: 12px 18px; margin-bottom: 1.5rem; border-left: 4px solid var(--accent-copper); font-size: 0.88rem;">
+                <!-- Inyectado dinámicamente por app.js -->
+            </div>
+
+            <!-- MÓDULO EXCLUSIVO DE VISTO BUENO Y FIRMA DIGITAL (CLIENTE) -->
             <div id="clientApprovalCard" class="card" style="display: none; border-left: 4px solid var(--accent-copper); background: rgba(217, 119, 6, 0.05); margin-bottom: 1.5rem;">
-                <h3>📜 Visto Bueno & Acta de Recibo del Cliente</h3>
-                <p><small>Revise los entregables publicados a continuación. Al otorgar la aprobación final, se iniciará la ventana contractual de 30 días de acceso activo.</small></p>
+                <h3>📜 Visto Bueno & Firma del Acta de Recibo</h3>
+                <p><small>Al autorizar la aprobación, el sistema compilará automáticamente el Acta de Recibo en PDF con el sello digital y el checklist de entregables.</small></p>
                 <div style="margin-top: 10px;">
                     <textarea id="clientComments" placeholder="Escriba sus observaciones o comentarios sobre los entregables..." style="width: 100%; height: 70px; padding: 8px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #fff;"></textarea>
                 </div>
                 <div style="margin-top: 10px; display: flex; gap: 10px; align-items: center;">
-                    <button class="btn-primary" onclick="procesarAprobacionCliente('APROBADO')">Aprobar y Firmar Recibo</button>
+                    <button class="btn-primary" onclick="procesarAprobacionCliente('APROBADO')">Aprobar y Generar Acta PDF</button>
                     <button class="btn-secondary" style="background: #ef4444; color: #fff; border:none;" onclick="procesarAprobacionCliente('RECHAZADO')">Solicitar Ajustes</button>
                     <span id="accessTimer" style="margin-left: auto; font-weight: bold; color: var(--accent-copper); font-size: 0.9rem;"></span>
                 </div>
             </div>
 
+            <!-- TABLA PRINCIPAL DE ENTREGABLES ISO 19650 -->
             <div class="card table-card">
                 <table id="filesTable">
                     <thead>
@@ -78,7 +85,7 @@
                 </table>
             </div>
 
-            <!-- CONTENEDOR DE VISOR DEDICADO A PDF, IMÁGENES E INFORMES HTML -->
+            <!-- VISOR 2D / IMÁGENES / REPORTES HTML -->
             <div id="viewerContainer" class="card viewer-card hidden" style="position: relative;">
                 <button class="close-viewer" onclick="closeViewer()" style="position: absolute; top: 12px; right: 12px; z-index: 1000; cursor: pointer;">✕</button>
                 <iframe id="ifcViewerFrame" src="" frameborder="0" style="width: 100%; height: 550px; border: none; display: none;"></iframe>
@@ -86,7 +93,7 @@
         </div>
     </div>
 
-    <!-- MODAL DE CARGA Y ANEXO DE INFORMES / ENTREGABLES -->
+    <!-- MODAL DE SUBIDA Y ANEXO DE INFORMES TÉCNICOS -->
     <div id="uploadModal" class="modal-hidden">
         <div class="modal-content card" style="max-width: 500px;">
             <h3>Subir / Anexar Entregable al CDE</h3>
@@ -111,7 +118,7 @@
         </div>
     </div>
 
-    <!-- MODAL CREACIÓN DE PROYECTO CON DROPDOWNS -->
+    <!-- MODAL CREACIÓN DE PROYECTOS ISO 19650 -->
     <div id="projectModal" class="modal-hidden">
         <div class="modal-content card">
             <h3>Crear Nuevo Proyecto en CDE</h3>
