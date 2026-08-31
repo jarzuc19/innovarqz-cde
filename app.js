@@ -273,11 +273,10 @@ async function loadFiles() {
         return;
     }
 
+    // Mantener solo la última versión registrada de cada archivo
     const archivosUnicos = new Map();
     files.forEach(f => {
-        if (!archivosUnicos.has(f.archivo_nombre)) {
-            archivosUnicos.set(f.archivo_nombre, f);
-        }
+        archivosUnicos.set(f.archivo_nombre, f);
     });
 
     archivosUnicos.forEach(f => {
@@ -288,9 +287,9 @@ async function loadFiles() {
         const disciplina = esValidoISO ? parts[4] : "SIN_FORMATO";
         const estadoISO = esValidoISO ? parts[5].split(".")[0] : activeTab;
 
-        // Validar si la extensión permite vista previa (Ver)
+        // Estricto: El botón VER solo aparece en PDFs e imágenes
         const ext = nombreCompleto.split('.').pop().toLowerCase();
-        const esVisualizable = ["pdf", "png", "jpg", "jpeg", "mp4", "webm", "mov"].includes(ext);
+        const esVisualizable = ["pdf", "png", "jpg", "jpeg"].includes(ext);
 
         if (esValidoISO) {
             tbody.innerHTML += `
