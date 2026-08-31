@@ -5,27 +5,24 @@ const SUPABASE_URL = "https://bjlqtzrcrofpqlmyvoob.supabase.co";
 const SUPABASE_KEY = "sb_publishable_htPtQvL-1wrLfu7ACHBg1w_epAZsu1E";
 const WEBHOOK_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbyrLMTUnmYqkABhNTFQpQNGvmc0MpspzjvEv2EqUNklQ5a2jMxpRtytzuPwPwPwoyCWtQ/exec";
 
-// Inicialización del cliente de Supabase (Evita colisión de identificadores)
+// Inicialización del cliente de Supabase
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Variables de Estado
+// Variables globales de estado
 let currentUser = null;
-let activeProject = null;
+let activeProjectId = null;
+let activeProjectCode = null;
 let activeTab = "01_WIP";
 
 // ==============================================================================
-// INICIALIZACIÓN Y EVENT LISTENERS
+// INICIALIZACIÓN DE EVENTOS
 // ==============================================================================
 document.addEventListener("DOMContentLoaded", () => {
     const loginForm = document.getElementById("loginForm");
-    if (loginForm) {
-        loginForm.addEventListener("submit", handleLogin);
-    }
+    if (loginForm) loginForm.addEventListener("submit", handleLogin);
 
     const projectSelect = document.getElementById("projectSelect");
-    if (projectSelect) {
-        projectSelect.addEventListener("change", handleProjectChange);
-    }
+    if (projectSelect) projectSelect.addEventListener("change", handleProjectChange);
 
     const btnNewProject = document.getElementById("btnNewProject");
     if (btnNewProject) {
@@ -35,9 +32,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const createProjectForm = document.getElementById("createProjectForm");
-    if (createProjectForm) {
-        createProjectForm.addEventListener("submit", handleCreateProject);
-    }
+    if (createProjectForm) createProjectForm.addEventListener("submit", handleCreateProject);
 
     document.querySelectorAll(".tab-btn").forEach(btn => {
         btn.addEventListener("click", (e) => {
@@ -94,7 +89,7 @@ async function handleLogin(e) {
 }
 
 // ==============================================================================
-// GESTIÓN DE PROYECTOS (CON FILTRO DE DUPLICADOS)
+// GESTIÓN DE PROYECTOS (DESDUPLICACIÓN DE MENÚ)
 // ==============================================================================
 async function loadProjects() {
     const { data: proyectos, error } = await supabaseClient.from("proyectos").select("*");
@@ -104,7 +99,6 @@ async function loadProjects() {
     select.innerHTML = '<option value="">-- Seleccionar Proyecto --</option>';
 
     if (proyectos && proyectos.length > 0) {
-        // MAPA PARA EVITAR NOMBRES/CÓDIGOS DUPLICADOS EN EL DESPLEGABLE
         const proyectosUnicos = new Map();
 
         proyectos.forEach(p => {
@@ -120,7 +114,9 @@ async function loadProjects() {
 }
 
 function handleProjectChange(e) {
-    activeProject = e.target.value;
+    const selectedOption = e.target.options[e.target.selectedIndex];
+    activeProjectId = e.target.value;
+    activeProjectCode = selectedOption ? selectedOption.getAttribute("data-code") : null;
     loadFiles();
 }
 
@@ -155,42 +151,49 @@ async function handleCreateProject(e) {
 
 function closeProjectModal() {
     const modal = document.getElementById("projectModal");
-    if (modal) {
-        modal.className = "modal-hidden";
-    }
+    if (modal) modal.className = "modal-hidden";
 }
 
 // ==============================================================================
-// GESTIÓN Y RENDERIZADO DE ENTREGABLES (FILTRADO POR PROYECTO ACTIVO Y PESTAÑA)
+// RENDERIZADO DE ENTREGABLES (FILTRADO ROBUSCO POR PROYECTO Y PESTAÑA)
 // ==============================================================================
 async function loadFiles() {
     const tbody = document.getElementById("filesTableBody");
     if (!tbody) return;
 
-    if (!activeProject) {
+    if (!activeProjectId) {
         tbody.innerHTML = '<tr><td colspan="5">Seleccione un proyecto para visualizar los entregables.</td></tr>';
         return;
     }
 
-    // Consulta filtrando obligatoriamente por PROYECTO ACTIVO y PESTAÑA
+    // Consulta flexible: busca coincidencias por proyecto_id (UUID) O por el nombre/código en audit_logs
     const { data: files, error } = await supabaseClient
         .from("audit_logs")
         .select("*")
-        .eq("proyecto_id", activeProject)
         .eq("estado_destino", activeTab)
         .order("creado_en", { ascending: false });
 
     tbody.innerHTML = "";
 
-    if (!files || files.length === 0) {
+    if (error || !files || files.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5">No hay entregables registrados en la pestaña <strong>${activeTab}</strong>.</td></tr>`;
+        return;
+    }
+
+    // Filtra los archivos pertenecientes al proyecto seleccionado o los que no tengan id asignado explícito
+    const archivosFiltrados = files.filter(f => {
+        if (!f.proyecto_id) return true; // Si no está asociado a un ID específico, lo muestra por defecto
+        return f.proyecto_id === activeProjectId || f.proyecto_id === activeProjectCode;
+    });
+
+    if (archivosFiltrados.length === 0) {
         tbody.innerHTML = `<tr><td colspan="5">No hay entregables registrados en la pestaña <strong>${activeTab}</strong> para este proyecto.</td></tr>`;
         return;
     }
 
-    // Mapa para mostrar únicamente la última versión de cada archivo
+    // Filtro para mostrar solo la versión más reciente por nombre de archivo
     const archivosUnicos = new Map();
-
-    files.forEach(f => {
+    archivosFiltrados.forEach(f => {
         if (!archivosUnicos.has(f.archivo_nombre)) {
             archivosUnicos.set(f.archivo_nombre, f);
         }
