@@ -163,7 +163,7 @@ function closeProjectModal() {
 }
 
 // ==============================================================================
-// GESTIÓN Y RENDERIZADO DE ENTREGABLES ISO 19650
+// GESTIÓN Y RENDERIZADO DE ENTREGABLES ISO 19650 (CON FILTRO DE DUPLICADOS)
 // ==============================================================================
 async function loadFiles() {
     const tbody = document.getElementById("filesTableBody");
@@ -174,11 +174,12 @@ async function loadFiles() {
         return;
     }
 
-    // Consulta a la tabla audit_logs por estado activo (01_WIP, 02_SHARED, 03_PUBLISHED, 04_ARCHIVED)
+    // Consulta los registros de audit_logs para la pestaña activa ordenados del más reciente
     const { data: files, error } = await supabaseClient
         .from("audit_logs")
         .select("*")
-        .eq("estado_destino", activeTab);
+        .eq("estado_destino", activeTab)
+        .order("creado_en", { ascending: false });
 
     tbody.innerHTML = "";
 
@@ -187,7 +188,16 @@ async function loadFiles() {
         return;
     }
 
+    // MAPA PARA EVITAR DUPLICADOS Y MOSTRAR ÚNICAMENTE LA VERSIÓN MÁS RECIENTE
+    const archivosUnicos = new Map();
+
     files.forEach(f => {
+        if (!archivosUnicos.has(f.archivo_nombre)) {
+            archivosUnicos.set(f.archivo_nombre, f);
+        }
+    });
+
+    archivosUnicos.forEach(f => {
         // Desglose sintáctico de la nomenclatura ISO 19650
         const parts = f.archivo_nombre ? f.archivo_nombre.split("-") : [];
         const disciplina = parts[4] || "GENERAL";
