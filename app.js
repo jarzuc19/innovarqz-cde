@@ -439,32 +439,64 @@ async function generarPDFActaRecibo(observaciones) {
 }
 
 // ==============================================================================
-// RENDERIZADO DE ENTREGABLES (CONSULTA FLEXIBLE ORIGEN / DESTINO)
+// RENDERIZADO DE ENTREGABLES (FILTRADO LOCAL ROBUSTO)
 // ==============================================================================
 async function loadFiles() {
     const tbody = document.getElementById("filesTableBody");
     if (!tbody || !activeProjectId) return;
 
-    // Consulta flexible para resolver discrepancias entre estado_destino y estado_origen
+    // 1. Obtener todos los registros del proyecto activo sin bloqueos de filtros PostgREST
     const { data: files, error } = await supabaseClient
         .from("audit_logs")
         .select("*")
         .eq("proyecto_id", activeProjectId)
-        .or(`estado_destino.eq.${activeTab},estado_origen.eq.${activeTab}`)
         .order("created_at", { ascending: false });
 
     tbody.innerHTML = "";
 
-    if (error || !files || files.length === 0) {
+    if (error) {
+        console.error("Error al consultar Supabase:", error);
+        tbody.innerHTML = `<tr><td colspan="5" style="color:#ef4444;">Error al cargar datos: ${error.message}</td></tr>`;
+        return;
+    }
+
+    if (!files || files.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5">No hay entregables registrados para este proyecto.</td></tr>`;
+        return;
+    }
+
+    // 2. Filtrar en JavaScript por la pestaña activa (coincidencia en origen, destino o nomenclatura ISO)
+    const archivosPestana = files.filter(f => {
+        // Omitir notas técnicas y actas de la lista principal
+        if (f.archivo_nombre.startsWith("ACTA_DECISION_CLIENTE") || f.archivo_nombre.startsWith("NOTA_TECNICA_")) {
+            return false;
+        }
+
+        const eDestino = f.estado_destino || "";
+        const eOrigen = f.estado_origen || "";
+
+        // Coincidencia directa por campo
+        if (eDestino === activeTab || eOrigen === activeTab) return true;
+
+        // Respaldo por nomenclatura ISO 19650 (ej. _S0 -> 01_WIP, _S1 -> 02_SHARED, _A1 -> 03_PUBLISHED)
+        const partes = f.archivo_nombre.split("_");
+        if (partes.length >= 6) {
+            const codigoEstado = partes[5].split(".")[0].toUpperCase();
+            if (activeTab === "01_WIP" && (codigoEstado === "S0" || eOrigen === "01_WIP")) return true;
+            if (activeTab === "02_SHARED" && (codigoEstado === "S1" || eOrigen === "02_SHARED")) return true;
+            if (activeTab === "03_PUBLISHED" && (codigoEstado.startsWith("A") || eOrigen === "03_PUBLISHED")) return true;
+        }
+
+        return false;
+    });
+
+    if (archivosPestana.length === 0) {
         tbody.innerHTML = `<tr><td colspan="5">No hay entregables en la pestaña <strong>${activeTab}</strong> para este proyecto.</td></tr>`;
         return;
     }
 
-    files.forEach(f => {
-        if (f.archivo_nombre.startsWith("ACTA_DECISION_CLIENTE") || f.archivo_nombre.startsWith("NOTA_TECNICA_")) {
-            return;
-        }
-
+    // 3. Renderizar cada entregable
+    archivosPestana.forEach(f => {
         const nombreCompleto = f.archivo_nombre || "";
         const parts = nombreCompleto.split("_");
         
@@ -474,11 +506,10 @@ async function loadFiles() {
 
         const ext = nombreCompleto.split('.').pop().toLowerCase();
         const esVisualizable = ["pdf", "png", "jpg", "jpeg", "html", "htm"].includes(ext);
-
         const fechaSubidaStr = f.created_at ? new Date(f.created_at).toLocaleString() : (f.version || "N/A");
 
         let botonPromocion = "";
-        if (currentUser.cargo !== "CLIENTE") {
+        if (currentUser && currentUser.cargo !== "CLIENTE") {
             if (activeTab === "01_WIP" && (currentUser.cargo.includes("MODELADOR") || currentUser.cargo.includes("SUPER_ADMIN") || currentUser.cargo.includes("BIM Manager"))) {
                 botonPromocion = `<button class="btn-secondary" style="font-size:0.75rem; padding:0.3rem 0.6rem;" onclick="promoverArchivo('${nombreCompleto}', '01_WIP', '02_SHARED')">Promover a SHARED</button>`;
             } else if (activeTab === "02_SHARED" && (currentUser.cargo.includes("REVISOR") || currentUser.cargo.includes("SUPER_ADMIN") || currentUser.cargo.includes("BIM Manager"))) {
