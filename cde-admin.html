@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administrador de Usuarios y Permisos | CDE InnovArqZ</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --bg-card: #1e293b;
+            --bg-section-alt: #0b1120;
+            --accent-copper: #d97706;
+            --accent-copper-hover: #b45309;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+            --danger-color: #ef4444;
+            --success-color: #10b981;
+            --shadow-color: rgba(0, 0, 0, 0.5);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 2rem 5%;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 0;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 2rem;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .logo span { color: var(--accent-copper); }
+        .logo small {
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            border-left: 1px solid var(--border-color);
+            padding-left: 0.75rem;
+        }
+
+        .card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 15px 35px var(--shadow-color);
+        }
+
+        .section-title {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--accent-copper);
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.75rem;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .form-group.full { grid-column: span 2; }
+
+        label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        input[type="text"], input[type="email"], select {
+            background-color: var(--bg-section-alt);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            font-size: 0.92rem;
+            outline: none;
+            transition: border-color 0.3s;
+            width: 100%;
+        }
+
+        input:focus, select:focus {
+            border-color: var(--accent-copper);
+        }
+
+        .permisos-preview {
+            background-color: var(--bg-section-alt);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+            display: flex;
+            gap: 1.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .badge-permiso {
+            font-size: 0.8rem;
+            font-weight: 700;
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            background-color: var(--border-color);
+            color: var(--text-muted);
+        }
+
+        .badge-permiso.active {
+            background-color: rgba(16, 185, 129, 0.2);
+            color: var(--success-color);
+            border: 1px solid var(--success-color);
+        }
+
+        .btn-primary {
+            background-color: var(--accent-copper);
+            color: #fff;
+            border: none;
+            padding: 0.85rem 2rem;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary:hover { background-color: var(--accent-copper-hover); }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        th, td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.9rem;
+        }
+
+        th {
+            background-color: var(--bg-section-alt);
+            color: var(--accent-copper);
+            font-weight: 700;
+        }
+
+        @media (max-width: 800px) {
+            .form-grid { grid-template-columns: 1fr; }
+            .form-group.full { grid-column: span 1; }
+            .permisos-preview { flex-direction: column; gap: 0.5rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo">
+            <div>Innov<span>ArqZ</span></div>
+            <small>Admin CDE ISO 19650</small>
+        </div>
+    </header>
+
+    <!-- FORMULARIO DE REGISTRO DE USUARIOS -->
+    <div class="card">
+        <div class="section-title">👤 Registrar Nuevo Usuario y Asignar Rol</div>
+
+        <form id="userForm" onsubmit="registrarUsuario(event)">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Nombre Completo</label>
+                    <input type="text" id="u_nombre" placeholder="Ej. Arq. Carlos Mendoza" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Correo Electrónico (Para Código de 6 Dígitos)</label>
+                    <input type="email" id="u_email" placeholder="carlos.mendoza@cliente.com" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Empresa / Entidad</label>
+                    <input type="text" id="u_empresa" placeholder="Ej. Alcaldía de Pasto" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Proyecto Asignado</label>
+                    <select id="u_proyecto" required>
+                        <option value="" disabled selected>Cargando proyectos...</option>
+                    </select>
+                </div>
+
+                <div class="form-group full">
+                    <label>Rol ISO 19650</label>
+                    <select id="u_rol" onchange="actualizarPrevisualizacionPermisos()" required>
+                        <option value="" disabled selected>-- Seleccionar Rol --</option>
+                        <option value="MODELADOR">MODELADOR (Especialista de Diseño)</option>
+                        <option value="REVISOR_EXTERNO">REVISOR EXTERNO (Consultor / Auditor)</option>
+                        <option value="CLIENTE">CLIENTE FINAL (Visualizador de Entregables)</option>
+                        <option value="SUPER_ADMIN">SUPER ADMIN (Director General)</option>
+                    </select>
+                </div>
+
+                <!-- PREVISUALIZACIÓN AUTOMÁTICA DE PERMISOS -->
+                <div class="form-group full">
+                    <label>Distribución Automática de Permisos para el CDE:</label>
+                    <div class="permisos-preview">
+                        <span id="perm_wip" class="badge-permiso">01_WIP (Trabajo en Progreso)</span>
+                        <span id="perm_shared" class="badge-permiso">02_SHARED (Compartido)</span>
+                        <span id="perm_published" class="badge-permiso">03_PUBLISHED (Publicado)</span>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 2rem; text-align: right;">
+                <button type="submit" class="btn-primary" id="btnGuardar">
+                    Guardar Usuario y Permisos
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- LISTADO DE USUARIOS REGISTRADOS -->
+    <div class="card">
+        <div class="section-title">📋 Usuarios Registrados en el CDE</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>Email</th>
+                    <th>Empresa</th>
+                    <th>Proyecto</th>
+                    <th>Rol</th>
+                </tr>
+            </thead>
+            <tbody id="tablaUsuarios">
+                <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Cargando usuarios...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+<script>
+    const SUPABASE_URL = "https://bjlqtzrcrofpqlmyvoob.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_htPtQvL-1wrLfu7ACHBg1w_epAZsu1E";
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    document.addEventListener('DOMContentLoaded', () => {
+        cargarProyectos();
+        cargarListaUsuarios();
+    });
+
+    async function cargarProyectos() {
+        const select = document.getElementById('u_proyecto');
+        const { data: proyectos, error } = await supabaseClient
+            .from('proyectos')
+            .select('*')
+            .eq('activo', true);
+
+        if (error || !proyectos || proyectos.length === 0) {
+            select.innerHTML = '<option value="">No hay proyectos activos</option>';
+            return;
+        }
+
+        select.innerHTML = '<option value="" disabled selected>-- Seleccionar Proyecto --</option>';
+        proyectos.forEach(p => {
+            select.innerHTML += `<option value="${p.id}">${p.nombre} (${p.codigo_proyecto})</option>`;
+        });
+    }
+
+    function actualizarPrevisualizacionPermisos() {
+        const rol = document.getElementById('u_rol').value;
+        const w = document.getElementById('perm_wip');
+        const s = document.getElementById('perm_shared');
+        const p = document.getElementById('perm_published');
+
+        w.className = 'badge-permiso';
+        s.className = 'badge-permiso';
+        p.className = 'badge-permiso';
+
+        if (rol === 'MODELADOR') {
+            w.classList.add('active');
+            s.classList.add('active');
+        } else if (rol === 'REVISOR_EXTERNO') {
+            s.classList.add('active');
+            p.classList.add('active');
+        } else if (rol === 'CLIENTE') {
+            p.classList.add('active');
+        } else if (rol === 'SUPER_ADMIN') {
+            w.classList.add('active');
+            s.classList.add('active');
+            p.classList.add('active');
+        }
+    }
+
+    async function registrarUsuario(event) {
+        event.preventDefault();
+        const btn = document.getElementById('btnGuardar');
+        btn.disabled = true;
+        btn.innerText = "Registrando...";
+
+        const nombre = document.getElementById('u_nombre').value.trim();
+        const email = document.getElementById('u_email').value.trim();
+        const empresa = document.getElementById('u_empresa').value.trim();
+        const proyectoId = document.getElementById('u_proyecto').value;
+        const rol = document.getElementById('u_rol').value;
+
+        // Determinar permisos booleanos
+        const permisoWip = (rol === 'MODELADOR' || rol === 'SUPER_ADMIN');
+        const permisoShared = (rol === 'MODELADOR' || rol === 'REVISOR_EXTERNO' || rol === 'SUPER_ADMIN');
+        const permisoPublished = (rol === 'CLIENTE' || rol === 'REVISOR_EXTERNO' || rol === 'SUPER_ADMIN');
+
+        try {
+            // 1. Insertar en tabla public.usuarios
+            const { data: usuarioData, error: errUser } = await supabaseClient
+                .from('usuarios')
+                .insert([{
+                    nombre_completo: nombre,
+                    email: email,
+                    empresa: empresa,
+                    cargo: rol
+                }])
+                .select();
+
+            if (errUser) throw errUser;
+
+            const usuarioId = usuarioData[0].id;
+
+            // 2. Insertar en tabla public.permisos_proyecto
+            const { error: errPerms } = await supabaseClient
+                .from('permisos_proyecto')
+                .insert([{
+                    usuario_id: usuarioId,
+                    proyecto_id: proyectoId,
+                    rol: rol,
+                    permiso_wip: permisoWip,
+                    permiso_shared: permisoShared,
+                    permiso_published: permisoPublished
+                }]);
+
+            if (errPerms) throw errPerms;
+
+            alert("✅ Usuario registrado exitosamente con sus permisos asignados.");
+            document.getElementById('userForm').reset();
+            actualizarPrevisualizacionPermisos();
+            cargarListaUsuarios();
+
+        } catch (err) {
+            console.error(err);
+            alert("⚠️ Error al registrar el usuario: " + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerText = "Guardar Usuario y Permisos";
+        }
+    }
+
+    async function cargarListaUsuarios() {
+        const tbody = document.getElementById('tablaUsuarios');
+        const { data: permisos, error } = await supabaseClient
+            .from('permisos_proyecto')
+            .select(`
+                rol,
+                usuarios (nombre_completo, email, empresa),
+                proyectos (codigo_proyecto, nombre)
+            `);
+
+        if (error || !permisos || permisos.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">No hay usuarios registrados.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = '';
+        permisos.forEach(p => {
+            const u = p.usuarios || {};
+            const pr = p.proyectos || {};
+            tbody.innerHTML += `
+                <tr>
+                    <td><strong>${u.nombre_completo || 'N/A'}</strong></td>
+                    <td>${u.email || 'N/A'}</td>
+                    <td>${u.empresa || 'N/A'}</td>
+                    <td>${pr.codigo_proyecto || 'N/A'}</td>
+                    <td><span class="badge-permiso active">${p.rol}</span></td>
+                </tr>
+            `;
+        });
+    }
+</script>
+</body>
+</html>
