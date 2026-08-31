@@ -1,11 +1,10 @@
 // ==============================================================================
 // CONFIGURACIÓN CENTRALIZADA DE SERVICIOS - CDE INNOVARQZ S.A.S.
 // ==============================================================================
-const SUPABASE_URL = "https://bjlqtzrcrofpqlmyvoob.supabase.co";
+const SUPABASE_URL = "[https://bjlqtzrcrofpqlmyvoob.supabase.co](https://bjlqtzrcrofpqlmyvoob.supabase.co)";
 const SUPABASE_KEY = "sb_publishable_htPtQvL-1wrLfu7ACHBg1w_epAZsu1E";
-const WEBHOOK_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbyrLMTUnmYqkABhNTFQpQNGvmc0MpspzjvEv2EqUNklQ5a2jMxpRtytzuPwPwPwoyCWtQ/exec";
+const WEBHOOK_APPS_SCRIPT = "[https://script.google.com/macros/s/AKfycbyrLMTUnmYqkABhNTFQpQNGvmc0MpspzjvEv2EqUNklQ5a2jMxpRtytzuPwPwPwoyCWtQ/exec](https://script.google.com/macros/s/AKfycbyrLMTUnmYqkABhNTFQpQNGvmc0MpspzjvEv2EqUNklQ5a2jMxpRtytzuPwPwPwoyCWtQ/exec)";
 
-// Inicialización segura del cliente
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let currentUser = null;
