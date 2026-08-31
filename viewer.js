@@ -1,38 +1,53 @@
-function openViewer(fileUrl) {
-    const container = document.getElementById("viewerContainer");
-    const pdfContainer = document.getElementById("pdfViewerCanvas");
+// ==============================================================================
+// VISOR DE ENTREGABLES MULTIMEDIA E INTERACTIVOS (PDF, IFC, IMÁGENES)
+// ==============================================================================
+
+function openViewer(driveUrl, nombreArchivo) {
+    if (!driveUrl) {
+        alert("⚠️ No hay una URL de archivo válida asociada a este entregable.");
+        return;
+    }
+
+    const extension = nombreArchivo.split('.').pop().toLowerCase();
+    const viewerContainer = document.getElementById("viewerContainer");
     const ifcFrame = document.getElementById("ifcViewerFrame");
+    const pdfCanvas = document.getElementById("pdfViewerCanvas");
 
-    container.classList.remove("hidden");
-    pdfContainer.innerHTML = "";
-    ifcFrame.src = "";
+    if (!viewerContainer || !ifcFrame) return;
 
-    if (fileUrl.toLowerCase().includes(".pdf")) {
-        ifcFrame.style.display = "none";
-        pdfContainer.style.display = "block";
+    // Convertir URL estándar de Google Drive a la versión incrustable (preview)
+    let embedUrl = driveUrl;
+    if (driveUrl.includes("drive.google.com")) {
+        const fileIdMatch = driveUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        if (fileIdMatch && fileIdMatch[1]) {
+            embedUrl = `https://drive.google.com/file/d/${fileIdMatch[1]}/preview`;
+        }
+    }
 
-        pdfjsLib.getDocument(fileUrl).promise.then(pdf => {
-            pdf.getPage(1).then(page => {
-                const canvas = document.createElement("canvas");
-                const context = canvas.getContext("2d");
-                const viewport = page.getViewport({ scale: 1.2 });
-                canvas.height = viewport.height;
-                canvas.width = viewport.width;
-
-                page.render({ canvasContext: context, viewport: viewport });
-                pdfContainer.appendChild(canvas);
-            });
-        });
-    } else if (fileUrl.toLowerCase().includes(".ifc")) {
-        pdfContainer.style.display = "none";
+    // Lógica según formato de entregable
+    if (extension === "pdf" || extension === "ifc" || extension === "png" || extension === "jpg" || extension === "jpeg") {
+        if (pdfCanvas) pdfCanvas.style.display = "none";
+        
+        ifcFrame.src = embedUrl;
         ifcFrame.style.display = "block";
-        ifcFrame.src = `https://web-ifc-viewer.web.app/?modelUrl=${encodeURIComponent(fileUrl)}`;
+        ifcFrame.style.width = "100%";
+        ifcFrame.style.height = "500px";
+
+        viewerContainer.classList.remove("hidden");
+        viewerContainer.style.display = "block";
+        viewerContainer.scrollIntoView({ behavior: "smooth" });
     } else {
-        alert("Visualización previa disponible para .pdf y .ifc. Descargue el archivo nativo.");
-        closeViewer();
+        alert(`ℹ️ La previsualización directa no está disponible para archivos .${extension}.\n\nUtilice el botón 'Descargar' para abrir el modelo en su software nativo (Revit, Civil 3D, AutoCAD).`);
     }
 }
 
 function closeViewer() {
-    document.getElementById("viewerContainer").classList.add("hidden");
+    const viewerContainer = document.getElementById("viewerContainer");
+    const ifcFrame = document.getElementById("ifcViewerFrame");
+    
+    if (ifcFrame) ifcFrame.src = "";
+    if (viewerContainer) {
+        viewerContainer.classList.add("hidden");
+        viewerContainer.style.display = "none";
+    }
 }
