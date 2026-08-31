@@ -5,8 +5,8 @@ const SUPABASE_URL = "https://bjlqtzrcrofpqlmyvoob.supabase.co";
 const SUPABASE_KEY = "sb_publishable_htPtQvL-1wrLfu7ACHBg1w_epAZsu1E";
 const WEBHOOK_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbyrLMTUnmYqkABhNTFQpQNGvmc0MpspzjvEv2EqUNklQ5a2jMxpRtytzuPwPwPwoyCWtQ/exec";
 
-// Inicialización del cliente de Supabase
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// Inicialización corregida del cliente de Supabase (Evita colisión de identificadores)
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Variables de Estado de la Aplicación
 let currentUser = null;
@@ -66,8 +66,8 @@ async function handleLogin(e) {
         return;
     }
 
-    // Consulta directa a la tabla usuarios en Supabase
-    const { data: user, error } = await supabase
+    // Consulta directa a la tabla usuarios en Supabase usando supabaseClient
+    const { data: user, error } = await supabaseClient
         .from("usuarios")
         .select("*")
         .eq("email", email)
@@ -108,7 +108,7 @@ async function handleLogin(e) {
 // GESTIÓN DE PROYECTOS
 // ==============================================================================
 async function loadProjects() {
-    const { data: proyectos, error } = await supabase.from("proyectos").select("*");
+    const { data: proyectos, error } = await supabaseClient.from("proyectos").select("*");
     const select = document.getElementById("projectSelect");
     
     if (!select) return;
@@ -175,7 +175,7 @@ async function loadFiles() {
     }
 
     // Consulta a la tabla audit_logs por estado activo (01_WIP, 02_SHARED, 03_PUBLISHED, 04_ARCHIVED)
-    const { data: files, error } = await supabase
+    const { data: files, error } = await supabaseClient
         .from("audit_logs")
         .select("*")
         .eq("estado_destino", activeTab);
