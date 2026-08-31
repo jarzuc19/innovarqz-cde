@@ -83,9 +83,16 @@ async function handleLogin(e) {
     document.getElementById("loginView").style.display = "none";
     document.getElementById("dashboardView").style.display = "block";
 
+    // Mostrar botón de nuevo proyecto según cargo
     const btnNewProject = document.getElementById("btnNewProject");
     if (btnNewProject && user.cargo && (user.cargo.includes("BIM Manager") || user.cargo.includes("Director General") || user.cargo.includes("SUPER_ADMIN"))) {
         btnNewProject.style.display = "block";
+    }
+
+    // Mostrar botón de subida si es técnico (Modelador, Revisor, SuperAdmin)
+    const btnUpload = document.getElementById("btnUploadFile");
+    if (btnUpload && currentUser.cargo !== "CLIENTE") {
+        btnUpload.style.display = "block";
     }
 
     loadProjects();
@@ -135,7 +142,6 @@ async function handleProjectChange(e) {
         .eq("proyecto_id", activeProjectId)
         .single();
 
-    // Si es SuperAdmin registrado directamente o tiene todos los permisos activos por defecto
     if (!permisos && (currentUser.cargo === "SUPER_ADMIN" || currentUser.cargo?.includes("Director General"))) {
         userPermissions = { permiso_wip: true, permiso_shared: true, permiso_published: true };
     } else {
@@ -143,10 +149,10 @@ async function handleProjectChange(e) {
     }
 
     aplicarRestriccionPestanas();
+    evaluarVentanaContractual30Dias();
     loadFiles();
 }
 
-// Oculta o muestra dinámicamente las pestañas según la matriz de permisos
 function aplicarRestriccionPestanas() {
     const tabWip = document.querySelector('.tab-btn[data-tab="01_WIP"]');
     const tabShared = document.querySelector('.tab-btn[data-tab="02_SHARED"]');
@@ -158,7 +164,6 @@ function aplicarRestriccionPestanas() {
     if (tabPublished) tabPublished.style.display = userPermissions.permiso_published ? "inline-block" : "none";
     if (tabArchived) tabArchived.style.display = userPermissions.permiso_wip ? "inline-block" : "none";
 
-    // Redirección inteligente de pestaña activa si no tiene permiso en WIP
     document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
 
     if (!userPermissions.permiso_wip && userPermissions.permiso_published) {
@@ -171,11 +176,262 @@ function aplicarRestriccionPestanas() {
         activeTab = "01_WIP";
         if (tabWip) tabWip.classList.add("active");
     }
+
+    // Mostrar u ocultar tarjeta de aprobación para el cliente
+    const clientCard = document.getElementById("clientApprovalCard");
+    if (clientCard) {
+        clientCard.style.display = (currentUser.cargo === "CLIENTE" && activeTab === "03_PUBLISHED") ? "block" : "none";
+    }
 }
 
 // ==============================================================================
-// MODAL DE CREACIÓN DE PROYECTOS
+// GESTIÓN DE ACCIONES Y MÓDULOS DEL CDE (SUBIDA, PROMOCIÓN Y APROBACIÓN)
 // ==============================================================================
+function openUploadModal() {
+    const modal = document.getElementById("uploadModal");
+    if (modal) modal.className = "modal-overlay";
+}
+
+function closeUploadModal() {
+    const modal = document.getElementById("uploadModal");
+    if (modal) modal.className = "modal-hidden";
+}
+
+async function handleFileUpload(e) {
+    e.preventDefault();
+    const fileInput = document.getElementById("fileInput");
+    const targetTab = document.getElementById("uploadTargetTab").value;
+    const comment = document.getElementById("uploadComment").value;
+    const btnSubmit = document.getElementById("btnSubmitUpload");
+
+    if (!fileInput.files || fileInput.files.length === 0) {
+        alert("Por favor seleccione un archivo.");
+        return;
+    }
+
+    const file = fileInput.files[0];
+    btnSubmit.disabled = true;
+    btnSubmit.innerText = "Subiendo archivo...";
+
+    const reader = new FileReader();
+    reader.onload = async function(event) {
+        const base64Data = event.target.result.split(',')[1];
+
+        const payload = {
+            accion: "SUBIR_INFORME",
+            proyecto_id: activeProjectId,
+            codigo_proyecto: activeProjectCode,
+            nombre_archivo: file.name,
+            estado_destino: targetTab,
+            usuario_email: currentUser.email,
+            usuario_nombre: currentUser.nombre_completo,
+            archivo_base64: base64Data,
+            mime_type: file.type,
+            comentario: comment
+        };
+
+        try {
+            await fetch(WEBHOOK_APPS_SCRIPT, {
+                method: "POST",
+                mode: "no-cors",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            alert("✅ Archivo/Informe subido e integrado exitosamente.");
+            closeUploadModal();
+            setTimeout(() => loadFiles(), 2500);
+        } catch (err) {
+            alert("Error al subir archivo: " + err.message);
+        } finally {
+            btnSubmit.disabled = false;
+            btnSubmit.innerText = "Subir al CDE";
+        }
+    };
+    reader.readAsDataURL(file);
+}
+
+async function promoverArchivo(nombreArchivo, estadoOrigen, estadoDestino) {
+    if (!confirm(`¿Confirma promover el archivo "${nombreArchivo}" de ${estadoOrigen} a ${estadoDestino}?`)) return;
+
+    const payload = {
+        accion: "PROMOVER_ARCHIVO",
+        proyecto_id: activeProjectId,
+        codigo_proyecto: activeProjectCode,
+        nombre_archivo: nombreArchivo,
+        estado_origen: estadoOrigen,
+        estado_destino: estadoDestino,
+        usuario_email: currentUser.email,
+        usuario_nombre: currentUser.nombre_completo
+    };
+
+    alert("Promoviendo entregable en Drive...");
+
+    try {
+        await fetch(WEBHOOK_APPS_SCRIPT, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        alert("¡Promoción procesada exitosamente!");
+        setTimeout(() => loadFiles(), 2500);
+    } catch (err) {
+        alert("Error de promoción: " + err.message);
+    }
+}
+
+async function procesarAprobacionCliente(estadoAprobacion) {
+    const observaciones = document.getElementById("clientComments").value.trim();
+
+    if (estadoAprobacion === "RECHAZADO" && !observaciones) {
+        alert("⚠️ Por favor ingrese sus observaciones especificando los ajustes requeridos.");
+        return;
+    }
+
+    if (!confirm(`¿Confirma marcar este entregable como ${estadoAprobacion}?`)) return;
+
+    const payload = {
+        accion: "APROBACION_CLIENTE",
+        proyecto_id: activeProjectId,
+        codigo_proyecto: activeProjectCode,
+        usuario_nombre: currentUser.nombre_completo,
+        usuario_email: currentUser.email,
+        estado_aprobacion: estadoAprobacion,
+        observaciones: observaciones
+    };
+
+    alert("Registrando decisión de firma...");
+
+    try {
+        await fetch(WEBHOOK_APPS_SCRIPT, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        alert("✅ Su respuesta ha sido registrada y notificada al equipo directivo.");
+        evaluarVentanaContractual30Dias();
+    } catch (err) {
+        alert("Error de registro: " + err.message);
+    }
+}
+
+async function evaluarVentanaContractual30Dias() {
+    if (!activeProjectId) return;
+
+    const { data: decision } = await supabaseClient
+        .from("audit_logs")
+        .select("*")
+        .eq("proyecto_id", activeProjectId)
+        .eq("archivo_nombre", "ACTA_DECISION_CLIENTE_APROBADO")
+        .order("id", { ascending: false })
+        .limit(1);
+
+    const timerSpan = document.getElementById("accessTimer");
+    if (!timerSpan) return;
+
+    if (decision && decision.length > 0) {
+        const fechaAprobacion = new Date(decision[0].created_at || Date.now());
+        const fechaLimite = new Date(fechaAprobacion.getTime() + (30 * 24 * 60 * 60 * 1000));
+        const hoy = new Date();
+
+        const diasRestantes = Math.ceil((fechaLimite - hoy) / (1000 * 60 * 60 * 24));
+
+        if (diasRestantes > 0) {
+            timerSpan.innerHTML = `⏱️ Ventana Contractual Activa: Quedan ${diasRestantes} días de acceso`;
+        } else {
+            timerSpan.innerHTML = `⚠️ Período Contractual de 30 días finalizado`;
+        }
+    } else {
+        timerSpan.innerHTML = "⏳ Pendiente Aprobación Inicial";
+    }
+}
+
+// ==============================================================================
+// CARGA Y RENDERIZADO DE ENTREGABLES ISO 19650
+// ==============================================================================
+async function loadFiles() {
+    const tbody = document.getElementById("filesTableBody");
+    if (!tbody) return;
+
+    if (!activeProjectId) {
+        tbody.innerHTML = '<tr><td colspan="5">Seleccione un proyecto para visualizar los entregables.</td></tr>';
+        return;
+    }
+
+    const { data: files, error } = await supabaseClient
+        .from("audit_logs")
+        .select("*")
+        .eq("proyecto_id", activeProjectId)
+        .eq("estado_destino", activeTab);
+
+    tbody.innerHTML = "";
+
+    if (error || !files || files.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5">No hay entregables en la pestaña <strong>${activeTab}</strong> para este proyecto.</td></tr>`;
+        return;
+    }
+
+    const archivosUnicos = new Map();
+    files.forEach(f => {
+        archivosUnicos.set(f.archivo_nombre, f);
+    });
+
+    archivosUnicos.forEach(f => {
+        const nombreCompleto = f.archivo_nombre || "";
+        const parts = nombreCompleto.split("_");
+        
+        const esValidoISO = parts.length >= 6;
+        const disciplina = esValidoISO ? parts[4] : "SIN_FORMATO";
+        const estadoISO = esValidoISO ? parts[5].split(".")[0] : activeTab;
+
+        const ext = nombreCompleto.split('.').pop().toLowerCase();
+        const esVisualizable = ["pdf", "png", "jpg", "jpeg", "html", "htm"].includes(ext);
+
+        // Generar botones condicionales de promoción según el rol del usuario
+        let botonPromocion = "";
+        if (currentUser.cargo !== "CLIENTE") {
+            if (activeTab === "01_WIP" && (currentUser.cargo.includes("MODELADOR") || currentUser.cargo.includes("SUPER_ADMIN"))) {
+                botonPromocion = `<button class="btn-secondary" style="font-size:0.75rem; padding:0.3rem 0.6rem;" onclick="promoverArchivo('${nombreCompleto}', '01_WIP', '02_SHARED')">Promover a SHARED</button>`;
+            } else if (activeTab === "02_SHARED" && (currentUser.cargo.includes("REVISOR") || currentUser.cargo.includes("SUPER_ADMIN"))) {
+                botonPromocion = `<button class="btn-secondary" style="font-size:0.75rem; padding:0.3rem 0.6rem; background:#10b981; color:#fff;" onclick="promoverArchivo('${nombreCompleto}', '02_SHARED', '03_PUBLISHED')">Publicar a Cliente</button>`;
+            }
+        }
+
+        if (esValidoISO || ext === "html") {
+            tbody.innerHTML += `
+                <tr>
+                    <td>${nombreCompleto}</td>
+                    <td><strong>${disciplina}</strong></td>
+                    <td><span class="badge">${estadoISO}</span></td>
+                    <td>${f.version || 'V1.0'}</td>
+                    <td>
+                        ${esVisualizable ? `<button class="btn-secondary" onclick="openViewer('${f.drive_file_url}', '${nombreCompleto}')">Ver</button>` : ''}
+                        <a href="${f.drive_file_url}" target="_blank" class="btn-primary" style="text-decoration:none; font-size: 0.8rem; padding: 0.4rem 0.8rem;">Descargar</a>
+                        ${botonPromocion}
+                    </td>
+                </tr>
+            `;
+        } else {
+            tbody.innerHTML += `
+                <tr style="background-color: rgba(239, 68, 68, 0.05);">
+                    <td style="color: #ef4444;">${nombreCompleto}</td>
+                    <td><strong style="color: #ef4444;">${disciplina}</strong></td>
+                    <td><span class="badge" style="background: #ef4444;">NO_CONFORME</span></td>
+                    <td>${f.version || 'V1.0'}</td>
+                    <td>
+                        <small style="color: #ef4444; display: block; line-height: 1.2;">⚠️ Renombrar bajo ISO 19650 ([PROY]_[ORIG]_[ZONA]_[TIPO]_[DISC]_[EST])</small>
+                    </td>
+                </tr>
+            `;
+        }
+    });
+}
+
+// Helpers para Modales de Proyectos
 async function prepareAndOpenProjectModal() {
     const yearCurrent = new Date().getFullYear();
     const prefix = `PRY${yearCurrent}`;
@@ -293,76 +549,4 @@ async function handleCreateProject(e) {
 function closeProjectModal() {
     const modal = document.getElementById("projectModal");
     if (modal) modal.className = "modal-hidden";
-}
-
-// ==============================================================================
-// CARGA Y RENDERIZADO DE ENTREGABLES ISO 19650
-// ==============================================================================
-async function loadFiles() {
-    const tbody = document.getElementById("filesTableBody");
-    if (!tbody) return;
-
-    if (!activeProjectId) {
-        tbody.innerHTML = '<tr><td colspan="5">Seleccione un proyecto para visualizar los entregables.</td></tr>';
-        return;
-    }
-
-    const { data: files, error } = await supabaseClient
-        .from("audit_logs")
-        .select("*")
-        .eq("proyecto_id", activeProjectId)
-        .eq("estado_destino", activeTab);
-
-    tbody.innerHTML = "";
-
-    if (error || !files || files.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5">No hay entregables en la pestaña <strong>${activeTab}</strong> para este proyecto.</td></tr>`;
-        return;
-    }
-
-    // Mantener solo la última versión registrada de cada archivo
-    const archivosUnicos = new Map();
-    files.forEach(f => {
-        archivosUnicos.set(f.archivo_nombre, f);
-    });
-
-    archivosUnicos.forEach(f => {
-        const nombreCompleto = f.archivo_nombre || "";
-        const parts = nombreCompleto.split("_");
-        
-        const esValidoISO = parts.length >= 6;
-        const disciplina = esValidoISO ? parts[4] : "SIN_FORMATO";
-        const estadoISO = esValidoISO ? parts[5].split(".")[0] : activeTab;
-
-        // Estricto: El botón VER solo aparece en PDFs e imágenes
-        const ext = nombreCompleto.split('.').pop().toLowerCase();
-        const esVisualizable = ["pdf", "png", "jpg", "jpeg"].includes(ext);
-
-        if (esValidoISO) {
-            tbody.innerHTML += `
-                <tr>
-                    <td>${nombreCompleto}</td>
-                    <td><strong>${disciplina}</strong></td>
-                    <td><span class="badge">${estadoISO}</span></td>
-                    <td>${f.version || 'V1.0'}</td>
-                    <td>
-                        ${esVisualizable ? `<button class="btn-secondary" onclick="openViewer('${f.drive_file_url}', '${nombreCompleto}')">Ver</button>` : ''}
-                        <a href="${f.drive_file_url}" target="_blank" class="btn-primary" style="text-decoration:none; font-size: 0.8rem; padding: 0.4rem 0.8rem;">Descargar</a>
-                    </td>
-                </tr>
-            `;
-        } else {
-            tbody.innerHTML += `
-                <tr style="background-color: rgba(239, 68, 68, 0.05);">
-                    <td style="color: #ef4444;">${nombreCompleto}</td>
-                    <td><strong style="color: #ef4444;">${disciplina}</strong></td>
-                    <td><span class="badge" style="background: #ef4444;">NO_CONFORME</span></td>
-                    <td>${f.version || 'V1.0'}</td>
-                    <td>
-                        <small style="color: #ef4444; display: block; line-height: 1.2;">⚠️ Renombrar bajo ISO 19650 ([PROY]_[ORIG]_[ZONA]_[TIPO]_[DISC]_[EST])</small>
-                    </td>
-                </tr>
-            `;
-        }
-    });
 }
