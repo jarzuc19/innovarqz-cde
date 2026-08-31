@@ -1,8 +1,10 @@
 // ==============================================================================
-// VISOR MULTIMEDIA E INTERACTIVO CDE ISO 19650 — INNOVARQZ S.A.S.
+// VISOR MULTIMEDIA Y RENDERIZADOR 3D OPENBIM (IFC.js) - INNOVARQZ S.A.S.
 // ==============================================================================
 
-function openViewer(driveUrl, nombreArchivo) {
+let ifcViewerInstance = null;
+
+async function openViewer(driveUrl, nombreArchivo) {
     if (!driveUrl) {
         alert("⚠️ No hay una URL válida asociada a este entregable.");
         return;
@@ -11,73 +13,84 @@ function openViewer(driveUrl, nombreArchivo) {
     const extension = nombreArchivo.split('.').pop().toLowerCase();
     const viewerContainer = document.getElementById("viewerContainer");
     const ifcFrame = document.getElementById("ifcViewerFrame");
-    const pdfCanvas = document.getElementById("pdfViewerCanvas");
+    const canvasContainer = document.getElementById("threeCanvasContainer");
 
-    if (!viewerContainer || !ifcFrame) return;
+    if (!viewerContainer || !ifcFrame || !canvasContainer) return;
 
-    // Extraer el File ID de Google Drive
+    // Extraer File ID de Google Drive
     let fileId = "";
     const fileIdMatch = driveUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
     if (fileIdMatch && fileIdMatch[1]) {
         fileId = fileIdMatch[1];
     }
 
-    // 1. CASO DOCUMENTOS 2D E IMÁGENES (PDF, PNG, JPG) -> Vista Previa Integrada
+    // --------------------------------------------------------------------------
+    // 1. CASO DOCUMENTOS 2D E IMÁGENES (.pdf, .png, .jpg)
+    // --------------------------------------------------------------------------
     if (["pdf", "png", "jpg", "jpeg"].includes(extension)) {
-        if (pdfCanvas) pdfCanvas.style.display = "none";
+        canvasContainer.style.display = "none";
         
         const embedUrl = fileId ? `https://drive.google.com/file/d/${fileId}/preview` : driveUrl;
         
         ifcFrame.src = embedUrl;
         ifcFrame.style.display = "block";
-        ifcFrame.style.width = "100%";
-        ifcFrame.style.height = "550px";
 
         viewerContainer.classList.remove("hidden");
         viewerContainer.style.display = "block";
-        viewerContainer.scrollIntoView({ behavior: "smooth" });
     } 
-    // 2. CASO MODELOS 3D IFC -> Redirección limpia a descarga/inspección
+    // --------------------------------------------------------------------------
+    // 2. CASO MODELO 3D IFC (.ifc) -> Renderizado 3D con IFC.js / WebGL
+    // --------------------------------------------------------------------------
     else if (extension === "ifc") {
-        if (viewerContainer) {
-            viewerContainer.classList.add("hidden");
-            viewerContainer.style.display = "none";
-        }
+        ifcFrame.style.display = "none";
+        canvasContainer.style.display = "block";
+        canvasContainer.innerHTML = ""; // Limpiar lienzo anterior
 
-        const downloadUrl = fileId 
-            ? `https://drive.google.com/uc?export=download&id=${fileId}` 
-            : driveUrl;
+        viewerContainer.classList.remove("hidden");
+        viewerContainer.style.display = "block";
 
-        // Abrir ventana directa de descarga/inspección sin pasar por la vista previa gris de Drive
-        const confirmDownload = confirm(
-            `📦 Modelo IFC detectado: ${nombreArchivo}\n\n` +
-            `Google Drive no posee renderizador 3D nativo.\n` +
-            `¿Desea descargar el archivo directamente para abrirlo en Solibri, BIMvision o su visor OpenBIM local?`
-        );
+        try {
+            // Inicializar el visor WebGL de IFC.js
+            const container = document.getElementById("threeCanvasContainer");
+            ifcViewerInstance = new IFCViewerAPI.IfcViewerAPI({ container, backgroundColor: new THREE.Color(0x0f172a) });
+            ifcViewerInstance.axes.setAxes();
+            ifcViewerInstance.grid.setGrid();
 
-        if (confirmDownload) {
-            window.location.href = downloadUrl;
+            // Configurar WASM para el decodificador nativo
+            ifcViewerInstance.IFC.setWasmPath("https://unpkg.com/web-ifc@0.0.34/");
+
+            // URL de descarga directa desde Google Drive
+            const directDownloadUrl = fileId 
+                ? `https://drive.google.com/uc?export=download&id=${fileId}` 
+                : driveUrl;
+
+            // Descargar el modelo en segundo plano y cargarlo en el lienzo 3D
+            const response = await fetch(directDownloadUrl);
+            const blob = await response.blob();
+            const file = new File([blob], nombreArchivo);
+
+            await ifcViewerInstance.IFC.loadIfc(file, true);
+        } catch (error) {
+            console.error("Error cargando el modelo IFC:", error);
+            alert("⚠️ No se pudo procesar la geometría 3D directamente desde Drive. Utilice el botón 'Descargar' para abrirlo localmente.");
         }
     } 
-    // 3. CASO MODELOS NATIVOS (RVT, DWG) -> Notificación Pedagógica
+    // --------------------------------------------------------------------------
+    // 3. ARCHIVOS NATIVOS (.rvt, .dwg)
+    // --------------------------------------------------------------------------
     else {
-        if (viewerContainer) {
-            viewerContainer.classList.add("hidden");
-            viewerContainer.style.display = "none";
-        }
-        
-        alert(
-            `ℹ️ Archivo nativo (.${extension}).\n\n` +
-            `Utilice el botón 'Descargar' para abrirlo en su software de escritorio (Revit, Civil 3D, AutoCAD).`
-        );
+        alert(`ℹ️ Los modelos nativos (.${extension}) no se pueden procesar directamente en el navegador de forma gratuita.\n\nUtilice el botón 'Descargar' para inspeccionarlo en Revit o AutoCAD.`);
     }
 }
 
 function closeViewer() {
     const viewerContainer = document.getElementById("viewerContainer");
     const ifcFrame = document.getElementById("ifcViewerFrame");
+    const canvasContainer = document.getElementById("threeCanvasContainer");
     
     if (ifcFrame) ifcFrame.src = "";
+    if (canvasContainer) canvasContainer.innerHTML = "";
+    
     if (viewerContainer) {
         viewerContainer.classList.add("hidden");
         viewerContainer.style.display = "none";
