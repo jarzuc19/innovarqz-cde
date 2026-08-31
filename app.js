@@ -10,7 +10,7 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Variables de Estado de la Aplicación
 let currentUser = null;
-let userPermissions = null; // Matriz de permisos del usuario activo
+let userPermissions = null;
 let activeProjectId = null;
 let activeProjectCode = null;
 let activeTab = "01_WIP";
@@ -83,13 +83,11 @@ async function handleLogin(e) {
     document.getElementById("loginView").style.display = "none";
     document.getElementById("dashboardView").style.display = "block";
 
-    // Mostrar botón de nuevo proyecto según cargo
     const btnNewProject = document.getElementById("btnNewProject");
     if (btnNewProject && user.cargo && (user.cargo.includes("BIM Manager") || user.cargo.includes("Director General") || user.cargo.includes("SUPER_ADMIN"))) {
         btnNewProject.style.display = "block";
     }
 
-    // Mostrar botón de subida si es técnico (Modelador, Revisor, SuperAdmin)
     const btnUpload = document.getElementById("btnUploadFile");
     if (btnUpload && currentUser.cargo !== "CLIENTE") {
         btnUpload.style.display = "block";
@@ -134,7 +132,6 @@ async function handleProjectChange(e) {
 
     if (!activeProjectId) return;
 
-    // Consultar permisos específicos del usuario para el proyecto seleccionado
     const { data: permisos } = await supabaseClient
         .from("permisos_proyecto")
         .select("*")
@@ -177,7 +174,6 @@ function aplicarRestriccionPestanas() {
         if (tabWip) tabWip.classList.add("active");
     }
 
-    // Mostrar u ocultar tarjeta de aprobación para el cliente
     const clientCard = document.getElementById("clientApprovalCard");
     if (clientCard) {
         clientCard.style.display = (currentUser.cargo === "CLIENTE" && activeTab === "03_PUBLISHED") ? "block" : "none";
@@ -185,7 +181,7 @@ function aplicarRestriccionPestanas() {
 }
 
 // ==============================================================================
-// GESTIÓN DE ACCIONES Y MÓDULOS DEL CDE (SUBIDA, PROMOCIÓN Y APROBACIÓN)
+// OPERACIONES CON DRIVE (SUBIDA, PROMOCIÓN Y APROBACIÓN DE CLIENTE)
 // ==============================================================================
 function openUploadModal() {
     const modal = document.getElementById("uploadModal");
@@ -231,16 +227,20 @@ async function handleFileUpload(e) {
         };
 
         try {
-            await fetch(WEBHOOK_APPS_SCRIPT, {
+            const res = await fetch(WEBHOOK_APPS_SCRIPT, {
                 method: "POST",
-                mode: "no-cors",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
                 body: JSON.stringify(payload)
             });
+            const responseData = await res.json();
 
-            alert("✅ Archivo/Informe subido e integrado exitosamente.");
-            closeUploadModal();
-            setTimeout(() => loadFiles(), 2500);
+            if (responseData.status === "success") {
+                alert("✅ Archivo subido e integrado exitosamente.");
+                closeUploadModal();
+                loadFiles();
+            } else {
+                alert("⚠️ Error en servidor: " + responseData.message);
+            }
         } catch (err) {
             alert("Error al subir archivo: " + err.message);
         } finally {
@@ -265,20 +265,22 @@ async function promoverArchivo(nombreArchivo, estadoOrigen, estadoDestino) {
         usuario_nombre: currentUser.nombre_completo
     };
 
-    alert("Promoviendo entregable en Drive...");
-
     try {
-        await fetch(WEBHOOK_APPS_SCRIPT, {
+        const res = await fetch(WEBHOOK_APPS_SCRIPT, {
             method: "POST",
-            mode: "no-cors",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
             body: JSON.stringify(payload)
         });
+        const responseData = await res.json();
 
-        alert("¡Promoción procesada exitosamente!");
-        setTimeout(() => loadFiles(), 2500);
+        if (responseData.status === "success") {
+            alert("¡Promoción física en Drive procesada exitosamente!");
+            loadFiles();
+        } else {
+            alert("⚠️ Error de promoción: " + responseData.message);
+        }
     } catch (err) {
-        alert("Error de promoción: " + err.message);
+        alert("Error de comunicación: " + err.message);
     }
 }
 
@@ -302,20 +304,22 @@ async function procesarAprobacionCliente(estadoAprobacion) {
         observaciones: observaciones
     };
 
-    alert("Registrando decisión de firma...");
-
     try {
-        await fetch(WEBHOOK_APPS_SCRIPT, {
+        const res = await fetch(WEBHOOK_APPS_SCRIPT, {
             method: "POST",
-            mode: "no-cors",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
             body: JSON.stringify(payload)
         });
+        const responseData = await res.json();
 
-        alert("✅ Su respuesta ha sido registrada y notificada al equipo directivo.");
-        evaluarVentanaContractual30Dias();
+        if (responseData.status === "success") {
+            alert("✅ Su respuesta ha sido registrada y notificada al equipo directivo.");
+            evaluarVentanaContractual30Dias();
+        } else {
+            alert("⚠️ Error en registro: " + responseData.message);
+        }
     } catch (err) {
-        alert("Error de registro: " + err.message);
+        alert("Error de envío: " + err.message);
     }
 }
 
@@ -391,7 +395,6 @@ async function loadFiles() {
         const ext = nombreCompleto.split('.').pop().toLowerCase();
         const esVisualizable = ["pdf", "png", "jpg", "jpeg", "html", "htm"].includes(ext);
 
-        // Generar botones condicionales de promoción según el rol del usuario
         let botonPromocion = "";
         if (currentUser.cargo !== "CLIENTE") {
             if (activeTab === "01_WIP" && (currentUser.cargo.includes("MODELADOR") || currentUser.cargo.includes("SUPER_ADMIN"))) {
@@ -531,16 +534,20 @@ async function handleCreateProject(e) {
     alert("Enviando orden a Google Drive...");
 
     try {
-        await fetch(WEBHOOK_APPS_SCRIPT, {
+        const res = await fetch(WEBHOOK_APPS_SCRIPT, {
             method: "POST",
-            mode: "no-cors",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
             body: JSON.stringify(payload)
         });
+        const responseData = await res.json();
 
-        closeProjectModal();
-        alert("¡Estructura generada exitosamente! Actualizando en 3 segundos...");
-        setTimeout(() => loadProjects(), 3000);
+        if (responseData.status === "success") {
+            closeProjectModal();
+            alert("¡Estructura generada exitosamente! Actualizando...");
+            loadProjects();
+        } else {
+            alert("⚠️ Error en creación: " + responseData.message);
+        }
     } catch (err) {
         alert("Error de envío: " + err.message);
     }
