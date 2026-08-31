@@ -14,7 +14,7 @@ let activeProjectCode = null;
 let activeTab = "01_WIP";
 
 // ==============================================================================
-// INICIALIZACIÓN Y EVENT LISTENERS DE NAVEGACIÓN
+// INICIALIZACIÓN Y EVENT LISTENERS
 // ==============================================================================
 document.addEventListener("DOMContentLoaded", () => {
     const loginForm = document.getElementById("loginForm");
@@ -29,14 +29,15 @@ document.addEventListener("DOMContentLoaded", () => {
     const createProjectForm = document.getElementById("createProjectForm");
     if (createProjectForm) createProjectForm.addEventListener("submit", handleCreateProject);
 
-    // ESCUCHADOR FLUIDO DE PESTAÑAS (01_WIP, 02_SHARED, 03_PUBLISHED, 04_ARCHIVED)
+    setupDropdownWithOther("ubicacionSelect", "ubicacionOtherInput");
+    setupDropdownWithOther("tipoSelect", "tipoOtherInput");
+
     document.querySelectorAll(".tab-btn").forEach(btn => {
         btn.addEventListener("click", (e) => {
             document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
             e.target.classList.add("active");
             activeTab = e.target.dataset.tab;
             
-            // Actualizar interfaz según pestaña activa seleccionada
             const clientCard = document.getElementById("clientApprovalCard");
             if (clientCard && currentUser) {
                 clientCard.style.display = (currentUser.cargo === "CLIENTE" && activeTab === "03_PUBLISHED") ? "block" : "none";
@@ -47,9 +48,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 });
 
-// ==============================================================================
-// AUTENTICACIÓN Y EVALUACIÓN DE ROLES
-// ==============================================================================
 async function handleLogin(e) {
     e.preventDefault();
     const email = document.getElementById("emailInput").value.trim();
@@ -66,6 +64,7 @@ async function handleLogin(e) {
     }
 
     currentUser = user;
+
     document.getElementById("userInfo").innerHTML = `
         <strong>${user.nombre_completo}</strong><br>
         <small style="color: var(--accent-copper);">${user.cargo || 'SuperAdmin'}</small>
@@ -87,9 +86,6 @@ async function handleLogin(e) {
     loadProjects();
 }
 
-// ==============================================================================
-// GESTIÓN DE PROYECTOS Y NAVEGACIÓN RESTRINGIDA POR PERMISOS
-// ==============================================================================
 async function loadProjects() {
     let proyectosVisibles = [];
 
@@ -162,28 +158,10 @@ function aplicarRestriccionPestanas() {
     if (tabPublished) tabPublished.style.display = userPermissions.permiso_published ? "inline-block" : "none";
     if (tabArchived) tabArchived.style.display = userPermissions.permiso_wip ? "inline-block" : "none";
 
-    // Establecer la primera pestaña visible sin bloquear los clics posteriores
-    const pestanaActivaActual = document.querySelector(`.tab-btn[data-tab="${activeTab}"]`);
-    if (!pestanaActivaActual || pestanaActivaActual.style.display === "none") {
-        if (userPermissions.permiso_wip && tabWip) {
-            activarBotonPestana(tabWip, "01_WIP");
-        } else if (userPermissions.permiso_shared && tabShared) {
-            activarBotonPestana(tabShared, "02_SHARED");
-        } else if (userPermissions.permiso_published && tabPublished) {
-            activarBotonPestana(tabPublished, "03_PUBLISHED");
-        }
-    }
-
     const clientCard = document.getElementById("clientApprovalCard");
     if (clientCard) {
         clientCard.style.display = (currentUser.cargo === "CLIENTE" && activeTab === "03_PUBLISHED") ? "block" : "none";
     }
-}
-
-function activarBotonPestana(btnEl, tabName) {
-    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-    btnEl.classList.add("active");
-    activeTab = tabName;
 }
 
 // ==============================================================================
@@ -198,7 +176,7 @@ async function cargarTimelineActividad() {
         .select("*")
         .eq("proyecto_id", activeProjectId)
         .order("created_at", { ascending: false })
-        .limit(3);
+        .limit(5);
 
     if (!logs || logs.length === 0) {
         timelineDiv.style.display = "block";
@@ -207,17 +185,21 @@ async function cargarTimelineActividad() {
     }
 
     timelineDiv.style.display = "block";
-    let html = "🕒 <strong>Última Actividad Registrada (ISO 19650):</strong><ul style='margin-left: 20px; margin-top: 5px; list-style-type: square;'>";
+    let html = "🕒 <strong>Bitácora de Eventos e Interacciones (ISO 19650):</strong><ul style='margin-left: 20px; margin-top: 5px; list-style-type: square;'>";
     logs.forEach(l => {
-        const fecha = new Date(l.created_at).toLocaleString();
-        html += `<li><strong>${fecha}</strong> — Archivo: <em>${l.archivo_nombre}</em> (Estado: <span class="badge" style="font-size:0.75rem;">${l.estado_destino}</span>)</li>`;
+        const fecha = l.created_at ? new Date(l.created_at).toLocaleString() : l.version;
+        if (l.archivo_nombre.startsWith("NOTA_TECNICA_")) {
+            html += `<li style='color: #ef4444;'><strong>${fecha}</strong> — ⚠️ <strong>${l.drive_file_url}</strong></li>`;
+        } else {
+            html += `<li><strong>${fecha}</strong> — Entregable: <em>${l.archivo_nombre}</em> en <span class="badge" style="font-size:0.75rem;">${l.estado_destino}</span></li>`;
+        }
     });
     html += "</ul>";
     timelineDiv.innerHTML = html;
 }
 
 // ==============================================================================
-// OPERACIONES CON DRIVE (SUBIDA, PROMOCIÓN Y APROBACIÓN DE CLIENTE)
+// SUBIDA DE ARCHIVOS CON REGLA ESTRICTA DE NOMENCLATURA ISO 19650
 // ==============================================================================
 function openUploadModal() {
     const modal = document.getElementById("uploadModal");
@@ -227,6 +209,13 @@ function openUploadModal() {
 function closeUploadModal() {
     const modal = document.getElementById("uploadModal");
     if (modal) modal.className = "modal-hidden";
+}
+
+// VALIDADOR ESTRICTO DE NOMENCLATURA ISO 19650 ([PROY]_[ORIG]_[ZONA]_[TIPO]_[DISC]_[EST])
+function validarNomenclaturaISO19650(nombreArchivo) {
+    const nombreSinExt = nombreArchivo.split('.').slice(0, -1).join('.');
+    const partes = nombreSinExt.split('_');
+    return partes.length >= 6;
 }
 
 async function handleFileUpload(e) {
@@ -242,6 +231,13 @@ async function handleFileUpload(e) {
     }
 
     const file = fileInput.files[0];
+
+    // REGLA FUNDAMENTAL ISO 19650: Bloqueo de subida si no cumple la nomenclatura
+    if (!validarNomenclaturaISO19650(file.name) && !file.name.endsWith(".html")) {
+        alert(`❌ REGLA ISO 19650 INCUMPLIDA:\n\nEl archivo "${file.name}" no cumple con el estándar de denominación:\n[PROYECTO]_[ORIGINADOR]_[ZONA]_[TIPO]_[DISCIPLINA]_[ESTADO]\n\nEjemplo válido: PRY2026-001_INNOVARQZ_ZZ_M3_ARQ_S1.ifc\n\nPor favor renómbrelo localmente antes de volver a subirlo.`);
+        return;
+    }
+
     btnSubmit.disabled = true;
     btnSubmit.innerText = "Subiendo archivo...";
 
@@ -375,7 +371,7 @@ async function procesarAprobacionCliente(estadoAprobacion) {
             headers: { "Content-Type": "text/plain;charset=utf-8" },
             body: JSON.stringify(payload)
         });
-        alert("🚨 Solicitud de ajustes notificada al equipo de diseño.");
+        alert("🚨 Solicitud de ajustes notificada y registrada en la bitácora.");
         cargarTimelineActividad();
     }
 }
@@ -411,7 +407,7 @@ async function generarPDFActaRecibo(observaciones) {
     let yPos = 585;
     if (files) {
         files.forEach(f => {
-            if (!f.archivo_nombre.includes("ACTA_DECISION")) {
+            if (!f.archivo_nombre.includes("ACTA_DECISION") && !f.archivo_nombre.includes("NOTA_TECNICA")) {
                 page.drawText(`• ${f.archivo_nombre} (${f.version || 'V1.0'})`, { x: 60, y: yPos, size: 9, font: fontRegular });
                 yPos -= 18;
             }
@@ -427,7 +423,7 @@ async function generarPDFActaRecibo(observaciones) {
 }
 
 // ==============================================================================
-// CARGA Y RENDERIZADO DE ENTREGABLES ISO 19650
+// RENDERIZADO DE ENTREGABLES (MOSTRANDO TODAS LAS RE-SUBIDAS CON SU HORA)
 // ==============================================================================
 async function loadFiles() {
     const tbody = document.getElementById("filesTableBody");
@@ -437,7 +433,8 @@ async function loadFiles() {
         .from("audit_logs")
         .select("*")
         .eq("proyecto_id", activeProjectId)
-        .eq("estado_destino", activeTab);
+        .eq("estado_destino", activeTab)
+        .order("created_at", { ascending: false });
 
     tbody.innerHTML = "";
 
@@ -446,22 +443,23 @@ async function loadFiles() {
         return;
     }
 
-    const archivosUnicos = new Map();
     files.forEach(f => {
-        if (!f.archivo_nombre.startsWith("ACTA_DECISION_CLIENTE")) {
-            archivosUnicos.set(f.archivo_nombre, f);
+        // Ignorar las notas técnicas internas en la lista principal
+        if (f.archivo_nombre.startsWith("ACTA_DECISION_CLIENTE") || f.archivo_nombre.startsWith("NOTA_TECNICA_")) {
+            return;
         }
-    });
 
-    archivosUnicos.forEach(f => {
         const nombreCompleto = f.archivo_nombre || "";
         const parts = nombreCompleto.split("_");
+        
         const esValidoISO = parts.length >= 6;
         const disciplina = esValidoISO ? parts[4] : "SIN_FORMATO";
         const estadoISO = esValidoISO ? parts[5].split(".")[0] : activeTab;
 
         const ext = nombreCompleto.split('.').pop().toLowerCase();
         const esVisualizable = ["pdf", "png", "jpg", "jpeg", "html", "htm"].includes(ext);
+
+        const fechaSubidaStr = f.created_at ? new Date(f.created_at).toLocaleString() : (f.version || "N/A");
 
         let botonPromocion = "";
         if (currentUser.cargo !== "CLIENTE") {
@@ -472,19 +470,33 @@ async function loadFiles() {
             }
         }
 
-        tbody.innerHTML += `
-            <tr>
-                <td>${nombreCompleto}</td>
-                <td><strong>${disciplina}</strong></td>
-                <td><span class="badge">${estadoISO}</span></td>
-                <td>${f.version || 'V1.0'}</td>
-                <td>
-                    ${esVisualizable ? `<button class="btn-secondary" onclick="openViewer('${f.drive_file_url}', '${nombreCompleto}')">Ver</button>` : ''}
-                    <a href="${f.drive_file_url}" target="_blank" class="btn-primary" style="text-decoration:none; font-size: 0.8rem; padding: 0.4rem 0.8rem;">Descargar</a>
-                    ${botonPromocion}
-                </td>
-            </tr>
-        `;
+        if (esValidoISO || ext === "html") {
+            tbody.innerHTML += `
+                <tr>
+                    <td>${nombreCompleto}</td>
+                    <td><strong>${disciplina}</strong></td>
+                    <td><span class="badge">${estadoISO}</span></td>
+                    <td><small style="color:var(--text-muted);">${fechaSubidaStr}</small></td>
+                    <td>
+                        ${esVisualizable ? `<button class="btn-secondary" onclick="openViewer('${f.drive_file_url}', '${nombreCompleto}')">Ver</button>` : ''}
+                        <a href="${f.drive_file_url}" target="_blank" class="btn-primary" style="text-decoration:none; font-size: 0.8rem; padding: 0.4rem 0.8rem;">Descargar</a>
+                        ${botonPromocion}
+                    </td>
+                </tr>
+            `;
+        } else {
+            tbody.innerHTML += `
+                <tr style="background-color: rgba(239, 68, 68, 0.05);">
+                    <td style="color: #ef4444;">${nombreCompleto}</td>
+                    <td><strong style="color: #ef4444;">${disciplina}</strong></td>
+                    <td><span class="badge" style="background: #ef4444;">NO_CONFORME</span></td>
+                    <td><small style="color:#ef4444;">${fechaSubidaStr}</small></td>
+                    <td>
+                        <small style="color: #ef4444; display: block; line-height: 1.2;">⚠️ Renombrar bajo ISO 19650 ([PROY]_[ORIG]_[ZONA]_[TIPO]_[DISC]_[EST])</small>
+                    </td>
+                </tr>
+            `;
+        }
     });
 }
 
@@ -521,13 +533,59 @@ async function prepareAndOpenProjectModal() {
     if (modal) modal.className = "modal-overlay";
 }
 
+function setupDropdownWithOther(selectId, otherInputId) {
+    const select = document.getElementById(selectId);
+    const otherInput = document.getElementById(otherInputId);
+    if (!select || !otherInput) return;
+
+    select.addEventListener("change", (e) => {
+        if (e.target.value === "OTRO") {
+            otherInput.style.display = "block";
+            otherInput.required = true;
+        } else {
+            otherInput.style.display = "none";
+            otherInput.required = false;
+            otherInput.value = "";
+        }
+    });
+}
+
+function obtenerValorCampo(selectId, otherInputId) {
+    const select = document.getElementById(selectId);
+    if (!select) return "";
+    if (select.value === "OTRO") {
+        const otherInput = document.getElementById(otherInputId);
+        return otherInput ? otherInput.value.trim() : "";
+    }
+    return select.value;
+}
+
+function esValidoTextoCampo(val) {
+    if (!val || val.length < 3) return false;
+    if (/^\d+$/.test(val)) return false;
+    return true;
+}
+
 async function handleCreateProject(e) {
     e.preventDefault();
     
     const codigo = document.getElementById("codigoProj").value.trim();
     const cliente = document.getElementById("clienteProj").value.trim();
-    const ubicacion = document.getElementById("ubicacionSelect").value;
-    const tipoObra = document.getElementById("tipoSelect").value;
+    const ubicacion = obtenerValorCampo("ubicacionSelect", "ubicacionOtherInput");
+    const tipoObra = obtenerValorCampo("tipoSelect", "tipoOtherInput");
+
+    if (!esValidoTextoCampo(cliente)) {
+        alert("⚠️ El cliente ingresado no es válido (mínimo 3 letras, no sólo números).");
+        return;
+    }
+    if (!esValidoTextoCampo(ubicacion)) {
+        alert("⚠️ La ubicación especificada no es válida.");
+        return;
+    }
+    if (!esValidoTextoCampo(tipoObra)) {
+        alert("⚠️ El tipo de obra especificado no es válido.");
+        return;
+    }
 
     const payload = {
         accion: "CREAR_PROYECTO",
@@ -549,7 +607,7 @@ async function handleCreateProject(e) {
 
         if (responseData.status === "success") {
             closeProjectModal();
-            alert("¡Estructura generada exitosamente!");
+            alert("¡Estructura generada exitosamente! Actualizando...");
             loadProjects();
         } else {
             alert("⚠️ Error en creación: " + responseData.message);
