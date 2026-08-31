@@ -68,16 +68,41 @@
         </div>
     </div>
 
-    <!-- MODAL CREACIÓN DE PROYECTO -->
+    <!-- MODAL CREACIÓN DE PROYECTO CON DROPDOWNS -->
     <div id="projectModal" class="modal-hidden">
         <div class="modal-content card">
             <h3>Crear Nuevo Proyecto en CDE</h3>
             <form id="createProjectForm">
-                <input type="text" id="codigoProj" placeholder="Código (Ej: PRY2026-001)" required>
+                <label><small>Código Autogenerado:</small></label>
+                <input type="text" id="codigoProj" placeholder="Código (Ej: PRY2026-001)" required readonly>
+
+                <label><small>Cliente:</small></label>
                 <input type="text" id="clienteProj" placeholder="Cliente (Ej: AlcaldiaPasto)" required>
-                <input type="text" id="ubicacionProj" placeholder="Ubicación (Ej: Pasto)" required>
-                <input type="text" id="tipoProj" placeholder="Tipo (Ej: Edificio)" required>
-                <div class="modal-actions">
+
+                <label><small>Ubicación:</small></label>
+                <select id="ubicacionSelect" required>
+                    <option value="">-- Seleccionar Ubicación --</option>
+                    <option value="Pasto">Pasto</option>
+                    <option value="Ricaurte">Ricaurte</option>
+                    <option value="Tumaco">Tumaco</option>
+                    <option value="Ipiales">Ipiales</option>
+                    <option value="Mallama">Mallama</option>
+                    <option value="OTRO">Otro...</option>
+                </select>
+                <input type="text" id="ubicacionOtherInput" placeholder="Escriba la ubicación" style="display:none; margin-top:5px;">
+
+                <label><small>Tipo de Obra:</small></label>
+                <select id="tipoSelect" required>
+                    <option value="">-- Seleccionar Tipo --</option>
+                    <option value="EdificioResidencial">Edificio Residencial</option>
+                    <option value="InfraestructuraVial">Infraestructura Vial</option>
+                    <option value="EquipamientoEducativo">Equipamiento Educativo</option>
+                    <option value="Remodelacion">Remodelación</option>
+                    <option value="OTRO">Otro...</option>
+                </select>
+                <input type="text" id="tipoOtherInput" placeholder="Escriba el tipo de obra" style="display:none; margin-top:5px;">
+
+                <div class="modal-actions" style="margin-top:15px;">
                     <button type="button" class="btn-secondary" onclick="closeProjectModal()">Cancelar</button>
                     <button type="submit" class="btn-primary">Crear en Drive y CDE</button>
                 </div>
