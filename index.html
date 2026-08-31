@@ -3,56 +3,89 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CDE | InnovArqZ S.A.S. (ISO 19650)</title>
+    <title>CDE | InnovArqZ Soluciones Integrales S.A.S.</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
 </head>
 <body>
-    <header class="cde-header">
-        <div class="logo">Innov<span>ArqZ</span> CDE</div>
-        <div id="userInfo" class="user-info">Cargando usuario...</div>
+    <header class="navbar">
+        <div class="logo">Innov<span>ArqZ</span> <small>CDE ISO 19650</small></div>
+        <div class="user-info" id="userInfo">Cargando usuario...</div>
     </header>
 
-    <main class="cde-container">
-        <!-- Banner de regla de 30 días para clientes -->
-        <div id="expirationBanner" class="alert-banner" style="display: none;">
-            ⚠️ <strong>Período de Gracia Activo:</strong> Su acceso de descarga estará activo por 30 días posteriores al Acta de Recibo a Satisfacción.
+    <div class="container">
+        <!-- PANTALLA DE LOGIN -->
+        <div id="loginView" class="card login-card">
+            <h2>Acceso al Portal CDE</h2>
+            <form id="loginForm">
+                <input type="email" id="emailInput" placeholder="Correo electrónico" required>
+                <input type="password" id="passwordInput" placeholder="Contraseña" required>
+                <button type="submit" class="btn-primary">Iniciar Sesión</button>
+            </form>
         </div>
 
-        <section class="controls-panel">
-            <label for="projectSelect">Proyecto Activo:</label>
-            <select id="projectSelect" onchange="cargarArchivosProyecto()">
-                <option value="">Seleccione un proyecto...</option>
-            </select>
-        </section>
+        <!-- DASHBOARD DEL CDE -->
+        <div id="dashboardView" class="dashboard-hidden">
+            <div class="controls-bar card">
+                <div class="control-group">
+                    <label for="projectSelect">Proyecto Activo:</label>
+                    <select id="projectSelect"></select>
+                </div>
+                <button id="btnNewProject" class="btn-secondary" style="display:none;">+ Nuevo Proyecto</button>
+            </div>
 
-        <!-- Estados ISO 19650 -->
-        <nav class="iso-tabs">
-            <button class="tab-btn active" onclick="cambiarEstadoISO('01_WIP')">01 WIP (Trabajo en Curso)</button>
-            <button class="tab-btn" onclick="cambiarEstadoISO('02_SHARED')">02 SHARED (Compartido)</button>
-            <button class="tab-btn" onclick="cambiarEstadoISO('03_PUBLISHED')">03 PUBLISHED (Publicado)</button>
-            <button class="tab-btn" onclick="cambiarEstadoISO('04_ARCHIVED')">04 ARCHIVED (Archivado)</button>
-        </nav>
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="01_WIP">01_WIP (Trabajo en Progreso)</button>
+                <button class="tab-btn" data-tab="02_SHARED">02_SHARED (Compartido)</button>
+                <button class="tab-btn" data-tab="03_PUBLISHED">03_PUBLISHED (Publicado)</button>
+                <button class="tab-btn" data-tab="04_ARCHIVED">04_ARCHIVED (Archivado)</button>
+            </div>
 
-        <section class="files-table-container">
-            <table class="files-table">
-                <thead>
-                    <tr>
-                        <th>Nombre del Archivo</th>
-                        <th>Versión</th>
-                        <th>Disciplina</th>
-                        <th>Acción ISO 19650</th>
-                    </tr>
-                </thead>
-                <tbody id="filesTableBody">
-                    <tr>
-                        <td colspan="4" style="text-align: center;">Seleccione un proyecto para cargar archivos...</td>
-                    </tr>
-                </tbody>
-            </table>
-        </section>
-    </main>
+            <div class="card table-card">
+                <table id="filesTable">
+                    <thead>
+                        <tr>
+                            <th>Nombre del Archivo (ISO 19650)</th>
+                            <th>Discipl.</th>
+                            <th>Estado</th>
+                            <th>Versión</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="filesTableBody">
+                        <tr><td colspan="5">Seleccione un proyecto para cargar archivos.</td></tr>
+                    </tbody>
+                </table>
+            </div>
 
+            <!-- CONTENEDOR DE VISORES -->
+            <div id="viewerContainer" class="card viewer-card hidden">
+                <button class="close-viewer" onclick="closeViewer()">X</button>
+                <div id="pdfViewerCanvas"></div>
+                <iframe id="ifcViewerFrame" src="" frameborder="0"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CREACIÓN DE PROYECTO -->
+    <div id="projectModal" class="modal-hidden">
+        <div class="modal-content card">
+            <h3>Crear Nuevo Proyecto en CDE</h3>
+            <form id="createProjectForm">
+                <input type="text" id="codigoProj" placeholder="Código (Ej: PRY2026-001)" required>
+                <input type="text" id="clienteProj" placeholder="Cliente (Ej: AlcaldiaPasto)" required>
+                <input type="text" id="ubicacionProj" placeholder="Ubicación (Ej: Pasto)" required>
+                <input type="text" id="tipoProj" placeholder="Tipo (Ej: Edificio)" required>
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" onclick="closeProjectModal()">Cancelar</button>
+                    <button type="submit" class="btn-primary">Crear en Drive y CDE</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="viewer.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
