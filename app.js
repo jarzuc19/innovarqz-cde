@@ -3,7 +3,7 @@
 // ==============================================================================
 const SUPABASE_URL = "https://bjlqtzrcrofpqlmyvoob.supabase.co";
 const SUPABASE_KEY = "sb_publishable_htPtQvL-1wrLfu7ACHBg1w_epAZsu1E";
-const WEBHOOK_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbzMjRSmC_Lcqy6HuqOOMpTezhFXd1RsaIiA16HhLMlfIjWI_fuW42xpm26g4ZjKwyBDjw/exec";
+const WEBHOOK_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbyOXZ5NQE4j4Lgvxzso4CSN4bROmbvhxwZgptV631PxxGPbk-qZBdsiFn-uTc1GO9G_HQ/exec";
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -14,7 +14,7 @@ let activeProjectCode = null;
 let activeTab = "01_WIP";
 
 // ==============================================================================
-// INICIALIZACIÓN Y EVENT LISTENERS DE NAVEGACIÓN
+// INICIALIZACIÓN Y NAVEGACIÓN
 // ==============================================================================
 document.addEventListener("DOMContentLoaded", () => {
     const loginForm = document.getElementById("loginForm");
@@ -36,7 +36,6 @@ document.addEventListener("DOMContentLoaded", () => {
         btn.addEventListener("click", (e) => {
             const requestedTab = e.target.dataset.tab;
 
-            // Bloqueo de seguridad ISO 19650 en clic manual
             if (!validarAccesoPestana(requestedTab)) {
                 alert(`⛔ Acceso denegado: Su rol (${currentUser.cargo}) no tiene permisos para acceder a la carpeta ${requestedTab}.`);
                 return;
@@ -66,7 +65,7 @@ function validarAccesoPestana(tabName) {
 }
 
 // ==============================================================================
-// AUTENTICACIÓN Y EVALUACIÓN DE ROLES
+// AUTENTICACIÓN
 // ==============================================================================
 async function handleLogin(e) {
     e.preventDefault();
@@ -115,7 +114,7 @@ async function handleLogin(e) {
 }
 
 // ==============================================================================
-// GESTIÓN DE PROYECTOS Y REDIRECCIÓN INICIAL SEGÚN ROL
+// PROYECTOS Y REDIRECCIÓN DE PESTAÑA INICIAL SEGÚN ROL
 // ==============================================================================
 async function loadProjects() {
     let proyectosVisibles = [];
@@ -174,7 +173,6 @@ async function handleProjectChange(e) {
         userPermissions = permiso || { permiso_wip: false, permiso_shared: false, permiso_published: true, permiso_archived: false };
     }
 
-    // Redirección de pestaña por defecto según perfil de usuario
     if (currentUser.cargo === "CLIENTE") {
         activeTab = "03_PUBLISHED";
     } else if (currentUser.cargo.includes("REVISOR")) {
@@ -215,7 +213,7 @@ function aplicarRestriccionPestanasVisuales() {
 }
 
 // ==============================================================================
-// MÓDULO UNIFICADO DE INTERACCIÓN TÉCNICA Y NOTAS
+// MÓDULO UNIFICADO DE INTERACCIÓN TÉCNICA (SOLUCIÓN MENSAJE CLIENTE)
 // ==============================================================================
 async function evaluarNotasTecnicasActivas() {
     const card = document.getElementById("technicalNoteCard");
@@ -226,20 +224,26 @@ async function evaluarNotasTecnicasActivas() {
         return;
     }
 
-    const { data: notas } = await supabaseClient
+    // Consulta directa a la tabla audit_logs por notas técnicas
+    const { data: notas, error } = await supabaseClient
         .from("audit_logs")
         .select("*")
         .eq("proyecto_id", activeProjectId)
-        .like("archivo_nombre", "NOTA_TECNICA_%")
+        .ilike("archivo_nombre", "NOTA_TECNICA_%")
         .order("id", { ascending: false })
         .limit(1);
+
+    if (error) {
+        console.error("Error al consultar nota técnica:", error);
+        return;
+    }
 
     if (notas && notas.length > 0) {
         const ultimaNota = notas[0];
         const esSolicitudCliente = ultimaNota.archivo_nombre.includes("AJUSTES_SOLICITADOS");
         const esConfirmado = ultimaNota.archivo_nombre.includes("CONFIRMADO_RECIBIDO");
         const esReunion = ultimaNota.archivo_nombre.includes("SOLICITUD_REUNION");
-        const esModelador = currentUser.cargo.includes("MODELADOR");
+        const esModelador = currentUser.cargo.includes("MODELADOR") || currentUser.cargo.includes("SUPER_ADMIN");
 
         card.style.display = "block";
 
@@ -270,7 +274,7 @@ async function evaluarNotasTecnicasActivas() {
             card.innerHTML = `
                 <div>
                     <h4 style="color: #ef4444; margin-bottom: 5px;">🚨 Solicitud de Ajustes / Observaciones del Cliente</h4>
-                    <p style="font-size: 0.9rem; color: #f8fafc; margin-bottom: 8px;"><strong>Mensaje:</strong> "${ultimaNota.drive_file_url}"</p>
+                    <p style="font-size: 0.95rem; color: #f8fafc; margin-bottom: 8px;"><strong>Mensaje:</strong> "${ultimaNota.drive_file_url}"</p>
                     <small style="color: var(--text-muted);">Registrado el: ${ultimaNota.version}</small>
                 </div>
                 ${botonesAccion}
@@ -281,7 +285,7 @@ async function evaluarNotasTecnicasActivas() {
             card.innerHTML = `
                 <h4 style="color: #10b981; margin-bottom: 5px;">🛠️ Ajustes en Proceso por el Modelador</h4>
                 <p style="font-size: 0.88rem; color: #f8fafc;">El modelador ha verificado las observaciones y se encuentra modificando los entregables.</p>
-                <small style="color: var(--text-muted);">Actualizado: ${ultimaNota.version} por ${ultimaNota.drive_file_url.split(':')[0]}</small>
+                <small style="color: var(--text-muted);">Actualizado: ${ultimaNota.version} por ${ultimaNota.drive_file_url}</small>
             `;
         } else if (esReunion) {
             card.style.borderColor = "#d97706";
@@ -326,7 +330,7 @@ async function responderNotaTecnica(tipoRespuesta, comentario) {
 }
 
 // ==============================================================================
-// BARRA SUPERIOR DE ACTIVIDAD / HISTORIAL EN TIEMPO REAL
+// BARRA DE ACTIVIDAD Y BITÁCORA
 // ==============================================================================
 async function cargarTimelineActividad() {
     let timelineDiv = document.getElementById("activityTimeline");
@@ -360,7 +364,7 @@ async function cargarTimelineActividad() {
 }
 
 // ==============================================================================
-// SUBIDA DE ARCHIVOS Y NOMENCLATURA ISO 19650
+// SUBIDA Y PROMOCIÓN CON RENOMBRADO ISO 19650 DE S0 ➔ S1 ➔ A1
 // ==============================================================================
 function openUploadModal() {
     const modal = document.getElementById("uploadModal");
@@ -376,6 +380,20 @@ function validarNomenclaturaISO19650(nombreArchivo) {
     const nombreSinExt = nombreArchivo.split('.').slice(0, -1).join('.');
     const partes = nombreSinExt.split('_');
     return partes.length >= 6;
+}
+
+// Recalcula la etiqueta manteniendo la extensión intacta
+function recalcularEstadoEnNombre(nombreOriginal, nuevoEstadoISO) {
+    const partesExt = nombreOriginal.split('.');
+    const ext = partesExt.pop();
+    const nombreSinExt = partesExt.join('.');
+    
+    const comp = nombreSinExt.split('_');
+    if (comp.length >= 6) {
+        comp[5] = nuevoEstadoISO;
+        return comp.join('_') + '.' + ext;
+    }
+    return nombreOriginal;
 }
 
 async function handleFileUpload(e) {
@@ -444,13 +462,18 @@ async function handleFileUpload(e) {
 }
 
 async function promoverArchivo(nombreArchivo, estadoOrigen, estadoDestino) {
-    if (!confirm(`¿Confirma promover el archivo "${nombreArchivo}" de ${estadoOrigen} a ${estadoDestino}?`)) return;
+    // Calculamos el nuevo nombre con sufijo S1 o A1 antes de llamar al servidor
+    let nuevoEstadoISO = (estadoDestino === "02_SHARED") ? "S1" : "A1";
+    let nuevoNombreCalculado = recalcularEstadoEnNombre(nombreArchivo, nuevoEstadoISO);
+
+    if (!confirm(`¿Confirma promover el archivo "${nombreArchivo}" a ${estadoDestino} como "${nuevoNombreCalculado}"?`)) return;
 
     const payload = {
         accion: "PROMOVER_ARCHIVO",
         proyecto_id: activeProjectId,
         codigo_proyecto: activeProjectCode,
         nombre_archivo: nombreArchivo,
+        nuevo_nombre_archivo: nuevoNombreCalculado,
         estado_origen: estadoOrigen,
         estado_destino: estadoDestino,
         usuario_email: currentUser.email,
@@ -466,7 +489,7 @@ async function promoverArchivo(nombreArchivo, estadoOrigen, estadoDestino) {
         const responseData = await res.json();
 
         if (responseData.status === "success") {
-            alert("¡Promoción física en Drive procesada exitosamente!");
+            alert("¡Promoción física en Drive y renombrado procesado exitosamente!");
             loadFiles();
             cargarTimelineActividad();
         } else {
@@ -583,13 +606,12 @@ async function generarPDFActaRecibo(observaciones) {
 }
 
 // ==============================================================================
-// RENDERIZADO DE ENTREGABLES (BLOQUEO DE ROL + UNICIDAD POR ARCHIVO)
+// RENDERIZADO DE ENTREGABLES
 // ==============================================================================
 async function loadFiles() {
     const tbody = document.getElementById("filesTableBody");
     if (!tbody || !activeProjectId) return;
 
-    // Validación de seguridad antes de consultar
     if (!validarAccesoPestana(activeTab)) {
         tbody.innerHTML = `<tr><td colspan="5" style="color:#ef4444; font-weight:bold;">⛔ Acceso restringido a la carpeta ${activeTab} según su perfil de usuario.</td></tr>`;
         return;
@@ -697,7 +719,7 @@ async function loadFiles() {
     });
 }
 
-// Helpers para Modales y Proyectos
+// Helpers Modales
 async function prepareAndOpenProjectModal() {
     const yearCurrent = new Date().getFullYear();
     const prefix = `PRY${yearCurrent}`;
