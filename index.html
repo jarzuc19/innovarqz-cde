@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CDE | InnovArqZ Soluciones Integrales S.A.S.</title>
     <link rel="stylesheet" href="styles.css">
-    
-    <!-- SDK de Supabase, PDF.js & Generador PDF (pdf-lib) -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
@@ -18,7 +16,7 @@
     </header>
 
     <div class="container">
-        <!-- PANTALLA DE LOGIN -->
+        <!-- LOGIN -->
         <div id="loginView" class="card login-card">
             <h2>Acceso al Portal CDE</h2>
             <form id="loginForm">
@@ -28,7 +26,7 @@
             </form>
         </div>
 
-        <!-- DASHBOARD DEL CDE -->
+        <!-- DASHBOARD -->
         <div id="dashboardView" class="dashboard-hidden">
             <div class="controls-bar card">
                 <div class="control-group">
@@ -42,21 +40,16 @@
             </div>
 
             <div class="tabs">
-                <button class="tab-btn active" data-tab="01_WIP">01_WIP (Trabajo en Progreso)</button>
+                <button class="tab-btn" data-tab="01_WIP">01_WIP (Trabajo en Progreso)</button>
                 <button class="tab-btn" data-tab="02_SHARED">02_SHARED (Compartido)</button>
                 <button class="tab-btn" data-tab="03_PUBLISHED">03_PUBLISHED (Publicado)</button>
                 <button class="tab-btn" data-tab="04_ARCHIVED">04_ARCHIVED (Archivado)</button>
             </div>
 
-            <!-- PASO 2: TARJETA INTERACTIVA DE NOTAS TÉCNICAS (PARA MODELADOR / REVISOR / ADMIN) -->
-            <div id="technicalNoteCard" class="card" style="display: none; border-left: 4px solid #ef4444; background: rgba(239, 68, 68, 0.08); margin-bottom: 1.5rem; padding: 1.2rem;">
-                <!-- Renderizado dinámicamente desde app.js -->
-            </div>
+            <!-- MÓDULO UNIFICADO DE INTERACCIÓN TÉCNICA Y NOTAS -->
+            <div id="technicalNoteCard" class="card" style="display: none; margin-bottom: 1.5rem; padding: 1.2rem;"></div>
 
-            <!-- CONTENEDOR DINÁMICO DE ACTIVIDAD Y NOTAS TÉCNICAS -->
-            <div id="activityTimeline" class="card" style="display: none; background: rgba(15, 23, 42, 0.6); padding: 12px 18px; margin-bottom: 1.5rem; border-left: 4px solid var(--accent-copper); font-size: 0.88rem;"></div>
-
-            <!-- MÓDULO EXCLUSIVO DE VISTO BUENO Y FIRMA DIGITAL (CLIENTE) -->
+            <!-- VISTO BUENO Y FIRMA DIGITAL (EXCLUSIVO CLIENTE) -->
             <div id="clientApprovalCard" class="card" style="display: none; border-left: 4px solid var(--accent-copper); background: rgba(217, 119, 6, 0.05); margin-bottom: 1.5rem;">
                 <h3>📜 Visto Bueno & Firma del Acta de Recibo</h3>
                 <p><small>Al autorizar la aprobación, el sistema compilará automáticamente el Acta de Recibo en PDF con el sello digital y el checklist de entregables.</small></p>
@@ -66,11 +59,13 @@
                 <div style="margin-top: 10px; display: flex; gap: 10px; align-items: center;">
                     <button class="btn-primary" onclick="procesarAprobacionCliente('APROBADO')">Aprobar y Generar Acta PDF</button>
                     <button class="btn-secondary" style="background: #ef4444; color: #fff; border:none;" onclick="procesarAprobacionCliente('RECHAZADO')">Solicitar Ajustes</button>
-                    <span id="accessTimer" style="margin-left: auto; font-weight: bold; color: var(--accent-copper); font-size: 0.9rem;"></span>
                 </div>
             </div>
 
-            <!-- TABLA PRINCIPAL DE ENTREGABLES ISO 19650 -->
+            <!-- BITÁCORA DE EVENTOS E INTERACCIONES -->
+            <div id="activityTimeline" class="card" style="display: none; background: rgba(15, 23, 42, 0.6); padding: 12px 18px; margin-bottom: 1.5rem; border-left: 4px solid var(--accent-copper); font-size: 0.88rem;"></div>
+
+            <!-- TABLA PRINCIPAL DE ENTREGABLES -->
             <div class="card table-card">
                 <table id="filesTable">
                     <thead>
@@ -88,7 +83,7 @@
                 </table>
             </div>
 
-            <!-- VISOR 2D / IMÁGENES / REPORTES HTML -->
+            <!-- VISOR DE ARCHIVOS -->
             <div id="viewerContainer" class="card viewer-card hidden" style="position: relative;">
                 <button class="close-viewer" onclick="closeViewer()" style="position: absolute; top: 12px; right: 12px; z-index: 1000; cursor: pointer;">✕</button>
                 <iframe id="ifcViewerFrame" src="" frameborder="0" style="width: 100%; height: 550px; border: none; display: none;"></iframe>
@@ -96,22 +91,22 @@
         </div>
     </div>
 
-    <!-- MODAL DE SUBIDA Y ANEXO DE INFORMES TÉCNICOS -->
+    <!-- MODAL DE SUBIDA -->
     <div id="uploadModal" class="modal-hidden">
         <div class="modal-content card" style="max-width: 500px;">
             <h3>Subir / Anexar Entregable al CDE</h3>
             <form id="uploadFileForm" onsubmit="handleFileUpload(event)">
-                <label><small>Seleccionar Archivo Local (.rvt, .ifc, .pdf, .html):</small></label>
+                <label><small>Seleccionar Archivo Local (.rvt, .nwc, .ifc, .pdf, .html, etc.):</small></label>
                 <input type="file" id="fileInput" required style="margin-top: 5px; margin-bottom: 12px; width: 100%;">
 
                 <label><small>Pestaña Destino:</small></label>
                 <select id="uploadTargetTab" required style="width: 100%; margin-bottom: 12px;">
-                    <option value="01_WIP">01_WIP (Modelador - Nativos)</option>
-                    <option value="02_SHARED">02_SHARED (Coordinación / Informes BCF)</option>
+                    <option value="01_WIP">01_WIP (Modelador - Nativos/Trabajo)</option>
+                    <option value="02_SHARED">02_SHARED (Coordinación / Intercambio BEP)</option>
                 </select>
 
                 <label><small>Comentario / Resumen del Cambio:</small></label>
-                <textarea id="uploadComment" placeholder="Ej. Entrega de informe de interferencias en fachada..." style="width: 100%; height: 60px; border-radius: 6px; background: #0f172a; color: #fff; padding: 6px;" required></textarea>
+                <textarea id="uploadComment" placeholder="Ej. Archivo nativo Navisworks entregado para coordinación de interferencias..." style="width: 100%; height: 60px; border-radius: 6px; background: #0f172a; color: #fff; padding: 6px;" required></textarea>
 
                 <div class="modal-actions" style="margin-top:15px; display: flex; justify-content: flex-end; gap: 10px;">
                     <button type="button" class="btn-secondary" onclick="closeUploadModal()">Cancelar</button>
@@ -121,7 +116,7 @@
         </div>
     </div>
 
-    <!-- MODAL CREACIÓN DE PROYECTOS ISO 19650 -->
+    <!-- MODAL CREACIÓN DE PROYECTOS -->
     <div id="projectModal" class="modal-hidden">
         <div class="modal-content card">
             <h3>Crear Nuevo Proyecto en CDE</h3>
