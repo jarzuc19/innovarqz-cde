@@ -34,9 +34,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     document.querySelectorAll(".tab-btn").forEach(btn => {
         btn.addEventListener("click", (e) => {
+            const requestedTab = e.target.dataset.tab;
+
+            // Bloqueo de seguridad ISO 19650 en clic manual
+            if (!validarAccesoPestana(requestedTab)) {
+                alert(`⛔ Acceso denegado: Su rol (${currentUser.cargo}) no tiene permisos para acceder a la carpeta ${requestedTab}.`);
+                return;
+            }
+
             document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
             e.target.classList.add("active");
-            activeTab = e.target.dataset.tab;
+            activeTab = requestedTab;
             
             const clientCard = document.getElementById("clientApprovalCard");
             if (clientCard && currentUser) {
@@ -47,6 +55,15 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 });
+
+function validarAccesoPestana(tabName) {
+    if (!userPermissions) return false;
+    if (tabName === "01_WIP") return !!userPermissions.permiso_wip;
+    if (tabName === "02_SHARED") return !!userPermissions.permiso_shared;
+    if (tabName === "03_PUBLISHED") return !!userPermissions.permiso_published;
+    if (tabName === "04_ARCHIVED") return !!userPermissions.permiso_wip;
+    return false;
+}
 
 // ==============================================================================
 // AUTENTICACIÓN Y EVALUACIÓN DE ROLES
@@ -98,7 +115,7 @@ async function handleLogin(e) {
 }
 
 // ==============================================================================
-// GESTIÓN DE PROYECTOS Y CONTROL DE PERMISOS
+// GESTIÓN DE PROYECTOS Y REDIRECCIÓN INICIAL SEGÚN ROL
 // ==============================================================================
 async function loadProjects() {
     let proyectosVisibles = [];
@@ -157,13 +174,22 @@ async function handleProjectChange(e) {
         userPermissions = permiso || { permiso_wip: false, permiso_shared: false, permiso_published: true, permiso_archived: false };
     }
 
-    aplicarRestriccionPestanas();
+    // Redirección de pestaña por defecto según perfil de usuario
+    if (currentUser.cargo === "CLIENTE") {
+        activeTab = "03_PUBLISHED";
+    } else if (currentUser.cargo.includes("REVISOR")) {
+        activeTab = "02_SHARED";
+    } else {
+        activeTab = "01_WIP";
+    }
+
+    aplicarRestriccionPestanasVisuales();
     evaluarNotasTecnicasActivas();
     cargarTimelineActividad();
     loadFiles();
 }
 
-function aplicarRestriccionPestanas() {
+function aplicarRestriccionPestanasVisuales() {
     const tabWip = document.querySelector('.tab-btn[data-tab="01_WIP"]');
     const tabShared = document.querySelector('.tab-btn[data-tab="02_SHARED"]');
     const tabPublished = document.querySelector('.tab-btn[data-tab="03_PUBLISHED"]');
@@ -174,6 +200,14 @@ function aplicarRestriccionPestanas() {
     if (tabPublished) tabPublished.style.display = userPermissions.permiso_published ? "inline-block" : "none";
     if (tabArchived) tabArchived.style.display = userPermissions.permiso_wip ? "inline-block" : "none";
 
+    document.querySelectorAll(".tab-btn").forEach(b => {
+        if (b.dataset.tab === activeTab) {
+            b.classList.add("active");
+        } else {
+            b.classList.remove("active");
+        }
+    });
+
     const clientCard = document.getElementById("clientApprovalCard");
     if (clientCard) {
         clientCard.style.display = (currentUser.cargo === "CLIENTE" && activeTab === "03_PUBLISHED") ? "block" : "none";
@@ -181,7 +215,7 @@ function aplicarRestriccionPestanas() {
 }
 
 // ==============================================================================
-// PASO 2: TARJETA INTERACTIVA DE NOTAS TÉCNICAS (CON 2 BOTONES DE RESPUESTA)
+// MÓDULO UNIFICADO DE INTERACCIÓN TÉCNICA Y NOTAS
 // ==============================================================================
 async function evaluarNotasTecnicasActivas() {
     const card = document.getElementById("technicalNoteCard");
@@ -192,7 +226,6 @@ async function evaluarNotasTecnicasActivas() {
         return;
     }
 
-    // Consultar el último evento de nota técnica en la bitácora
     const { data: notas } = await supabaseClient
         .from("audit_logs")
         .select("*")
@@ -206,43 +239,56 @@ async function evaluarNotasTecnicasActivas() {
         const esSolicitudCliente = ultimaNota.archivo_nombre.includes("AJUSTES_SOLICITADOS");
         const esConfirmado = ultimaNota.archivo_nombre.includes("CONFIRMADO_RECIBIDO");
         const esReunion = ultimaNota.archivo_nombre.includes("SOLICITUD_REUNION");
+        const esModelador = currentUser.cargo.includes("MODELADOR");
 
         card.style.display = "block";
 
         if (esSolicitudCliente) {
             card.style.borderColor = "#ef4444";
             card.style.background = "rgba(239, 68, 68, 0.08)";
-            card.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                    <div>
-                        <h4 style="color: #ef4444; margin-bottom: 5px;">🚨 Solicitud de Ajustes del Cliente / Revisor</h4>
-                        <p style="font-size: 0.9rem; color: #f8fafc; margin-bottom: 8px;"><strong>Detalle:</strong> "${ultimaNota.drive_file_url}"</p>
-                        <small style="color: var(--text-muted);">Registrado el: ${ultimaNota.version}</small>
+            
+            let botonesAccion = "";
+            if (esModelador) {
+                botonesAccion = `
+                    <div style="margin-top: 15px; display: flex; gap: 10px;">
+                        <button class="btn-primary" style="background: #10b981; font-size: 0.85rem;" onclick="responderNotaTecnica('CONFIRMADO_RECIBIDO', 'Entendido. Se inician ajustes en modelos nativos.')">
+                            ✅ Confirmo Lectura (Iniciar Ajustes)
+                        </button>
+                        <button class="btn-secondary" style="background: #d97706; color: #fff; font-size: 0.85rem;" onclick="responderNotaTecnica('SOLICITUD_REUNION', 'Solicitud de mesa de trabajo técnica para aclarar observaciones.')">
+                            📅 Solicitar Comité Técnico
+                        </button>
                     </div>
+                `;
+            } else {
+                botonesAccion = `
+                    <div style="margin-top: 10px; font-size: 0.82rem; color: #d97706;">
+                        <em>Monitoreo del Revisor/SuperAdmin: Esperando confirmación o solicitud del Modelador.</em>
+                    </div>
+                `;
+            }
+
+            card.innerHTML = `
+                <div>
+                    <h4 style="color: #ef4444; margin-bottom: 5px;">🚨 Solicitud de Ajustes / Observaciones del Cliente</h4>
+                    <p style="font-size: 0.9rem; color: #f8fafc; margin-bottom: 8px;"><strong>Mensaje:</strong> "${ultimaNota.drive_file_url}"</p>
+                    <small style="color: var(--text-muted);">Registrado el: ${ultimaNota.version}</small>
                 </div>
-                <div style="margin-top: 15px; display: flex; gap: 10px;">
-                    <button class="btn-primary" style="background: #10b981; font-size: 0.85rem;" onclick="responderNotaTecnica('CONFIRMADO_RECIBIDO', 'Entendido. Se inician ajustes en modelos nativos.')">
-                        ✅ Confirmar Recibido (Iniciar Ajustes)
-                    </button>
-                    <button class="btn-secondary" style="background: #d97706; color: #fff; font-size: 0.85rem;" onclick="responderNotaTecnica('SOLICITUD_REUNION', 'Solicitud de mesa de trabajo técnica para aclarar observaciones.')">
-                        📅 Solicitar Reunión con el Equipo
-                    </button>
-                </div>
+                ${botonesAccion}
             `;
         } else if (esConfirmado) {
             card.style.borderColor = "#10b981";
             card.style.background = "rgba(16, 185, 129, 0.08)";
             card.innerHTML = `
-                <h4 style="color: #10b981; margin-bottom: 5px;">🛠️ Ajustes en Proceso por el Equipo Técnico</h4>
-                <p style="font-size: 0.88rem; color: #f8fafc;">El equipo de diseño ha verificado las observaciones y se encuentra modificando los entregables.</p>
-                <small style="color: var(--text-muted);">Estado actualizado: ${ultimaNota.version} por ${ultimaNota.drive_file_url.split(':')[0]}</small>
+                <h4 style="color: #10b981; margin-bottom: 5px;">🛠️ Ajustes en Proceso por el Modelador</h4>
+                <p style="font-size: 0.88rem; color: #f8fafc;">El modelador ha verificado las observaciones y se encuentra modificando los entregables.</p>
+                <small style="color: var(--text-muted);">Actualizado: ${ultimaNota.version} por ${ultimaNota.drive_file_url.split(':')[0]}</small>
             `;
         } else if (esReunion) {
             card.style.borderColor = "#d97706";
             card.style.background = "rgba(217, 119, 6, 0.08)";
             card.innerHTML = `
-                <h4 style="color: #d97706; margin-bottom: 5px;">📅 Mesa de Trabajo Solicitada</h4>
-                <p style="font-size: 0.88rem; color: #f8fafc;">Se ha solicitado una sesión de coordinación antes de modificar los modelos.</p>
+                <h4 style="color: #d97706; margin-bottom: 5px;">📅 Comité Técnico Solicitado</h4>
+                <p style="font-size: 0.88rem; color: #f8fafc;">El modelador ha solicitado una mesa de trabajo técnica antes de modificar los modelos.</p>
                 <small style="color: var(--text-muted);">Registrado: ${ultimaNota.version}</small>
             `;
         }
@@ -314,7 +360,7 @@ async function cargarTimelineActividad() {
 }
 
 // ==============================================================================
-// SUBIDA DE ARCHIVOS Y REGLA ESTRICTA DE NOMENCLATURA ISO 19650
+// SUBIDA DE ARCHIVOS Y NOMENCLATURA ISO 19650
 // ==============================================================================
 function openUploadModal() {
     const modal = document.getElementById("uploadModal");
@@ -537,11 +583,17 @@ async function generarPDFActaRecibo(observaciones) {
 }
 
 // ==============================================================================
-// PASO 1: RENDERIZADO DE ENTREGABLES (1 SOLA FILA POR ARCHIVO ÚNICO)
+// RENDERIZADO DE ENTREGABLES (BLOQUEO DE ROL + UNICIDAD POR ARCHIVO)
 // ==============================================================================
 async function loadFiles() {
     const tbody = document.getElementById("filesTableBody");
     if (!tbody || !activeProjectId) return;
+
+    // Validación de seguridad antes de consultar
+    if (!validarAccesoPestana(activeTab)) {
+        tbody.innerHTML = `<tr><td colspan="5" style="color:#ef4444; font-weight:bold;">⛔ Acceso restringido a la carpeta ${activeTab} según su perfil de usuario.</td></tr>`;
+        return;
+    }
 
     const { data: files, error } = await supabaseClient
         .from("audit_logs")
@@ -562,7 +614,6 @@ async function loadFiles() {
         return;
     }
 
-    // MAPA DE UNICIDAD: Mantiene solo la última versión/actualización por nombre único
     const mapaUnicos = new Map();
 
     files.forEach(f => {
@@ -584,7 +635,6 @@ async function loadFiles() {
         }
 
         if (perteneceAPestana) {
-            // Guarda solo la iteración más reciente si hay duplicados
             if (!mapaUnicos.has(f.archivo_nombre)) {
                 mapaUnicos.set(f.archivo_nombre, f);
             }
