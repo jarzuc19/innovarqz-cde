@@ -48,10 +48,13 @@
                 <button class="tab-btn" data-tab="04_ARCHIVED">04_ARCHIVED (Archivado)</button>
             </div>
 
-            <!-- CONTENEDOR DINÁMICO DE ACTIVIDAD Y NOTAS TÉCNICAS (AUDITORÍA) -->
-            <div id="activityTimeline" class="card" style="display: none; background: rgba(15, 23, 42, 0.6); padding: 12px 18px; margin-bottom: 1.5rem; border-left: 4px solid var(--accent-copper); font-size: 0.88rem;">
-                <!-- Inyectado dinámicamente por app.js -->
+            <!-- PASO 2: TARJETA INTERACTIVA DE NOTAS TÉCNICAS (PARA MODELADOR / REVISOR / ADMIN) -->
+            <div id="technicalNoteCard" class="card" style="display: none; border-left: 4px solid #ef4444; background: rgba(239, 68, 68, 0.08); margin-bottom: 1.5rem; padding: 1.2rem;">
+                <!-- Renderizado dinámicamente desde app.js -->
             </div>
+
+            <!-- CONTENEDOR DINÁMICO DE ACTIVIDAD Y NOTAS TÉCNICAS -->
+            <div id="activityTimeline" class="card" style="display: none; background: rgba(15, 23, 42, 0.6); padding: 12px 18px; margin-bottom: 1.5rem; border-left: 4px solid var(--accent-copper); font-size: 0.88rem;"></div>
 
             <!-- MÓDULO EXCLUSIVO DE VISTO BUENO Y FIRMA DIGITAL (CLIENTE) -->
             <div id="clientApprovalCard" class="card" style="display: none; border-left: 4px solid var(--accent-copper); background: rgba(217, 119, 6, 0.05); margin-bottom: 1.5rem;">
@@ -75,7 +78,7 @@
                             <th>Nombre del Archivo (ISO 19650)</th>
                             <th>Discipl.</th>
                             <th>Estado</th>
-                            <th>Fecha / Hora de Registro</th>
+                            <th>Última Modificación (Drive)</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
