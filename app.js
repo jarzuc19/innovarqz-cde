@@ -213,7 +213,7 @@ function aplicarRestriccionPestanasVisuales() {
 }
 
 // ==============================================================================
-// HILO DE NOTAS TÉCNICAS (CON BOTONES Y EVENTLISTENERS CORREGIDOS)
+// HILO DE NOTAS TÉCNICAS
 // ==============================================================================
 async function evaluarNotasTecnicasActivas() {
     const card = document.getElementById("technicalNoteCard");
@@ -269,7 +269,7 @@ async function evaluarNotasTecnicasActivas() {
         html += `
             <div style="background: rgba(15, 23, 42, 0.6); padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; border-left: 3px solid ${colorTexto};">
                 <strong style="color: ${colorTexto}; font-size: 0.85rem;">${icono}</strong> 
-                <span style="font-size: 0.88rem; color: #fff;">"${n.drive_file_url}"</span>
+                <span style="font-size: 0.88rem; color: #fff;">${n.drive_file_url}</span>
                 <div style="text-align: right;"><small style="color: var(--text-muted); font-size: 0.72rem;">${n.version}</small></div>
             </div>
         `;
@@ -294,7 +294,6 @@ async function evaluarNotasTecnicasActivas() {
 
     card.innerHTML = html;
 
-    // Asignación limpia de eventos a los botones evitando bloqueos de sintaxis
     const btnConfirmar = document.getElementById("btnConfirmarLectura");
     if (btnConfirmar) {
         btnConfirmar.onclick = function() {
@@ -339,19 +338,18 @@ async function responderNotaTecnica(tipoRespuesta, comentario) {
 }
 
 // ==============================================================================
-// BITÁCORA UNIFICADA (HUMANA + EVENTOS REALES EN ORDEN DESCENDENTE POR ID)
+// BITÁCORA DE EVENTOS E INTERACCIONES (ORDENADADAS CRONOLÓGICAMENTE)
 // ==============================================================================
 async function cargarTimelineActividad() {
     let timelineDiv = document.getElementById("activityTimeline");
     if (!timelineDiv) return;
 
-    // Orden descendente estricto por ID para traer el instante real de registro
     const { data: logs } = await supabaseClient
         .from("audit_logs")
         .select("*")
         .eq("proyecto_id", activeProjectId)
         .order("id", { ascending: false })
-        .limit(10);
+        .limit(12);
 
     if (!logs || logs.length === 0) {
         timelineDiv.style.display = "block";
@@ -365,8 +363,8 @@ async function cargarTimelineActividad() {
     logs.forEach(l => {
         const fecha = l.version || "Sin fecha";
         if (l.archivo_nombre.startsWith("NOTA_TECNICA_")) {
-            let eventoNombre = l.archivo_nombre.replace("NOTA_TECNICA_", "");
-            html += `<li style='color: #fbbf24;'><strong>${fecha}</strong> — 💬 <strong>[INTERACCIÓN]</strong> ${eventoNombre}: <em>${l.drive_file_url}</em></li>`;
+            let tipoEvento = l.archivo_nombre.replace("NOTA_TECNICA_", "");
+            html += `<li style='color: #fbbf24;'><strong>${fecha}</strong> — 💬 <strong>[INTERACCIÓN]</strong> ${tipoEvento}: <em>${l.drive_file_url}</em></li>`;
         } else {
             html += `<li><strong>${fecha}</strong> — Entregable: <em>${l.archivo_nombre}</em> en <span class="badge" style="font-size:0.75rem;">${l.estado_destino || l.estado_origen}</span></li>`;
         }
@@ -377,7 +375,7 @@ async function cargarTimelineActividad() {
 }
 
 // ==============================================================================
-// SUBIDA Y PROMOCIÓN CON RENOMBRADO AUTOMÁTICO S0 ➔ S1 ➔ A1
+// SUBIDA Y PROMOCIÓN CON RENOMBRADO S0 ➔ S1 ➔ A1
 // ==============================================================================
 function openUploadModal() {
     const modal = document.getElementById("uploadModal");
@@ -582,7 +580,7 @@ async function generarPDFActaRecibo(observaciones) {
 
     const { PDFDocument, rgb, StandardFonts } = window.PDFLib;
     const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([600, 800]);
+    page = pdfDoc.addPage([600, 800]);
     const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
@@ -596,7 +594,7 @@ async function generarPDFActaRecibo(observaciones) {
 
     page.drawText("Lista de Archivos Recibidos a Satisfacción:", { x: 50, y: 610, size: 11, font });
 
-    const { data: files } = await supabaseClient.from("audit_logs").select("*").eq("proyecto_id", activeProjectId);
+    const { data: files } = await supabaseClient.from("audit_logs").select("*").eq("proyecto_id", activeProjectId).eq("activo", true);
 
     let yPos = 585;
     if (files) {
@@ -617,7 +615,7 @@ async function generarPDFActaRecibo(observaciones) {
 }
 
 // ==============================================================================
-// RENDERIZADO DE ENTREGABLES
+// RENDERIZADO DE ENTREGABLES (FILTRADO POR ACTIVO = TRUE)
 // ==============================================================================
 async function loadFiles() {
     const tbody = document.getElementById("filesTableBody");
@@ -628,10 +626,12 @@ async function loadFiles() {
         return;
     }
 
+    // Filtra exclusivamente por archivos que siguen VIVOS en Google Drive (activo = true)
     const { data: files, error } = await supabaseClient
         .from("audit_logs")
         .select("*")
         .eq("proyecto_id", activeProjectId)
+        .eq("activo", true)
         .order("id", { ascending: false });
 
     tbody.innerHTML = "";
@@ -643,7 +643,7 @@ async function loadFiles() {
     }
 
     if (!files || files.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5">No hay entregables registrados para este proyecto.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5">No hay entregables activos en esta carpeta.</td></tr>`;
         return;
     }
 
