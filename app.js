@@ -3,7 +3,7 @@
 // ==============================================================================
 const SUPABASE_URL = "https://bjlqtzrcrofpqlmyvoob.supabase.co";
 const SUPABASE_KEY = "sb_publishable_htPtQvL-1wrLfu7ACHBg1w_epAZsu1E";
-const WEBHOOK_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbyOXZ5NQE4j4Lgvxzso4CSN4bROmbvhxwZgptV631PxxGPbk-qZBdsiFn-uTc1GO9G_HQ/exec";
+const WEBHOOK_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbxL-gzS5e3FSjePYKzoML2NHok7-2YUKr4x8s0bbZtTxdquFTRDV1TzakVPBTAnmVkZNA/exec";
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -68,7 +68,7 @@ function validarAccesoPestana(tabName) {
 }
 
 // ==============================================================================
-// AUTENTICACIÓN (LOGIN CORREGIDO)
+// AUTENTICACIÓN
 // ==============================================================================
 async function handleLogin(e) {
     e.preventDefault();
@@ -349,7 +349,7 @@ async function responderNotaTecnica(tipoRespuesta, comentario) {
 }
 
 // ==============================================================================
-// BITÁCORA REAL (ACCIONES HUMANAS E INTERACCIONES CRONOLÓGICAS)
+// BITÁCORA REAL
 // ==============================================================================
 async function cargarTimelineActividad() {
     let timelineDiv = document.getElementById("activityTimeline");
@@ -391,7 +391,7 @@ async function cargarTimelineActividad() {
 }
 
 // ==============================================================================
-// SUBIDA Y PROMOCIÓN CON RENOMBRADO S0 ➔ S1 ➔ A1
+// SUBIDA DIRECTA DE ARCHIVOS PESADOS (> 50MB) SIN PASAR POR APPS SCRIPT
 // ==============================================================================
 function openUploadModal() {
     const modal = document.getElementById("uploadModal");
@@ -426,7 +426,6 @@ async function handleFileUpload(e) {
     e.preventDefault();
     const fileInput = document.getElementById("fileInput");
     const targetTab = document.getElementById("uploadTargetTab").value;
-    const comment = document.getElementById("uploadComment").value;
     const btnSubmit = document.getElementById("btnSubmitUpload");
 
     if (!fileInput.files || fileInput.files.length === 0) {
@@ -442,49 +441,74 @@ async function handleFileUpload(e) {
     }
 
     btnSubmit.disabled = true;
-    btnSubmit.innerText = "Subiendo archivo...";
+    btnSubmit.innerText = "Iniciando sesión segura...";
 
-    const reader = new FileReader();
-    reader.onload = async function(event) {
-        const base64Data = event.target.result.split(',')[1];
+    try {
+        // Step 1: Solicitar la URL de subida resumible a Apps Script
+        const reqSession = await fetch(WEBHOOK_APPS_SCRIPT, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({
+                accion: "OBTENER_URL_RESUMIBLE",
+                proyecto_id: activeProjectId,
+                estado_destino: targetTab,
+                nombre_archivo: file.name,
+                mime_type: file.type || "application/octet-stream"
+            })
+        });
 
-        const payload = {
-            accion: "SUBIR_INFORME",
-            proyecto_id: activeProjectId,
-            codigo_proyecto: activeProjectCode,
-            nombre_archivo: file.name,
-            estado_destino: targetTab,
-            usuario_email: currentUser.email,
-            usuario_nombre: currentUser.nombre_completo,
-            archivo_base64: base64Data,
-            mime_type: file.type,
-            comentario: comment
-        };
+        const resSession = await reqSession.json();
 
-        try {
-            const res = await fetch(WEBHOOK_APPS_SCRIPT, {
-                method: "POST",
-                headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: JSON.stringify(payload)
-            });
-            const responseData = await res.json();
-
-            if (responseData.status === "success") {
-                alert("✅ Archivo subido e integrado exitosamente.");
-                closeUploadModal();
-                loadFiles();
-                cargarTimelineActividad();
-            } else {
-                alert("⚠️ Error en servidor: " + responseData.message);
-            }
-        } catch (err) {
-            alert("Error al subir archivo: " + err.message);
-        } finally {
+        if (resSession.status !== "success" || !resSession.uploadUrl) {
+            alert("⚠️ No se pudo generar el canal de transmisión directo: " + resSession.message);
             btnSubmit.disabled = false;
             btnSubmit.innerText = "Subir al CDE";
+            return;
         }
-    };
-    reader.readAsDataURL(file);
+
+        // Step 2: Transmisión directa desde el navegador a la API de Drive
+        btnSubmit.innerText = "Transmitiendo archivo...";
+
+        const uploadRes = await fetch(resSession.uploadUrl, {
+            method: "PUT",
+            headers: { "Content-Type": file.type || "application/octet-stream" },
+            body: file
+        });
+
+        const uploadData = await uploadRes.json();
+
+        if (uploadData.id) {
+            const driveFileUrl = `https://drive.google.com/file/d/${uploadData.id}/view`;
+
+            // Step 3: Notificar a Apps Script que la carga terminó para registrar en la bitácora
+            await fetch(WEBHOOK_APPS_SCRIPT, {
+                method: "POST",
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify({
+                    accion: "REGISTRAR_CARGA_COMPLETA",
+                    proyecto_id: activeProjectId,
+                    codigo_proyecto: activeProjectCode,
+                    nombre_archivo: file.name,
+                    estado_destino: targetTab,
+                    usuario_nombre: currentUser.nombre_completo,
+                    drive_file_url: driveFileUrl
+                })
+            });
+
+            alert("✅ ¡Modelo subido e integrado exitosamente al CDE!");
+            closeUploadModal();
+            loadFiles();
+            cargarTimelineActividad();
+        } else {
+            alert("⚠️ Ocurrió un inconveniente durante la transmisión del archivo.");
+        }
+
+    } catch (err) {
+        alert("Error de subida: " + err.message);
+    } finally {
+        btnSubmit.disabled = false;
+        btnSubmit.innerText = "Subir al CDE";
+    }
 }
 
 async function promoverArchivo(nombreArchivo, estadoOrigen, estadoDestino) {
