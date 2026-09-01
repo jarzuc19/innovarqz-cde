@@ -3,7 +3,7 @@
 // ==============================================================================
 const SUPABASE_URL = "https://bjlqtzrcrofpqlmyvoob.supabase.co";
 const SUPABASE_KEY = "sb_publishable_htPtQvL-1wrLfu7ACHBg1w_epAZsu1E";
-const WEBHOOK_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbyOXZ5NQE4j4Lgvxzso4CSN4bROmbvhxwZgptV631PxxGPbk-qZBdsiFn-uTc1GO9G_HQ/exec";
+const WEBHOOK_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbzMjRSmC_Lcqy6HuqOOMpTezhFXd1RsaIiA16HhLMlfIjWI_fuW42xpm26g4ZjKwyBDjw/exec";
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -114,7 +114,7 @@ async function handleLogin(e) {
 }
 
 // ==============================================================================
-// PROYECTOS Y REDIRECCIÓN DE PESTAÑA INICIAL SEGÚN ROL
+// PROYECTOS Y REDIRECCIÓN INICIAL
 // ==============================================================================
 async function loadProjects() {
     let proyectosVisibles = [];
@@ -213,7 +213,7 @@ function aplicarRestriccionPestanasVisuales() {
 }
 
 // ==============================================================================
-// MÓDULO UNIFICADO DE INTERACCIÓN TÉCNICA (HISTORIAL DE DISCUSIÓN RECURRENTE)
+// HILO DE NOTAS TÉCNICAS (CON BOTONES Y EVENTLISTENERS CORREGIDOS)
 // ==============================================================================
 async function evaluarNotasTecnicasActivas() {
     const card = document.getElementById("technicalNoteCard");
@@ -224,21 +224,15 @@ async function evaluarNotasTecnicasActivas() {
         return;
     }
 
-    // Traemos las últimas 5 interacciones para construir el hilo de conversación
     const { data: notas, error } = await supabaseClient
         .from("audit_logs")
         .select("*")
         .eq("proyecto_id", activeProjectId)
         .ilike("archivo_nombre", "NOTA_TECNICA_%")
         .order("id", { ascending: false })
-        .limit(5);
+        .limit(10);
 
-    if (error) {
-        console.error("Error al consultar notas técnicas:", error);
-        return;
-    }
-
-    if (!notas || notas.length === 0) {
+    if (error || !notas || notas.length === 0) {
         card.style.display = "none";
         return;
     }
@@ -248,7 +242,6 @@ async function evaluarNotasTecnicasActivas() {
     const esSolicitudCliente = ultimaNota.archivo_nombre.includes("AJUSTES_SOLICITADOS");
     const esModelador = currentUser.cargo.includes("MODELADOR") || currentUser.cargo.includes("SUPER_ADMIN");
 
-    // Definir estilos dinámicos de la tarjeta según el estado actual
     if (esSolicitudCliente) {
         card.style.borderColor = "#ef4444";
         card.style.background = "rgba(239, 68, 68, 0.08)";
@@ -260,11 +253,9 @@ async function evaluarNotasTecnicasActivas() {
         card.style.background = "rgba(217, 119, 6, 0.08)";
     }
 
-    // Construcción del Historial Visible
-    let html = `<h4 style="color: var(--accent-copper); margin-bottom: 10px;">💬 Hilo de Interacción y Notas Técnicas del Proyecto</h4>`;
-    html += `<div style="max-height: 200px; overflow-y: auto; padding-right: 5px; margin-bottom: 12px;">`;
+    let html = `<h4 style="color: var(--accent-copper); margin-bottom: 10px;">💬 Hilo de Interacción y Notas Técnicas</h4>`;
+    html += `<div style="max-height: 220px; overflow-y: auto; padding-right: 5px; margin-bottom: 12px;">`;
 
-    // Renderizamos de la más antigua a la más reciente dentro del bloque
     const notasInvertidas = [...notas].reverse();
     notasInvertidas.forEach(n => {
         let tipo = n.archivo_nombre.replace("NOTA_TECNICA_", "");
@@ -286,14 +277,13 @@ async function evaluarNotasTecnicasActivas() {
 
     html += `</div>`;
 
-    // Controles de respuesta activa para el Modelador
     if (esModelador) {
         html += `
             <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #334155; display: flex; gap: 10px;">
-                <button class="btn-primary" style="background: #10b981; font-size: 0.82rem;" onclick="responderNotaTecnica('CONFIRMADO_RECIBIDO', 'Entendido. Se inician ajustes en modelos nativos.')">
+                <button id="btnConfirmarLectura" class="btn-primary" style="background: #10b981; font-size: 0.82rem;">
                     ✅ Confirmar Lectura
                 </button>
-                <button class="btn-secondary" style="background: #d97706; color: #fff; font-size: 0.82rem;" onclick="responderNotaTecnica('SOLICITUD_REUNION', 'Solicitud de mesa de trabajo técnica para aclarar observaciones.')">
+                <button id="btnSolicitarComite" class="btn-secondary" style="background: #d97706; color: #fff; font-size: 0.82rem;">
                     📅 Solicitar Comité Técnico
                 </button>
             </div>
@@ -303,21 +293,65 @@ async function evaluarNotasTecnicasActivas() {
     }
 
     card.innerHTML = html;
+
+    // Asignación limpia de eventos a los botones evitando bloqueos de sintaxis
+    const btnConfirmar = document.getElementById("btnConfirmarLectura");
+    if (btnConfirmar) {
+        btnConfirmar.onclick = function() {
+            responderNotaTecnica('CONFIRMADO_RECIBIDO', 'Entendido. Se inician ajustes en modelos nativos.');
+        };
+    }
+
+    const btnComite = document.getElementById("btnSolicitarComite");
+    if (btnComite) {
+        btnComite.onclick = function() {
+            responderNotaTecnica('SOLICITUD_REUNION', 'Solicitud de mesa de trabajo técnica para aclarar observaciones.');
+        };
+    }
+}
+
+async function responderNotaTecnica(tipoRespuesta, comentario) {
+    if (!confirm("¿Confirma registrar esta respuesta en la bitácora del proyecto?")) return;
+
+    const payload = {
+        accion: "RESPUESTA_NOTA_TECNICA",
+        proyecto_id: activeProjectId,
+        tipo_respuesta: tipoRespuesta,
+        usuario_nombre: currentUser.nombre_completo,
+        comentario: comentario
+    };
+
+    try {
+        const res = await fetch(WEBHOOK_APPS_SCRIPT, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.status === "success") {
+            alert("✅ Respuesta registrada correctamente.");
+            evaluarNotasTecnicasActivas();
+            cargarTimelineActividad();
+        }
+    } catch (err) {
+        alert("Error al registrar respuesta: " + err.message);
+    }
 }
 
 // ==============================================================================
-// BARRA DE ACTIVIDAD Y BITÁCORA UNIFICADA (INCLUYE RESPUESTAS)
+// BITÁCORA UNIFICADA (HUMANA + EVENTOS REALES EN ORDEN DESCENDENTE POR ID)
 // ==============================================================================
 async function cargarTimelineActividad() {
     let timelineDiv = document.getElementById("activityTimeline");
     if (!timelineDiv) return;
 
+    // Orden descendente estricto por ID para traer el instante real de registro
     const { data: logs } = await supabaseClient
         .from("audit_logs")
         .select("*")
         .eq("proyecto_id", activeProjectId)
         .order("id", { ascending: false })
-        .limit(8);
+        .limit(10);
 
     if (!logs || logs.length === 0) {
         timelineDiv.style.display = "block";
@@ -343,7 +377,7 @@ async function cargarTimelineActividad() {
 }
 
 // ==============================================================================
-// SUBIDA Y PROMOCIÓN CON RENOMBRADO ISO 19650 DE S0 ➔ S1 ➔ A1
+// SUBIDA Y PROMOCIÓN CON RENOMBRADO AUTOMÁTICO S0 ➔ S1 ➔ A1
 // ==============================================================================
 function openUploadModal() {
     const modal = document.getElementById("uploadModal");
@@ -361,7 +395,6 @@ function validarNomenclaturaISO19650(nombreArchivo) {
     return partes.length >= 6;
 }
 
-// Recalcula la etiqueta manteniendo la extensión intacta
 function recalcularEstadoEnNombre(nombreOriginal, nuevoEstadoISO) {
     const partesExt = nombreOriginal.split('.');
     const ext = partesExt.pop();
@@ -441,7 +474,6 @@ async function handleFileUpload(e) {
 }
 
 async function promoverArchivo(nombreArchivo, estadoOrigen, estadoDestino) {
-    // Calculamos el nuevo nombre con sufijo S1 o A1 antes de llamar al servidor
     let nuevoEstadoISO = (estadoDestino === "02_SHARED") ? "S1" : "A1";
     let nuevoNombreCalculado = recalcularEstadoEnNombre(nombreArchivo, nuevoEstadoISO);
 
