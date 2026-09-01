@@ -5,10 +5,8 @@ const SUPABASE_URL = "https://bjlqtzrcrofpqlmyvoob.supabase.co";
 const SUPABASE_KEY = "sb_publishable_htPtQvL-1wrLfu7ACHBg1w_epAZsu1E";
 const WEBHOOK_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbzMjRSmC_Lcqy6HuqOOMpTezhFXd1RsaIiA16HhLMlfIjWI_fuW42xpm26g4ZjKwyBDjw/exec";
 
-// Inicialización del cliente de Supabase
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Variables de Estado de la Aplicación
 let currentUser = null;
 let userPermissions = null;
 let activeProjectId = null;
@@ -34,7 +32,6 @@ document.addEventListener("DOMContentLoaded", () => {
     setupDropdownWithOther("ubicacionSelect", "ubicacionOtherInput");
     setupDropdownWithOther("tipoSelect", "tipoOtherInput");
 
-    // Navegación fluida por pestañas ISO 19650
     document.querySelectorAll(".tab-btn").forEach(btn => {
         btn.addEventListener("click", (e) => {
             document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
@@ -101,7 +98,7 @@ async function handleLogin(e) {
 }
 
 // ==============================================================================
-// GESTIÓN DE PROYECTOS Y NAVEGACIÓN RESTRINGIDA POR PERMISOS
+// GESTIÓN DE PROYECTOS Y CONTROL DE PERMISOS
 // ==============================================================================
 async function loadProjects() {
     let proyectosVisibles = [];
@@ -161,6 +158,7 @@ async function handleProjectChange(e) {
     }
 
     aplicarRestriccionPestanas();
+    evaluarNotasTecnicasActivas();
     cargarTimelineActividad();
     loadFiles();
 }
@@ -179,6 +177,105 @@ function aplicarRestriccionPestanas() {
     const clientCard = document.getElementById("clientApprovalCard");
     if (clientCard) {
         clientCard.style.display = (currentUser.cargo === "CLIENTE" && activeTab === "03_PUBLISHED") ? "block" : "none";
+    }
+}
+
+// ==============================================================================
+// PASO 2: TARJETA INTERACTIVA DE NOTAS TÉCNICAS (CON 2 BOTONES DE RESPUESTA)
+// ==============================================================================
+async function evaluarNotasTecnicasActivas() {
+    const card = document.getElementById("technicalNoteCard");
+    if (!card || !activeProjectId) return;
+
+    if (currentUser.cargo === "CLIENTE") {
+        card.style.display = "none";
+        return;
+    }
+
+    // Consultar el último evento de nota técnica en la bitácora
+    const { data: notas } = await supabaseClient
+        .from("audit_logs")
+        .select("*")
+        .eq("proyecto_id", activeProjectId)
+        .like("archivo_nombre", "NOTA_TECNICA_%")
+        .order("id", { ascending: false })
+        .limit(1);
+
+    if (notas && notas.length > 0) {
+        const ultimaNota = notas[0];
+        const esSolicitudCliente = ultimaNota.archivo_nombre.includes("AJUSTES_SOLICITADOS");
+        const esConfirmado = ultimaNota.archivo_nombre.includes("CONFIRMADO_RECIBIDO");
+        const esReunion = ultimaNota.archivo_nombre.includes("SOLICITUD_REUNION");
+
+        card.style.display = "block";
+
+        if (esSolicitudCliente) {
+            card.style.borderColor = "#ef4444";
+            card.style.background = "rgba(239, 68, 68, 0.08)";
+            card.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                        <h4 style="color: #ef4444; margin-bottom: 5px;">🚨 Solicitud de Ajustes del Cliente / Revisor</h4>
+                        <p style="font-size: 0.9rem; color: #f8fafc; margin-bottom: 8px;"><strong>Detalle:</strong> "${ultimaNota.drive_file_url}"</p>
+                        <small style="color: var(--text-muted);">Registrado el: ${ultimaNota.version}</small>
+                    </div>
+                </div>
+                <div style="margin-top: 15px; display: flex; gap: 10px;">
+                    <button class="btn-primary" style="background: #10b981; font-size: 0.85rem;" onclick="responderNotaTecnica('CONFIRMADO_RECIBIDO', 'Entendido. Se inician ajustes en modelos nativos.')">
+                        ✅ Confirmar Recibido (Iniciar Ajustes)
+                    </button>
+                    <button class="btn-secondary" style="background: #d97706; color: #fff; font-size: 0.85rem;" onclick="responderNotaTecnica('SOLICITUD_REUNION', 'Solicitud de mesa de trabajo técnica para aclarar observaciones.')">
+                        📅 Solicitar Reunión con el Equipo
+                    </button>
+                </div>
+            `;
+        } else if (esConfirmado) {
+            card.style.borderColor = "#10b981";
+            card.style.background = "rgba(16, 185, 129, 0.08)";
+            card.innerHTML = `
+                <h4 style="color: #10b981; margin-bottom: 5px;">🛠️ Ajustes en Proceso por el Equipo Técnico</h4>
+                <p style="font-size: 0.88rem; color: #f8fafc;">El equipo de diseño ha verificado las observaciones y se encuentra modificando los entregables.</p>
+                <small style="color: var(--text-muted);">Estado actualizado: ${ultimaNota.version} por ${ultimaNota.drive_file_url.split(':')[0]}</small>
+            `;
+        } else if (esReunion) {
+            card.style.borderColor = "#d97706";
+            card.style.background = "rgba(217, 119, 6, 0.08)";
+            card.innerHTML = `
+                <h4 style="color: #d97706; margin-bottom: 5px;">📅 Mesa de Trabajo Solicitada</h4>
+                <p style="font-size: 0.88rem; color: #f8fafc;">Se ha solicitado una sesión de coordinación antes de modificar los modelos.</p>
+                <small style="color: var(--text-muted);">Registrado: ${ultimaNota.version}</small>
+            `;
+        }
+    } else {
+        card.style.display = "none";
+    }
+}
+
+async function responderNotaTecnica(tipoRespuesta, comentario) {
+    if (!confirm("¿Confirma registrar esta respuesta en la bitácora del proyecto?")) return;
+
+    const payload = {
+        accion: "RESPUESTA_NOTA_TECNICA",
+        proyecto_id: activeProjectId,
+        tipo_respuesta: tipoRespuesta,
+        usuario_nombre: currentUser.nombre_completo,
+        comentario: comentario
+    };
+
+    try {
+        const res = await fetch(WEBHOOK_APPS_SCRIPT, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.status === "success") {
+            alert("✅ Respuesta registrada correctamente.");
+            evaluarNotasTecnicasActivas();
+            cargarTimelineActividad();
+        }
+    } catch (err) {
+        alert("Error al registrar respuesta: " + err.message);
     }
 }
 
@@ -388,6 +485,7 @@ async function procesarAprobacionCliente(estadoAprobacion) {
             body: JSON.stringify(payload)
         });
         alert("🚨 Solicitud de ajustes notificada y registrada en la bitácora.");
+        evaluarNotasTecnicasActivas();
         cargarTimelineActividad();
     }
 }
@@ -439,7 +537,7 @@ async function generarPDFActaRecibo(observaciones) {
 }
 
 // ==============================================================================
-// RENDERIZADO DE ENTREGABLES (ORDENADO POR ID Y CON FILTRADO FLEXIBLE)
+// PASO 1: RENDERIZADO DE ENTREGABLES (1 SOLA FILA POR ARCHIVO ÚNICO)
 // ==============================================================================
 async function loadFiles() {
     const tbody = document.getElementById("filesTableBody");
@@ -464,33 +562,41 @@ async function loadFiles() {
         return;
     }
 
-    const archivosPestana = files.filter(f => {
+    // MAPA DE UNICIDAD: Mantiene solo la última versión/actualización por nombre único
+    const mapaUnicos = new Map();
+
+    files.forEach(f => {
         if (f.archivo_nombre.startsWith("ACTA_DECISION_CLIENTE") || f.archivo_nombre.startsWith("NOTA_TECNICA_")) {
-            return false;
+            return;
         }
 
         const eDestino = f.estado_destino || "";
         const eOrigen = f.estado_origen || "";
 
-        if (eDestino === activeTab || eOrigen === activeTab) return true;
+        let perteneceAPestana = (eDestino === activeTab || eOrigen === activeTab);
 
         const partes = f.archivo_nombre.split("_");
-        if (partes.length >= 6) {
+        if (!perteneceAPestana && partes.length >= 6) {
             const codigoEstado = partes[5].split(".")[0].toUpperCase();
-            if (activeTab === "01_WIP" && (codigoEstado === "S0" || eOrigen === "01_WIP")) return true;
-            if (activeTab === "02_SHARED" && (codigoEstado === "S1" || eOrigen === "02_SHARED")) return true;
-            if (activeTab === "03_PUBLISHED" && (codigoEstado.startsWith("A") || eOrigen === "03_PUBLISHED")) return true;
+            if (activeTab === "01_WIP" && (codigoEstado === "S0" || eOrigen === "01_WIP")) perteneceAPestana = true;
+            if (activeTab === "02_SHARED" && (codigoEstado === "S1" || eOrigen === "02_SHARED")) perteneceAPestana = true;
+            if (activeTab === "03_PUBLISHED" && (codigoEstado.startsWith("A") || eOrigen === "03_PUBLISHED")) perteneceAPestana = true;
         }
 
-        return false;
+        if (perteneceAPestana) {
+            // Guarda solo la iteración más reciente si hay duplicados
+            if (!mapaUnicos.has(f.archivo_nombre)) {
+                mapaUnicos.set(f.archivo_nombre, f);
+            }
+        }
     });
 
-    if (archivosPestana.length === 0) {
+    if (mapaUnicos.size === 0) {
         tbody.innerHTML = `<tr><td colspan="5">No hay entregables en la pestaña <strong>${activeTab}</strong> para este proyecto.</td></tr>`;
         return;
     }
 
-    archivosPestana.forEach(f => {
+    mapaUnicos.forEach(f => {
         const nombreCompleto = f.archivo_nombre || "";
         const parts = nombreCompleto.split("_");
         
@@ -500,7 +606,7 @@ async function loadFiles() {
 
         const ext = nombreCompleto.split('.').pop().toLowerCase();
         const esVisualizable = ["pdf", "png", "jpg", "jpeg", "html", "htm"].includes(ext);
-        const fechaSubidaStr = f.version || "N/A";
+        const fechaUltimaModificacion = f.version || "N/A";
 
         let botonPromocion = "";
         if (currentUser && currentUser.cargo !== "CLIENTE") {
@@ -517,7 +623,7 @@ async function loadFiles() {
                     <td>${nombreCompleto}</td>
                     <td><strong>${disciplina}</strong></td>
                     <td><span class="badge">${estadoISO}</span></td>
-                    <td><small style="color:var(--text-muted);">${fechaSubidaStr}</small></td>
+                    <td><small style="color:var(--text-muted);">${fechaUltimaModificacion}</small></td>
                     <td>
                         ${esVisualizable ? `<button class="btn-secondary" onclick="openViewer('${f.drive_file_url}', '${nombreCompleto}')">Ver</button>` : ''}
                         <a href="${f.drive_file_url}" target="_blank" class="btn-primary" style="text-decoration:none; font-size: 0.8rem; padding: 0.4rem 0.8rem;">Descargar</a>
@@ -531,7 +637,7 @@ async function loadFiles() {
                     <td style="color: #ef4444;">${nombreCompleto}</td>
                     <td><strong style="color: #ef4444;">${disciplina}</strong></td>
                     <td><span class="badge" style="background: #ef4444;">NO_CONFORME</span></td>
-                    <td><small style="color:#ef4444;">${fechaSubidaStr}</small></td>
+                    <td><small style="color:#ef4444;">${fechaUltimaModificacion}</small></td>
                     <td>
                         <small style="color: #ef4444; display: block; line-height: 1.2;">⚠️ Renombrar bajo ISO 19650 ([PROY]_[ORIG]_[ZONA]_[TIPO]_[DISC]_[EST])</small>
                     </td>
@@ -541,9 +647,7 @@ async function loadFiles() {
     });
 }
 
-// ==============================================================================
-// HELPERS PARA MODALES Y PROYECTOS
-// ==============================================================================
+// Helpers para Modales y Proyectos
 async function prepareAndOpenProjectModal() {
     const yearCurrent = new Date().getFullYear();
     const prefix = `PRY${yearCurrent}`;
