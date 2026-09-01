@@ -391,7 +391,7 @@ async function cargarTimelineActividad() {
 }
 
 // ==============================================================================
-// SUBIDA DIRECTA DE ARCHIVOS PESADOS (> 50MB) SIN PASAR POR APPS SCRIPT
+// SUBIDA POR FRAGMENTOS (SOPORTE DE MODELOS PESADOS > 50MB SIN ERRORES DE CORS)
 // ==============================================================================
 function openUploadModal() {
     const modal = document.getElementById("uploadModal");
@@ -441,70 +441,58 @@ async function handleFileUpload(e) {
     }
 
     btnSubmit.disabled = true;
-    btnSubmit.innerText = "Iniciando sesión segura...";
+
+    // Fragmentos de 4 MB para garantizar compatibilidad con el servidor
+    const chunkSize = 4 * 1024 * 1024;
+    const totalChunks = Math.ceil(file.size / chunkSize);
 
     try {
-        // Step 1: Solicitar la URL de subida resumible a Apps Script
-        const reqSession = await fetch(WEBHOOK_APPS_SCRIPT, {
-            method: "POST",
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify({
-                accion: "OBTENER_URL_RESUMIBLE",
+        for (let i = 0; i < totalChunks; i++) {
+            const start = i * chunkSize;
+            const end = Math.min(file.size, start + chunkSize);
+            const chunk = file.slice(start, end);
+
+            const base64Chunk = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.readAsDataURL(chunk);
+            });
+
+            const porcentaje = Math.round(((i + 1) / totalChunks) * 100);
+            btnSubmit.innerText = `Subiendo: ${porcentaje}% (${i + 1}/${totalChunks})`;
+
+            const payload = {
+                accion: "SUBIR_CHUNK",
                 proyecto_id: activeProjectId,
                 estado_destino: targetTab,
                 nombre_archivo: file.name,
-                mime_type: file.type || "application/octet-stream"
-            })
-        });
+                chunk_base64: base64Chunk,
+                es_ultimo: (i === totalChunks - 1),
+                mime_type: file.type || "application/octet-stream",
+                usuario_nombre: currentUser.nombre_completo
+            };
 
-        const resSession = await reqSession.json();
-
-        if (resSession.status !== "success" || !resSession.uploadUrl) {
-            alert("⚠️ No se pudo generar el canal de transmisión directo: " + resSession.message);
-            btnSubmit.disabled = false;
-            btnSubmit.innerText = "Subir al CDE";
-            return;
-        }
-
-        // Step 2: Transmisión directa desde el navegador a la API de Drive
-        btnSubmit.innerText = "Transmitiendo archivo...";
-
-        const uploadRes = await fetch(resSession.uploadUrl, {
-            method: "PUT",
-            headers: { "Content-Type": file.type || "application/octet-stream" },
-            body: file
-        });
-
-        const uploadData = await uploadRes.json();
-
-        if (uploadData.id) {
-            const driveFileUrl = `https://drive.google.com/file/d/${uploadData.id}/view`;
-
-            // Step 3: Notificar a Apps Script que la carga terminó para registrar en la bitácora
-            await fetch(WEBHOOK_APPS_SCRIPT, {
+            const res = await fetch(WEBHOOK_APPS_SCRIPT, {
                 method: "POST",
                 headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: JSON.stringify({
-                    accion: "REGISTRAR_CARGA_COMPLETA",
-                    proyecto_id: activeProjectId,
-                    codigo_proyecto: activeProjectCode,
-                    nombre_archivo: file.name,
-                    estado_destino: targetTab,
-                    usuario_nombre: currentUser.nombre_completo,
-                    drive_file_url: driveFileUrl
-                })
+                body: JSON.stringify(payload)
             });
 
-            alert("✅ ¡Modelo subido e integrado exitosamente al CDE!");
-            closeUploadModal();
-            loadFiles();
-            cargarTimelineActividad();
-        } else {
-            alert("⚠️ Ocurrió un inconveniente durante la transmisión del archivo.");
-        }
+            const data = await res.json();
 
+            if (data.status !== "success") {
+                throw new Error(data.message || "Error al procesar el fragmento del modelo.");
+            }
+
+            if (data.completo) {
+                alert("✅ ¡Modelo pesado subido e integrado exitosamente al CDE!");
+                closeUploadModal();
+                loadFiles();
+                cargarTimelineActividad();
+            }
+        }
     } catch (err) {
-        alert("Error de subida: " + err.message);
+        alert("Error durante la transmisión: " + err.message);
     } finally {
         btnSubmit.disabled = false;
         btnSubmit.innerText = "Subir al CDE";
