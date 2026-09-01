@@ -3,7 +3,7 @@
 // ==============================================================================
 const SUPABASE_URL = "https://bjlqtzrcrofpqlmyvoob.supabase.co";
 const SUPABASE_KEY = "sb_publishable_htPtQvL-1wrLfu7ACHBg1w_epAZsu1E";
-const WEBHOOK_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbyZROxo0lJW9ImGGlRfS-Ila6H5pMAgN4RupXKV4_WwKcBewLku3kgyvh_Tr359Oij01w/exec";
+const WEBHOOK_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbxL-gzS5e3FSjePYKzoML2NHok7-2YUKr4x8s0bbZtTxdquFTRDV1TzakVPBTAnmVkZNA/exec";
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -391,7 +391,7 @@ async function cargarTimelineActividad() {
 }
 
 // ==============================================================================
-// SUBIDA POR FRAGMENTOS (SOPORTE DE MODELOS PESADOS > 50MB SIN ERRORES DE CORS)
+// SUBIDA DE ARCHIVOS POR FRAGMENTOS ULTRA-LIGEROS (1.5 MB)
 // ==============================================================================
 function openUploadModal() {
     const modal = document.getElementById("uploadModal");
@@ -436,14 +436,14 @@ async function handleFileUpload(e) {
     const file = fileInput.files[0];
 
     if (!validarNomenclaturaISO19650(file.name) && !file.name.endsWith(".html")) {
-        alert(`❌ REGLA ISO 19650 INCUMPLIDA:\n\nEl archivo "${file.name}" no cumple con el estándar de denominación:\n[PROYECTO]_[ORIGINADOR]_[ZONA]_[TIPO]_[DISCIPLINA]_[ESTADO]\n\nEjemplo válido: PRY2026-001_INNOVARQZ_ZZ_M3_ARQ_S1.ifc\n\nPor favor renómbrelo localmente antes de volver a subirlo.`);
+        alert(`❌ REGLA ISO 19650 INCUMPLIDA:\n\nEl archivo "${file.name}" no cumple con el estándar de denominación:\n[PROYECTO]_[ORIGINADOR]_[ZONA]_[TIPO]_[DISCIPLINA]_[ESTADO]\n\nEjemplo válido: PRY2026-001_INNOVARQZ_ZZ_M3_ARQ_S1.ifc`);
         return;
     }
 
     btnSubmit.disabled = true;
 
-    // Fragmentos de 4 MB para garantizar compatibilidad con el servidor
-    const chunkSize = 4 * 1024 * 1024;
+    // Fragmentos ultraligeros de 1.5 MB para prevenir fallos HTTP
+    const chunkSize = 1.5 * 1024 * 1024;
     const totalChunks = Math.ceil(file.size / chunkSize);
 
     try {
@@ -467,6 +467,8 @@ async function handleFileUpload(e) {
                 estado_destino: targetTab,
                 nombre_archivo: file.name,
                 chunk_base64: base64Chunk,
+                chunk_index: i,
+                total_chunks: totalChunks,
                 es_ultimo: (i === totalChunks - 1),
                 mime_type: file.type || "application/octet-stream",
                 usuario_nombre: currentUser.nombre_completo
@@ -481,11 +483,11 @@ async function handleFileUpload(e) {
             const data = await res.json();
 
             if (data.status !== "success") {
-                throw new Error(data.message || "Error al procesar el fragmento del modelo.");
+                throw new Error(data.message || "Error procesando el bloque de modelo.");
             }
 
             if (data.completo) {
-                alert("✅ ¡Modelo pesado subido e integrado exitosamente al CDE!");
+                alert("✅ ¡Modelo subido e integrado exitosamente al CDE!");
                 closeUploadModal();
                 loadFiles();
                 cargarTimelineActividad();
