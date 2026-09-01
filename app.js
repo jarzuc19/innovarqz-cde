@@ -213,7 +213,7 @@ function aplicarRestriccionPestanasVisuales() {
 }
 
 // ==============================================================================
-// MÓDULO UNIFICADO DE INTERACCIÓN TÉCNICA (SOLUCIÓN MENSAJE CLIENTE)
+// MÓDULO UNIFICADO DE INTERACCIÓN TÉCNICA (HISTORIAL DE DISCUSIÓN RECURRENTE)
 // ==============================================================================
 async function evaluarNotasTecnicasActivas() {
     const card = document.getElementById("technicalNoteCard");
@@ -224,113 +224,89 @@ async function evaluarNotasTecnicasActivas() {
         return;
     }
 
-    // Consulta directa a la tabla audit_logs por notas técnicas
+    // Traemos las últimas 5 interacciones para construir el hilo de conversación
     const { data: notas, error } = await supabaseClient
         .from("audit_logs")
         .select("*")
         .eq("proyecto_id", activeProjectId)
         .ilike("archivo_nombre", "NOTA_TECNICA_%")
         .order("id", { ascending: false })
-        .limit(1);
+        .limit(5);
 
     if (error) {
-        console.error("Error al consultar nota técnica:", error);
+        console.error("Error al consultar notas técnicas:", error);
         return;
     }
 
-    if (notas && notas.length > 0) {
-        const ultimaNota = notas[0];
-        const esSolicitudCliente = ultimaNota.archivo_nombre.includes("AJUSTES_SOLICITADOS");
-        const esConfirmado = ultimaNota.archivo_nombre.includes("CONFIRMADO_RECIBIDO");
-        const esReunion = ultimaNota.archivo_nombre.includes("SOLICITUD_REUNION");
-        const esModelador = currentUser.cargo.includes("MODELADOR") || currentUser.cargo.includes("SUPER_ADMIN");
-
-        card.style.display = "block";
-
-        if (esSolicitudCliente) {
-            card.style.borderColor = "#ef4444";
-            card.style.background = "rgba(239, 68, 68, 0.08)";
-            
-            let botonesAccion = "";
-            if (esModelador) {
-                botonesAccion = `
-                    <div style="margin-top: 15px; display: flex; gap: 10px;">
-                        <button class="btn-primary" style="background: #10b981; font-size: 0.85rem;" onclick="responderNotaTecnica('CONFIRMADO_RECIBIDO', 'Entendido. Se inician ajustes en modelos nativos.')">
-                            ✅ Confirmo Lectura (Iniciar Ajustes)
-                        </button>
-                        <button class="btn-secondary" style="background: #d97706; color: #fff; font-size: 0.85rem;" onclick="responderNotaTecnica('SOLICITUD_REUNION', 'Solicitud de mesa de trabajo técnica para aclarar observaciones.')">
-                            📅 Solicitar Comité Técnico
-                        </button>
-                    </div>
-                `;
-            } else {
-                botonesAccion = `
-                    <div style="margin-top: 10px; font-size: 0.82rem; color: #d97706;">
-                        <em>Monitoreo del Revisor/SuperAdmin: Esperando confirmación o solicitud del Modelador.</em>
-                    </div>
-                `;
-            }
-
-            card.innerHTML = `
-                <div>
-                    <h4 style="color: #ef4444; margin-bottom: 5px;">🚨 Solicitud de Ajustes / Observaciones del Cliente</h4>
-                    <p style="font-size: 0.95rem; color: #f8fafc; margin-bottom: 8px;"><strong>Mensaje:</strong> "${ultimaNota.drive_file_url}"</p>
-                    <small style="color: var(--text-muted);">Registrado el: ${ultimaNota.version}</small>
-                </div>
-                ${botonesAccion}
-            `;
-        } else if (esConfirmado) {
-            card.style.borderColor = "#10b981";
-            card.style.background = "rgba(16, 185, 129, 0.08)";
-            card.innerHTML = `
-                <h4 style="color: #10b981; margin-bottom: 5px;">🛠️ Ajustes en Proceso por el Modelador</h4>
-                <p style="font-size: 0.88rem; color: #f8fafc;">El modelador ha verificado las observaciones y se encuentra modificando los entregables.</p>
-                <small style="color: var(--text-muted);">Actualizado: ${ultimaNota.version} por ${ultimaNota.drive_file_url}</small>
-            `;
-        } else if (esReunion) {
-            card.style.borderColor = "#d97706";
-            card.style.background = "rgba(217, 119, 6, 0.08)";
-            card.innerHTML = `
-                <h4 style="color: #d97706; margin-bottom: 5px;">📅 Comité Técnico Solicitado</h4>
-                <p style="font-size: 0.88rem; color: #f8fafc;">El modelador ha solicitado una mesa de trabajo técnica antes de modificar los modelos.</p>
-                <small style="color: var(--text-muted);">Registrado: ${ultimaNota.version}</small>
-            `;
-        }
-    } else {
+    if (!notas || notas.length === 0) {
         card.style.display = "none";
+        return;
     }
-}
 
-async function responderNotaTecnica(tipoRespuesta, comentario) {
-    if (!confirm("¿Confirma registrar esta respuesta en la bitácora del proyecto?")) return;
+    card.style.display = "block";
+    const ultimaNota = notas[0];
+    const esSolicitudCliente = ultimaNota.archivo_nombre.includes("AJUSTES_SOLICITADOS");
+    const esModelador = currentUser.cargo.includes("MODELADOR") || currentUser.cargo.includes("SUPER_ADMIN");
 
-    const payload = {
-        accion: "RESPUESTA_NOTA_TECNICA",
-        proyecto_id: activeProjectId,
-        tipo_respuesta: tipoRespuesta,
-        usuario_nombre: currentUser.nombre_completo,
-        comentario: comentario
-    };
-
-    try {
-        const res = await fetch(WEBHOOK_APPS_SCRIPT, {
-            method: "POST",
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        if (data.status === "success") {
-            alert("✅ Respuesta registrada correctamente.");
-            evaluarNotasTecnicasActivas();
-            cargarTimelineActividad();
-        }
-    } catch (err) {
-        alert("Error al registrar respuesta: " + err.message);
+    // Definir estilos dinámicos de la tarjeta según el estado actual
+    if (esSolicitudCliente) {
+        card.style.borderColor = "#ef4444";
+        card.style.background = "rgba(239, 68, 68, 0.08)";
+    } else if (ultimaNota.archivo_nombre.includes("CONFIRMADO_RECIBIDO")) {
+        card.style.borderColor = "#10b981";
+        card.style.background = "rgba(16, 185, 129, 0.08)";
+    } else {
+        card.style.borderColor = "#d97706";
+        card.style.background = "rgba(217, 119, 6, 0.08)";
     }
+
+    // Construcción del Historial Visible
+    let html = `<h4 style="color: var(--accent-copper); margin-bottom: 10px;">💬 Hilo de Interacción y Notas Técnicas del Proyecto</h4>`;
+    html += `<div style="max-height: 200px; overflow-y: auto; padding-right: 5px; margin-bottom: 12px;">`;
+
+    // Renderizamos de la más antigua a la más reciente dentro del bloque
+    const notasInvertidas = [...notas].reverse();
+    notasInvertidas.forEach(n => {
+        let tipo = n.archivo_nombre.replace("NOTA_TECNICA_", "");
+        let colorTexto = "#f8fafc";
+        let icono = "💬";
+
+        if (tipo === "AJUSTES_SOLICITADOS") { colorTexto = "#ef4444"; icono = "🚨 Cliente:"; }
+        else if (tipo === "CONFIRMADO_RECIBIDO") { colorTexto = "#10b981"; icono = "✅ Modelador:"; }
+        else if (tipo === "SOLICITUD_REUNION") { colorTexto = "#d97706"; icono = "📅 Modelador:"; }
+
+        html += `
+            <div style="background: rgba(15, 23, 42, 0.6); padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; border-left: 3px solid ${colorTexto};">
+                <strong style="color: ${colorTexto}; font-size: 0.85rem;">${icono}</strong> 
+                <span style="font-size: 0.88rem; color: #fff;">"${n.drive_file_url}"</span>
+                <div style="text-align: right;"><small style="color: var(--text-muted); font-size: 0.72rem;">${n.version}</small></div>
+            </div>
+        `;
+    });
+
+    html += `</div>`;
+
+    // Controles de respuesta activa para el Modelador
+    if (esModelador) {
+        html += `
+            <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #334155; display: flex; gap: 10px;">
+                <button class="btn-primary" style="background: #10b981; font-size: 0.82rem;" onclick="responderNotaTecnica('CONFIRMADO_RECIBIDO', 'Entendido. Se inician ajustes en modelos nativos.')">
+                    ✅ Confirmar Lectura
+                </button>
+                <button class="btn-secondary" style="background: #d97706; color: #fff; font-size: 0.82rem;" onclick="responderNotaTecnica('SOLICITUD_REUNION', 'Solicitud de mesa de trabajo técnica para aclarar observaciones.')">
+                    📅 Solicitar Comité Técnico
+                </button>
+            </div>
+        `;
+    } else {
+        html += `<small style="color: var(--text-muted); display: block; margin-top: 5px;"><em>Vista de supervisión para Revisor / SuperAdmin.</em></small>`;
+    }
+
+    card.innerHTML = html;
 }
 
 // ==============================================================================
-// BARRA DE ACTIVIDAD Y BITÁCORA
+// BARRA DE ACTIVIDAD Y BITÁCORA UNIFICADA (INCLUYE RESPUESTAS)
 // ==============================================================================
 async function cargarTimelineActividad() {
     let timelineDiv = document.getElementById("activityTimeline");
@@ -341,24 +317,27 @@ async function cargarTimelineActividad() {
         .select("*")
         .eq("proyecto_id", activeProjectId)
         .order("id", { ascending: false })
-        .limit(5);
+        .limit(8);
 
     if (!logs || logs.length === 0) {
         timelineDiv.style.display = "block";
-        timelineDiv.innerHTML = "🕒 <strong>Bitácora de Eventos:</strong> Sin registro de actividad reciente para este proyecto.";
+        timelineDiv.innerHTML = "🕒 <strong>Bitácora de Eventos:</strong> Sin registro de actividad reciente.";
         return;
     }
 
     timelineDiv.style.display = "block";
     let html = "🕒 <strong>Bitácora de Eventos e Interacciones (ISO 19650):</strong><ul style='margin-left: 20px; margin-top: 5px; list-style-type: square;'>";
+    
     logs.forEach(l => {
         const fecha = l.version || "Sin fecha";
         if (l.archivo_nombre.startsWith("NOTA_TECNICA_")) {
-            html += `<li style='color: #ef4444;'><strong>${fecha}</strong> — ⚠️ <strong>${l.drive_file_url}</strong></li>`;
+            let eventoNombre = l.archivo_nombre.replace("NOTA_TECNICA_", "");
+            html += `<li style='color: #fbbf24;'><strong>${fecha}</strong> — 💬 <strong>[INTERACCIÓN]</strong> ${eventoNombre}: <em>${l.drive_file_url}</em></li>`;
         } else {
             html += `<li><strong>${fecha}</strong> — Entregable: <em>${l.archivo_nombre}</em> en <span class="badge" style="font-size:0.75rem;">${l.estado_destino || l.estado_origen}</span></li>`;
         }
     });
+    
     html += "</ul>";
     timelineDiv.innerHTML = html;
 }
