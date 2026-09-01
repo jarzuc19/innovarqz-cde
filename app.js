@@ -3,7 +3,7 @@
 // ==============================================================================
 const SUPABASE_URL = "https://bjlqtzrcrofpqlmyvoob.supabase.co";
 const SUPABASE_KEY = "sb_publishable_htPtQvL-1wrLfu7ACHBg1w_epAZsu1E";
-const WEBHOOK_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbzMjRSmC_Lcqy6HuqOOMpTezhFXd1RsaIiA16HhLMlfIjWI_fuW42xpm26g4ZjKwyBDjw/exec";
+const WEBHOOK_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbyOXZ5NQE4j4Lgvxzso4CSN4bROmbvhxwZgptV631PxxGPbk-qZBdsiFn-uTc1GO9G_HQ/exec";
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
