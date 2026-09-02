@@ -224,7 +224,7 @@ function aplicarRestriccionPestanasVisuales() {
 }
 
 // ==============================================================================
-// HILO DE NOTAS TÉCNICAS
+// HILO DE NOTAS TÉCNICAS (FILTRO EXCLUSIVO DE MENSANERÍA HUMANA)
 // ==============================================================================
 async function evaluarNotasTecnicasActivas() {
     const card = document.getElementById("technicalNoteCard");
@@ -243,13 +243,20 @@ async function evaluarNotasTecnicasActivas() {
         .order("id", { ascending: false })
         .limit(10);
 
-    if (error || !notas || notas.length === 0) {
+    // Filtramos unicamente interacciones humanas directas
+    const interaccionesHumanas = (notas || []).filter(n => 
+        n.archivo_nombre.includes("AJUSTES_SOLICITADOS") || 
+        n.archivo_nombre.includes("CONFIRMADO_RECIBIDO") || 
+        n.archivo_nombre.includes("SOLICITUD_REUNION")
+    );
+
+    if (error || interaccionesHumanas.length === 0) {
         card.style.display = "none";
         return;
     }
 
     card.style.display = "block";
-    const ultimaNota = notas[0];
+    const ultimaNota = interaccionesHumanas[0];
     const esSolicitudCliente = ultimaNota.archivo_nombre.includes("AJUSTES_SOLICITADOS");
     const esModelador = currentUser.cargo.includes("MODELADOR") || currentUser.cargo.includes("SUPER_ADMIN");
 
@@ -267,7 +274,7 @@ async function evaluarNotasTecnicasActivas() {
     let html = `<h4 style="color: var(--accent-copper); margin-bottom: 10px;">💬 Hilo de Interacción y Notas Técnicas</h4>`;
     html += `<div style="max-height: 220px; overflow-y: auto; padding-right: 5px; margin-bottom: 12px;">`;
 
-    const notasInvertidas = [...notas].reverse();
+    const notasInvertidas = [...interaccionesHumanas].reverse();
     notasInvertidas.forEach(n => {
         let tipo = n.archivo_nombre.replace("NOTA_TECNICA_", "");
         let colorTexto = "#f8fafc";
@@ -349,7 +356,7 @@ async function responderNotaTecnica(tipoRespuesta, comentario) {
 }
 
 // ==============================================================================
-// BITÁCORA REAL
+// BITÁCORA REAL (CRONOLOGÍA GENERAL DESCENDENTE COMPLETA)
 // ==============================================================================
 async function cargarTimelineActividad() {
     let timelineDiv = document.getElementById("activityTimeline");
@@ -359,9 +366,8 @@ async function cargarTimelineActividad() {
         .from("audit_logs")
         .select("*")
         .eq("proyecto_id", activeProjectId)
-        .ilike("archivo_nombre", "NOTA_TECNICA_%")
         .order("id", { ascending: false })
-        .limit(15);
+        .limit(20);
 
     if (error || !logs || logs.length === 0) {
         timelineDiv.style.display = "block";
@@ -376,12 +382,12 @@ async function cargarTimelineActividad() {
         const fecha = l.version || "Sin fecha";
         let eventoNombre = l.archivo_nombre.replace("NOTA_TECNICA_", "");
         
-        let icono = "💬";
-        let estiloTexto = "color: #fbbf24;";
+        let icono = "📄";
+        let estiloTexto = "color: #38bdf8;";
 
-        if (eventoNombre.includes("CARGA")) { icono = "📄"; estiloTexto = "color: #38bdf8;"; }
-        else if (eventoNombre.includes("PROMOCIÓN")) { icono = "🚀"; estiloTexto = "color: #34d399;"; }
+        if (eventoNombre.includes("PROMOCIÓN")) { icono = "🚀"; estiloTexto = "color: #34d399;"; }
         else if (eventoNombre.includes("AJUSTES")) { icono = "🚨"; estiloTexto = "color: #f87171;"; }
+        else if (eventoNombre.includes("CONFIRMADO")) { icono = "✅"; estiloTexto = "color: #10b981;"; }
 
         html += `<li style='${estiloTexto}'><strong>${fecha}</strong> — ${icono} <strong>[${eventoNombre}]</strong>: <em>${l.drive_file_url}</em></li>`;
     });
@@ -391,7 +397,7 @@ async function cargarTimelineActividad() {
 }
 
 // ==============================================================================
-// IMPORTACIÓN Y RENOMBRADO POR ENLACE DE DRIVE
+// GESTIÓN DE MODAL Y MÉTODOS DE SUBIDA HÍBRIDOS
 // ==============================================================================
 function openUploadModal() {
     const modal = document.getElementById("uploadModal");
@@ -401,6 +407,20 @@ function openUploadModal() {
 function closeUploadModal() {
     const modal = document.getElementById("uploadModal");
     if (modal) modal.className = "modal-hidden";
+}
+
+function toggleUploadMethod() {
+    const method = document.getElementById("uploadMethodSelect").value;
+    const linkGroup = document.getElementById("linkMethodGroup");
+    const directGroup = document.getElementById("directMethodGroup");
+
+    if (method === "LINK") {
+        linkGroup.style.display = "block";
+        directGroup.style.display = "none";
+    } else {
+        linkGroup.style.display = "none";
+        directGroup.style.display = "block";
+    }
 }
 
 function validarNomenclaturaISO19650(nombreArchivo) {
@@ -425,34 +445,75 @@ function recalcularEstadoEnNombre(nombreOriginal, nuevoEstadoISO) {
 async function handleFileUpload(e) {
     e.preventDefault();
     
-    const driveUrlInput = document.getElementById("driveUrlInput").value.trim();
+    const method = document.getElementById("uploadMethodSelect").value;
     const isoNameInput = document.getElementById("isoNameInput").value.trim();
     const targetTab = document.getElementById("uploadTargetTab").value;
     const btnSubmit = document.getElementById("btnSubmitUpload");
 
-    if (!driveUrlInput || !isoNameInput) {
-        alert("⚠️ Debe ingresar tanto el enlace del archivo como el nombre normado ISO 19650.");
+    if (!isoNameInput) {
+        alert("⚠️ Debe ingresar el nombre normado ISO 19650 con su extensión.");
         return;
     }
 
-    // Filtro de nomenclatura ISO 19650 antes de realizar cualquier llamada a servidor
+    // Validation ISO 19650
     if (!validarNomenclaturaISO19650(isoNameInput) && !isoNameInput.endsWith(".html")) {
-        alert(`❌ REGLA ISO 19650 INCUMPLIDA:\n\nEl nombre especificado "${isoNameInput}" NO es válido.\n\nDebe contener la estructura de 6 campos:\n[PROYECTO]_[ORIGINADOR]_[ZONA]_[TIPO]_[DISCIPLINA]_[ESTADO]\n\nEjemplo válido: PRY2026-001_INNOVARQZ_ZZ_M3_ARQ_S0.rvt\n\nPor favor corrija el nombre antes de continuar.`);
+        alert(`❌ REGLA ISO 19650 INCUMPLIDA:\n\nEl nombre "${isoNameInput}" no cumple la estructura:\n[PROYECTO]_[ORIGINADOR]_[ZONA]_[TIPO]_[DISCIPLINA]_[ESTADO].[ext]\n\nEjemplo: PRY2026-001_INNOVARQZ_ZZ_M3_ARQ_S0.rvt`);
         return;
     }
+
+    const extEscrita = isoNameInput.split('.').pop().toLowerCase();
 
     btnSubmit.disabled = true;
-    btnSubmit.innerText = "Importando y renombrando en Drive...";
+    btnSubmit.innerText = "Procesando e integrando al CDE...";
 
     try {
-        const payload = {
+        let payload = {
             accion: "IMPORTAR_DESDE_URL",
             proyecto_id: activeProjectId,
             estado_destino: targetTab,
             nombre_iso: isoNameInput,
-            url_origen: driveUrlInput,
             usuario_nombre: currentUser.nombre_completo
         };
+
+        if (method === "LINK") {
+            const driveUrlInput = document.getElementById("driveUrlInput").value.trim();
+            if (!driveUrlInput) {
+                alert("⚠️ Por favor ingrese el enlace público del archivo en Google Drive.");
+                btnSubmit.disabled = false;
+                btnSubmit.innerText = "Procesar Entregable";
+                return;
+            }
+            payload.tipo_carga = "URL";
+            payload.url_origen = driveUrlInput;
+        } else {
+            const fileInput = document.getElementById("fileLocalInput");
+            if (!fileInput.files || fileInput.files.length === 0) {
+                alert("⚠️ Por favor seleccione un archivo local.");
+                btnSubmit.disabled = false;
+                btnSubmit.innerText = "Procesar Entregable";
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            const extReal = file.name.split('.').pop().toLowerCase();
+
+            if (extReal !== extEscrita) {
+                alert(`❌ CONFLICTO DE EXTENSIÓN:\n\nEl archivo seleccionado es (.${extReal}) pero en el nombre escribió (.${extEscrita}).\n\nPor favor corrija el nombre para que coincida exactamente.`);
+                btnSubmit.disabled = false;
+                btnSubmit.innerText = "Procesar Entregable";
+                return;
+            }
+
+            const base64File = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.readAsDataURL(file);
+            });
+
+            payload.tipo_carga = "DIRECTA";
+            payload.file_base64 = base64File;
+            payload.mime_type = file.type || "application/octet-stream";
+        }
 
         const res = await fetch(WEBHOOK_APPS_SCRIPT, {
             method: "POST",
@@ -463,7 +524,7 @@ async function handleFileUpload(e) {
         const data = await res.json();
 
         if (data.status === "success") {
-            alert(`✅ ¡Modelo importado, renombrado a "${isoNameInput}" e integrado a tu Google Drive!`);
+            alert(`✅ ¡Entregable "${isoNameInput}" procesado e integrado exitosamente!`);
             closeUploadModal();
             loadFiles();
             cargarTimelineActividad();
@@ -474,7 +535,7 @@ async function handleFileUpload(e) {
         alert("Error de comunicación: " + err.message);
     } finally {
         btnSubmit.disabled = false;
-        btnSubmit.innerText = "Importar al CDE";
+        btnSubmit.innerText = "Procesar Entregable";
     }
 }
 
@@ -671,6 +732,7 @@ async function loadFiles() {
             if (activeTab === "01_WIP" && (codigoEstado === "S0" || eOrigen === "01_WIP")) perteneceAPestana = true;
             if (activeTab === "02_SHARED" && (codigoEstado === "S1" || eOrigen === "02_SHARED")) perteneceAPestana = true;
             if (activeTab === "03_PUBLISHED" && (codigoEstado.startsWith("A") || eOrigen === "03_PUBLISHED")) perteneceAPestana = true;
+            if (activeTab === "04_ARCHIVED" && eOrigen === "04_ARCHIVED") perteneceAPestana = true;
         }
 
         if (perteneceAPestana) {
