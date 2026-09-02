@@ -224,7 +224,7 @@ function aplicarRestriccionPestanasVisuales() {
 }
 
 // ==============================================================================
-// HILO DE NOTAS TÉCNICAS (CON ASUNTO Y DESCRIPCIÓN DETALLADA)
+// HILO DE NOTAS TÉCNICAS (ORDEN DESCENDENTE CON ASUNTO Y DESCRIPCIÓN)
 // ==============================================================================
 async function evaluarNotasTecnicasActivas() {
     const threadContainer = document.getElementById("interactionThreadContainer");
@@ -253,7 +253,7 @@ async function evaluarNotasTecnicasActivas() {
     );
 
     if (error || interaccionesHumanas.length === 0) {
-        card.style.display = "block";
+        card.style.display = "flex";
         threadContainer.innerHTML = "<small style='color: var(--text-muted);'>No hay interacciones recientes en este proyecto.</small>";
         if (actionsContainer) actionsContainer.style.display = "none";
         return;
@@ -262,6 +262,7 @@ async function evaluarNotasTecnicasActivas() {
     card.style.display = "flex";
     let html = "";
 
+    // Mantenemos orden descendente estricto (lo más reciente arriba)
     interaccionesHumanas.forEach(n => {
         let tipo = n.archivo_nombre.replace("NOTA_TECNICA_", "");
         let colorTexto = "#f8fafc";
@@ -367,6 +368,7 @@ async function cargarTimelineActividad() {
         if (eventoNombre.includes("PROMOCIÓN")) { icono = "🚀"; estiloTexto = "color: #34d399;"; }
         else if (eventoNombre.includes("AJUSTES")) { icono = "🚨"; estiloTexto = "color: #f87171;"; }
         else if (eventoNombre.includes("CONFIRMADO")) { icono = "✅"; estiloTexto = "color: #10b981;"; }
+        else if (eventoNombre.includes("REEMPLAZO")) { icono = "📦"; estiloTexto = "color: #fbbf24;"; }
 
         let mensajeOriginal = l.drive_file_url || "";
         let asuntoCorto = mensajeOriginal.split(" | Detalle: ")[0];
@@ -379,7 +381,7 @@ async function cargarTimelineActividad() {
 }
 
 // ==============================================================================
-// GESTIÓN DE SUBIDAS Y PROCESAMIENTO
+// GESTIÓN DE SUBIDAS Y VALIDACIÓN DE ESTADO ISO 19650
 // ==============================================================================
 function openUploadModal() {
     const modal = document.getElementById("uploadModal");
@@ -411,6 +413,15 @@ function validarNomenclaturaISO19650(nombreArchivo) {
     return partes.length >= 6;
 }
 
+function extraerEstadoDeNombre(nombreArchivo) {
+    const nombreSinExt = nombreArchivo.split('.').slice(0, -1).join('.');
+    const partes = nombreSinExt.split('_');
+    if (partes.length >= 6) {
+        return partes[5].toUpperCase();
+    }
+    return "";
+}
+
 function recalcularEstadoEnNombre(nombreOriginal, nuevoEstadoISO) {
     const partesExt = nombreOriginal.split('.');
     const ext = partesExt.pop();
@@ -438,14 +449,27 @@ async function handleFileUpload(e) {
     }
 
     if (!validarNomenclaturaISO19650(isoNameInput) && !isoNameInput.endsWith(".html")) {
-        alert(`❌ REGLA ISO 19650 INCUMPLIDA:\n\nEl nombre "${isoNameInput}" no cumple la estructura:\n[PROYECTO]_[ORIGINADOR]_[ZONA]_[TIPO]_[DISCIPLINA]_[ESTADO].[ext]\n\nEjemplo: PRY2026-001_INNOVARQZ_ZZ_M3_ARQ_S0.rvt`);
+        alert(`❌ REGLA ISO 19650 INCUMPLIDA:\n\nEl nombre "${isoNameInput}" no cumple la estructura de 6 campos:\n[PROYECTO]_[ORIGINADOR]_[ZONA]_[TIPO]_[DISCIPLINA]_[ESTADO].[ext]\n\nEjemplo: PRY2026-001_INNOVARQZ_ZZ_M3_ARQ_S0.rvt`);
+        return;
+    }
+
+    // --- VALIDACIÓN DE ESTADO ISO vs CARPETA DESTINO ---
+    const estadoArchivo = extraerEstadoDeNombre(isoNameInput);
+
+    if (targetTab === "01_WIP" && estadoArchivo !== "S0" && !estadoArchivo.startsWith("P0")) {
+        alert(`⛔ ESTADO INCOHERENTE CON CARPETA DESTINO:\n\nIntentó subir un archivo en estado "${estadoArchivo}" a la carpeta 01_WIP.\n\nEn 01_WIP solo se permiten entregables nativos en estado "S0" (o borradores P0). Por favor renombre su archivo a S0 antes de subir.`);
+        return;
+    }
+
+    if (targetTab === "02_SHARED" && !estadoArchivo.startsWith("S") && estadoArchivo === "S0") {
+        alert(`⛔ ESTADO INCOHERENTE CON CARPETA DESTINO:\n\nIntentó subir un archivo en estado "${estadoArchivo}" a 02_SHARED.\n\nEn 02_SHARED los entregables de coordinación deben tener estado S1, S2, etc. Corrija el nombre antes de continuar.`);
         return;
     }
 
     const extEscrita = isoNameInput.split('.').pop().toLowerCase();
 
     btnSubmit.disabled = true;
-    btnSubmit.innerText = "Procesando...";
+    btnSubmit.innerText = "Procesando e integrando al CDE...";
 
     try {
         let payload = {
@@ -479,7 +503,7 @@ async function handleFileUpload(e) {
             const extReal = file.name.split('.').pop().toLowerCase();
 
             if (extReal !== extEscrita) {
-                alert(`❌ CONFLICTO DE EXTENSIÓN:\n\nEl archivo es (.${extReal}) pero escribió (.${extEscrita}). Corrija el nombre.`);
+                alert(`❌ CONFLICTO DE EXTENSIÓN:\n\nEl archivo seleccionado es (.${extReal}) pero en el CDE escribió (.${extEscrita}). Corrija el nombre para que coincida exactamente.`);
                 btnSubmit.disabled = false;
                 btnSubmit.innerText = "Procesar Entregable";
                 return;
@@ -672,6 +696,37 @@ async function generarPDFActaRecibo(observaciones) {
 }
 
 // ==============================================================================
+// GESTIÓN DEL VISOR EN MODAL FLOTANTE
+// ==============================================================================
+function openViewerModal(driveUrl, nombreArchivo) {
+    const modal = document.getElementById("viewerModal");
+    const frame = document.getElementById("modalViewerFrame");
+    const title = document.getElementById("viewerTitle");
+    const externalLink = document.getElementById("viewerExternalLink");
+
+    if (!modal || !frame) return;
+
+    title.innerText = `Previsualizando: ${nombreArchivo}`;
+    externalLink.href = driveUrl;
+
+    // Si es un PDF de Drive, convertimos a URL de visualización embebida limpia
+    let previewUrl = driveUrl;
+    if (driveUrl.includes("drive.google.com/file/d/")) {
+        previewUrl = driveUrl.replace("/view?usp=drivesdk", "/preview").replace("/view", "/preview");
+    }
+
+    frame.src = previewUrl;
+    modal.className = "modal-overlay";
+}
+
+function closeViewerModal() {
+    const modal = document.getElementById("viewerModal");
+    const frame = document.getElementById("modalViewerFrame");
+    if (frame) frame.src = "";
+    if (modal) modal.className = "modal-hidden";
+}
+
+// ==============================================================================
 // RENDERIZADO DE ENTREGABLES
 // ==============================================================================
 async function loadFiles() {
@@ -764,7 +819,7 @@ async function loadFiles() {
                     <td><span class="badge">${estadoISO}</span></td>
                     <td><small style="color:var(--text-muted); font-size:0.75rem;">${fechaUltimaModificacion}</small></td>
                     <td>
-                        ${esVisualizable ? `<button class="btn-secondary" style="font-size:0.75rem; padding:0.25rem 0.5rem;" onclick="openViewer('${f.drive_file_url}', '${nombreCompleto}')">Ver</button>` : ''}
+                        ${esVisualizable ? `<button class="btn-secondary" style="font-size:0.75rem; padding:0.25rem 0.5rem;" onclick="openViewerModal('${f.drive_file_url}', '${nombreCompleto}')">Ver</button>` : ''}
                         <a href="${f.drive_file_url}" target="_blank" class="btn-primary" style="text-decoration:none; font-size: 0.75rem; padding: 0.25rem 0.5rem;">Descargar</a>
                         ${botonPromocion}
                     </td>
