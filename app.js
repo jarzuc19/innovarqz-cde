@@ -32,6 +32,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const uploadForm = document.getElementById("uploadForm");
     if (uploadForm) uploadForm.addEventListener("submit", handleFileUpload);
 
+    const revisorForm = document.getElementById("revisorInstructionForm");
+    if (revisorForm) revisorForm.addEventListener("submit", handleRevisorInstructionSubmit);
+
     setupDropdownWithOther("ubicacionSelect", "ubicacionOtherInput");
     setupDropdownWithOther("tipoSelect", "tipoOtherInput");
 
@@ -125,7 +128,7 @@ async function handleLogin(e) {
 }
 
 // ==============================================================================
-// PROYECTOS Y CONFIGURACIÓN DE VISTA
+// PROYECTOS Y CONFIGURACIÓN DE VISTA POR ROL
 // ==============================================================================
 async function loadProjects() {
     let proyectosVisibles = [];
@@ -222,7 +225,6 @@ function aplicarRestriccionPestanasVisuales() {
         clientCard.style.display = (currentUser.cargo === "CLIENTE" && activeTab === "03_PUBLISHED") ? "block" : "none";
     }
 
-    // Adaptación del centro de monitoreo para el Cliente (Bitácora al 100%)
     const techNoteCard = document.getElementById("technicalNoteCard");
     const auditLogCard = document.getElementById("auditLogCard");
     if (currentUser.cargo === "CLIENTE") {
@@ -235,7 +237,7 @@ function aplicarRestriccionPestanasVisuales() {
 }
 
 // ==============================================================================
-// HILO DE NOTAS TÉCNICAS (ORDEN DESCENDENTE ESTRICTO CON FLUJO DE 3 VÍAS)
+// HILO DE NOTAS TÉCNICAS (ORDENAMIENTO TEMPORAL NUMÉRICO STRICTO)
 // ==============================================================================
 async function evaluarNotasTecnicasActivas() {
     const threadContainer = document.getElementById("interactionThreadContainer");
@@ -255,7 +257,7 @@ async function evaluarNotasTecnicasActivas() {
         .eq("proyecto_id", activeProjectId)
         .ilike("archivo_nombre", "NOTA_TECNICA_%")
         .order("id", { ascending: false })
-        .limit(15);
+        .limit(20);
 
     const interaccionesHumanas = (notas || []).filter(n => 
         n.archivo_nombre.includes("AJUSTES_SOLICITADOS") || 
@@ -274,8 +276,12 @@ async function evaluarNotasTecnicasActivas() {
     card.style.display = "flex";
     let html = "";
 
-    // Mantenemos orden descendente estricto por ID/Hora
-    interaccionesHumanas.sort((a, b) => b.id - a.id);
+    // ORDENAMIENTO CRONOLÓGICO MILIMÉTRICO (Timestamp numérico descendente)
+    interaccionesHumanas.sort((a, b) => {
+        let timeA = new Date(a.version).getTime() || a.id;
+        let timeB = new Date(b.version).getTime() || b.id;
+        return timeB - timeA;
+    });
 
     interaccionesHumanas.forEach(n => {
         let tipo = n.archivo_nombre.replace("NOTA_TECNICA_", "");
@@ -307,9 +313,7 @@ async function evaluarNotasTecnicasActivas() {
     const esModelador = currentUser.cargo.includes("MODELADOR") || currentUser.cargo.includes("SUPER_ADMIN");
     const esRevisor = currentUser.cargo.includes("REVISOR") || currentUser.cargo.includes("SUPER_ADMIN");
 
-    if (actionsContainer) {
-        actionsContainer.style.display = "flex";
-    }
+    if (actionsContainer) actionsContainer.style.display = "flex";
 
     const btnConfirmar = document.getElementById("btnConfirmarLectura");
     if (btnConfirmar) {
@@ -330,13 +334,33 @@ async function evaluarNotasTecnicasActivas() {
     const btnCorregirModelador = document.getElementById("btnSolicitarCorreccionModelador");
     if (btnCorregirModelador) {
         btnCorregirModelador.style.display = esRevisor ? "inline-block" : "none";
-        btnCorregirModelador.onclick = function() {
-            let observacionTécnica = prompt("Escriba la instrucción técnica para el Modelador:");
-            if (observacionTécnica) {
-                responderNotaTecnica('CORRECCION_MODELADOR', observacionTécnica);
-            }
-        };
+        btnCorregirModelador.onclick = openRevisorInstructionModal;
     }
+}
+
+function openRevisorInstructionModal() {
+    const modal = document.getElementById("revisorInstructionModal");
+    if (modal) modal.className = "modal-overlay";
+}
+
+function closeRevisorInstructionModal() {
+    const modal = document.getElementById("revisorInstructionModal");
+    if (modal) modal.className = "modal-hidden";
+}
+
+async function handleRevisorInstructionSubmit(e) {
+    e.preventDefault();
+    const asunto = document.getElementById("revisorSubjectInput").value.trim();
+    const detalle = document.getElementById("revisorDetailInput").value.trim();
+
+    if (!asunto || !detalle) return;
+
+    let comentarioEstructurado = `${asunto} | Detalle: ${detalle}`;
+    await responderNotaTecnica('CORRECCION_MODELADOR', comentarioEstructurado);
+    
+    document.getElementById("revisorSubjectInput").value = "";
+    document.getElementById("revisorDetailInput").value = "";
+    closeRevisorInstructionModal();
 }
 
 async function responderNotaTecnica(tipoRespuesta, comentario) {
@@ -368,7 +392,7 @@ async function responderNotaTecnica(tipoRespuesta, comentario) {
 }
 
 // ==============================================================================
-// BITÁCORA REAL (ORDEN CRONOLÓGICO DESCENDENTE ESTRICTO POR ID)
+// BITÁCORA REAL (ORDEN CRONOLÓGICO NUMÉRICO DESCENDENTE INCORRUPTIBLE)
 // ==============================================================================
 async function cargarTimelineActividad() {
     let timelineDiv = document.getElementById("activityTimeline");
@@ -379,15 +403,19 @@ async function cargarTimelineActividad() {
         .select("*")
         .eq("proyecto_id", activeProjectId)
         .order("id", { ascending: false })
-        .limit(25);
+        .limit(30);
 
     if (error || !logs || logs.length === 0) {
         timelineDiv.innerHTML = "<small style='color: var(--text-muted);'>Sin actividad registrada.</small>";
         return;
     }
 
-    // Ordenamiento descendente por ID explícito
-    logs.sort((a, b) => b.id - a.id);
+    // ORDENAMIENTO MATEMÁTICO POR TIMESTAMP EXACTO
+    logs.sort((a, b) => {
+        let timeA = new Date(a.version).getTime() || a.id;
+        let timeB = new Date(b.version).getTime() || b.id;
+        return timeB - timeA;
+    });
 
     let html = "<ul style='margin-left: 15px; margin-top: 2px; padding: 0; list-style-type: square; font-size: 0.8rem;'>";
     
@@ -415,12 +443,11 @@ async function cargarTimelineActividad() {
 }
 
 // ==============================================================================
-// GESTIÓN DE SUBIDAS Y VALIDACIÓN POR ROL Y NOMENCLATURA
+// GESTIÓN DE SUBIDAS Y VALIDACIÓN ESTRICTA $1:1$ DE ESTADO ISO 19650
 // ==============================================================================
 function openUploadModal() {
     const optWip = document.getElementById("optUploadWip");
     const optShared = document.getElementById("optUploadShared");
-    const selectTarget = document.getElementById("uploadTargetTab");
 
     if (currentUser && currentUser.cargo.includes("REVISOR")) {
         if (optWip) optWip.style.display = "none";
@@ -498,15 +525,21 @@ async function handleFileUpload(e) {
         return;
     }
 
+    // --- BLOQUEO ESTRICTO DE ESTADO ISO vs CARPETA DESTINO ---
     const estadoArchivo = extraerEstadoDeNombre(isoNameInput);
 
     if (targetTab === "01_WIP" && estadoArchivo !== "S0" && !estadoArchivo.startsWith("P0")) {
-        alert(`⛔ ESTADO INCOHERENTE CON CARPETA DESTINO:\n\nIntentó subir un archivo en estado "${estadoArchivo}" a la carpeta 01_WIP.\n\nEn 01_WIP solo se permiten entregables nativos en estado "S0" (o borradores P0). Por favor renombre su archivo a S0 antes de subir.`);
+        alert(`⛔ VIOLACIÓN DE NORMA ISO 19650:\n\nEl archivo tiene el estado "${estadoArchivo}". En la carpeta 01_WIP solo se permiten entregables nativos en estado "S0" (o borradores P0).\n\nRenombre el archivo a S0 o seleccione la carpeta correspondiente.`);
         return;
     }
 
-    if (targetTab === "02_SHARED" && !estadoArchivo.startsWith("S") && estadoArchivo === "S0") {
-        alert(`⛔ ESTADO INCOHERENTE CON CARPETA DESTINO:\n\nIntentó subir un archivo en estado "${estadoArchivo}" a 02_SHARED.\n\nEn 02_SHARED los entregables de coordinación deben tener estado S1, S2, etc. Corrija el nombre antes de continuar.`);
+    if (targetTab === "02_SHARED" && (!estadoArchivo.startsWith("S") || estadoArchivo === "S0")) {
+        alert(`⛔ VIOLACIÓN DE NORMA ISO 19650:\n\nEl archivo tiene el estado "${estadoArchivo}". En la carpeta 02_SHARED solo se permiten entregables de coordinación en estado S1, S2, S3, etc.\n\nPromueva el archivo desde WIP o corrija el nombre antes de subir.`);
+        return;
+    }
+
+    if (targetTab === "03_PUBLISHED" && !estadoArchivo.startsWith("A")) {
+        alert(`⛔ VIOLACIÓN DE NORMA ISO 19650:\n\nEl archivo tiene el estado "${estadoArchivo}". En 03_PUBLISHED solo se permiten entregables aprobados en estado A1, A2, etc.\n\nPromueva el archivo desde SHARED para asignarle su estado publicado.`);
         return;
     }
 
@@ -643,8 +676,8 @@ async function procesarAprobacionCliente(estadoAprobacion) {
     if (!confirm(`¿Confirma marcar este entregable como ${estadoAprobacion}?`)) return;
 
     if (estadoAprobacion === "APROBADO") {
-        alert("Generando Acta de Recibo en PDF...");
-        const pdfBase64 = await generarPDFActaRecibo(observaciones);
+        alert("Generando Acta de Recibo Formal en PDF...");
+        const pdfBase64 = await generarPDFActaRecibo();
 
         const payload = {
             accion: "APROBACION_CLIENTE",
@@ -693,7 +726,10 @@ async function procesarAprobacionCliente(estadoAprobacion) {
     }
 }
 
-async function generarPDFActaRecibo(observaciones) {
+// ==============================================================================
+// GENERACIÓN DE ACTA PDF FORMAL Y COMPLEMENTADA (EXCLUSIVA 03_PUBLISHED)
+// ==============================================================================
+async function generarPDFActaRecibo() {
     if (!window.PDFLib) {
         await new Promise(resolve => {
             const script = document.createElement("script");
@@ -706,34 +742,67 @@ async function generarPDFActaRecibo(observaciones) {
     const { PDFDocument, rgb, StandardFonts } = window.PDFLib;
     const pdfDoc = await PDFDocument.create();
     const page = pdfDoc.addPage([600, 800]);
-    const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-    page.drawText("INNOVARQZ SOLUCIONES INTEGRALES S.A.S.", { x: 50, y: 750, size: 16, font, color: rgb(0.85, 0.47, 0.02) });
-    page.drawText("ACTA DE RECIBO A SATISFACCIÓN Y FIRMA DE ENTREGABLES", { x: 50, y: 725, size: 12, font });
+    // Encabezado Institucional
+    page.drawText("INNOVARQZ SOLUCIONES INTEGRALES S.A.S.", { x: 50, y: 740, size: 15, font: fontBold, color: rgb(0.85, 0.47, 0.02) });
+    page.drawText("NIT: 901.654.321-0 | CDE ISO 19650 PLATFORM", { x: 50, y: 725, size: 9, font: fontRegular, color: rgb(0.4, 0.4, 0.4) });
+    page.drawText("ACTA DE RECIBO A SATISFACCIÓN Y CIERRE DE HITO", { x: 50, y: 700, size: 12, font: fontBold });
 
+    // Datos del Proyecto y Cliente
     const fechaStr = new Date().toLocaleString();
-    page.drawText(`Proyecto: ${activeProjectCode}`, { x: 50, y: 680, size: 10, font: fontRegular });
-    page.drawText(`Cliente: ${currentUser.nombre_completo} (${currentUser.email})`, { x: 50, y: 665, size: 10, font: fontRegular });
-    page.drawText(`Fecha/Hora de Firma: ${fechaStr}`, { x: 50, y: 650, size: 10, font: fontRegular });
+    page.drawText(`Proyecto: ${activeProjectCode}`, { x: 50, y: 665, size: 10, font: fontBold });
+    page.drawText(`Cliente / Razón Social: ${currentUser.nombre_completo}`, { x: 50, y: 650, size: 10, font: fontRegular });
+    page.drawText(`Identificación / Correo: ${currentUser.email}`, { x: 50, y: 635, size: 10, font: fontRegular });
+    page.drawText(`Fecha y Hora de Firma Digital: ${fechaStr}`, { x: 50, y: 620, size: 10, font: fontRegular });
 
-    page.drawText("Lista de Archivos Recibidos a Satisfacción:", { x: 50, y: 610, size: 11, font });
+    // Declaración de Conformidad Formal
+    page.drawText("DECLARACIÓN DE CONFORMIDAD", { x: 50, y: 585, size: 11, font: fontBold });
+    const textoClausula = "Por medio del presente documento, el cliente hace constar que INNOVARQZ SOLUCIONES INTEGRALES S.A.S. cumplió a cabalidad con los entregables técnicos de información y modelos acordados. Se confirma la recepción a satisfacción de la documentación aprobada y se autoriza el cierre del hito correspondiente.";
+    
+    // Renderizado con ajuste de línea
+    page.drawText(textoClausula, { x: 50, y: 565, size: 9, font: fontRegular, maxWidth: 500, lineHeight: 12 });
 
-    const { data: files } = await supabaseClient.from("audit_logs").select("*").eq("proyecto_id", activeProjectId).eq("activo", true);
+    page.drawText("LISTA DE ENTREGABLES APROBADOS (03_PUBLISHED):", { x: 50, y: 505, size: 10, font: fontBold });
 
-    let yPos = 585;
-    if (files) {
+    // FILTRO ESTRICTO: Solo archivos vigentes de 03_PUBLISHED
+    const { data: files } = await supabaseClient
+        .from("audit_logs")
+        .select("*")
+        .eq("proyecto_id", activeProjectId)
+        .eq("estado_destino", "03_PUBLISHED")
+        .eq("activo", true);
+
+    let yPos = 485;
+    if (files && files.length > 0) {
+        const unicosPublished = new Map();
         files.forEach(f => {
-            if (!f.archivo_nombre.includes("ACTA_DECISION") && !f.archivo_nombre.includes("NOTA_TECNICA")) {
-                page.drawText(`• ${f.archivo_nombre} (${f.version || 'V1.0'})`, { x: 60, y: yPos, size: 9, font: fontRegular });
-                yPos -= 18;
+            if (!f.archivo_nombre.includes("ACTA_") && !f.archivo_nombre.includes("NOTA_TECNICA")) {
+                if (!unicosPublished.has(f.archivo_nombre)) unicosPublished.set(f.archivo_nombre, f);
             }
         });
+
+        unicosPublished.forEach(f => {
+            if (yPos > 180) {
+                page.drawText(`• ${f.archivo_nombre} (${f.version || 'V1.0'})`, { x: 60, y: yPos, size: 8, font: fontRegular });
+                yPos -= 16;
+            }
+        });
+    } else {
+        page.drawText("• Sin entregables registrados en 03_PUBLISHED", { x: 60, y: yPos, size: 8, font: fontRegular });
     }
 
-    page.drawText(`Observaciones del Cliente: ${observaciones || 'Sin observaciones'}`, { x: 50, y: yPos - 20, size: 10, font: fontRegular });
-    page.drawText("________________________________________", { x: 50, y: 100, fontRegular });
-    page.drawText("Firma Digital y Sello de Verificación CDE", { x: 50, y: 85, size: 9, font: fontRegular });
+    // Bloque Final de Firmas en 2 Columnas
+    page.drawLine({ start: { x: 50, y: 130 }, end: { x: 250, y: 130 }, thickness: 1, color: rgb(0.3, 0.3, 0.3) });
+    page.drawText("ARQ. JAMES RAMIRO ZUÑIGA CAIPE", { x: 50, y: 115, size: 9, font: fontBold });
+    page.drawText("Representante Legal", { x: 50, y: 102, size: 8, font: fontRegular });
+    page.drawText("INNOVARQZ SOLUCIONES INTEGRALES S.A.S.", { x: 50, y: 90, size: 8, font: fontRegular });
+
+    page.drawLine({ start: { x: 330, y: 130 }, end: { x: 530, y: 130 }, thickness: 1, color: rgb(0.3, 0.3, 0.3) });
+    page.drawText(`${currentUser.nombre_completo.toUpperCase()}`, { x: 330, y: 115, size: 9, font: fontBold });
+    page.drawText("Firma Digital y Sello CDE", { x: 330, y: 102, size: 8, font: fontRegular });
+    page.drawText(`Verificación: ${currentUser.email}`, { x: 330, y: 90, size: 8, font: fontRegular });
 
     const pdfBytes = await pdfDoc.saveAsBase64({ dataUri: false });
     return pdfBytes;
@@ -768,7 +837,7 @@ function closeViewerModal() {
 }
 
 // ==============================================================================
-// RENDERIZADO DE ENTREGABLES Y MANEJO DE HISTORIAL EN 04_ARCHIVED
+// RENDERIZADO DE ENTREGABLES Y HISTORIAL EN 04_ARCHIVED
 // ==============================================================================
 async function loadFiles() {
     const tbody = document.getElementById("filesTableBody");
@@ -801,10 +870,8 @@ async function loadFiles() {
     let listaAProcesar = [];
 
     if (activeTab === "04_ARCHIVED") {
-        // En 04_ARCHIVED NO deduplicamos: Mostramos el historial completo de versiones
         listaAProcesar = files.filter(f => f.estado_origen === "04_ARCHIVED" || f.estado_destino === "04_ARCHIVED");
     } else {
-        // Deduplicación normal para carpetas activas (WIP, SHARED, PUBLISHED)
         const mapaUnicos = new Map();
 
         files.forEach(f => {
@@ -852,7 +919,7 @@ async function loadFiles() {
         const esVisualizable = ["pdf", "png", "jpg", "jpeg", "html", "htm"].includes(ext);
         const fechaUltimaModificacion = f.version || "N/A";
 
-        // DESACTIVACIÓN TOTAL DE ACCIONES EN ARCHIVED
+        // VISTA SOLO LECTURA EN ARCHIVED
         if (activeTab === "04_ARCHIVED") {
             tbody.innerHTML += `
                 <tr style="opacity: 0.85;">
