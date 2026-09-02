@@ -91,26 +91,26 @@
         </div>
     </div>
 
-    <!-- MODAL DE SUBIDA -->
+    <!-- MODAL DE SUBIDA POR ENLACE -->
     <div id="uploadModal" class="modal-hidden">
-        <div class="modal-content card" style="max-width: 500px;">
-            <h3>Subir / Anexar Entregable al CDE</h3>
-            <form id="uploadFileForm" onsubmit="handleFileUpload(event)">
-                <label><small>Seleccionar Archivo Local (.rvt, .nwc, .ifc, .pdf, .html, etc.):</small></label>
-                <input type="file" id="fileInput" required style="margin-top: 5px; margin-bottom: 12px; width: 100%;">
+        <div class="modal-content card" style="max-width: 520px;">
+            <h3>Importar y Registrar Entregable (ISO 19650)</h3>
+            <form id="uploadForm">
+                <label><small>1. Enlace compartido del archivo en Google Drive:</small></label>
+                <input type="url" id="driveUrlInput" placeholder="https://drive.google.com/file/d/..." required style="width: 100%; margin-top: 4px; margin-bottom: 12px; padding: 8px; border-radius: 6px; background: #0f172a; color: #fff; border: 1px solid #334155;">
 
-                <label><small>Pestaña Destino:</small></label>
-                <select id="uploadTargetTab" required style="width: 100%; margin-bottom: 12px;">
+                <label><small>2. Nombre del Archivo Bajo Norma ISO 19650:</small></label>
+                <input type="text" id="isoNameInput" placeholder="Ej: PRY2026-001_INNOVARQZ_ZZ_M3_ARQ_S0.rvt" required style="width: 100%; margin-top: 4px; margin-bottom: 12px; padding: 8px; border-radius: 6px; background: #0f172a; color: #fff; border: 1px solid #334155;">
+
+                <label><small>3. Pestaña Destino:</small></label>
+                <select id="uploadTargetTab" required style="width: 100%; margin-top: 4px; margin-bottom: 15px; padding: 8px; border-radius: 6px; background: #0f172a; color: #fff; border: 1px solid #334155;">
                     <option value="01_WIP">01_WIP (Modelador - Nativos/Trabajo)</option>
                     <option value="02_SHARED">02_SHARED (Coordinación / Intercambio BEP)</option>
                 </select>
 
-                <label><small>Comentario / Resumen del Cambio:</small></label>
-                <textarea id="uploadComment" placeholder="Ej. Archivo nativo Navisworks entregado para coordinación de interferencias..." style="width: 100%; height: 60px; border-radius: 6px; background: #0f172a; color: #fff; padding: 6px;" required></textarea>
-
                 <div class="modal-actions" style="margin-top:15px; display: flex; justify-content: flex-end; gap: 10px;">
                     <button type="button" class="btn-secondary" onclick="closeUploadModal()">Cancelar</button>
-                    <button type="submit" class="btn-primary" id="btnSubmitUpload">Subir al CDE</button>
+                    <button type="submit" class="btn-primary" id="btnSubmitUpload">Importar al CDE</button>
                 </div>
             </form>
         </div>
