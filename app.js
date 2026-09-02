@@ -221,10 +221,21 @@ function aplicarRestriccionPestanasVisuales() {
     if (clientCard) {
         clientCard.style.display = (currentUser.cargo === "CLIENTE" && activeTab === "03_PUBLISHED") ? "block" : "none";
     }
+
+    // Adaptación del centro de monitoreo para el Cliente (Bitácora al 100%)
+    const techNoteCard = document.getElementById("technicalNoteCard");
+    const auditLogCard = document.getElementById("auditLogCard");
+    if (currentUser.cargo === "CLIENTE") {
+        if (techNoteCard) techNoteCard.style.display = "none";
+        if (auditLogCard) auditLogCard.style.height = "100%";
+    } else {
+        if (techNoteCard) techNoteCard.style.display = "flex";
+        if (auditLogCard) auditLogCard.style.height = "50%";
+    }
 }
 
 // ==============================================================================
-// HILO DE NOTAS TÉCNICAS (ORDEN DESCENDENTE CON ASUNTO Y DESCRIPCIÓN)
+// HILO DE NOTAS TÉCNICAS (ORDEN DESCENDENTE ESTRICTO CON FLUJO DE 3 VÍAS)
 // ==============================================================================
 async function evaluarNotasTecnicasActivas() {
     const threadContainer = document.getElementById("interactionThreadContainer");
@@ -244,12 +255,13 @@ async function evaluarNotasTecnicasActivas() {
         .eq("proyecto_id", activeProjectId)
         .ilike("archivo_nombre", "NOTA_TECNICA_%")
         .order("id", { ascending: false })
-        .limit(10);
+        .limit(15);
 
     const interaccionesHumanas = (notas || []).filter(n => 
         n.archivo_nombre.includes("AJUSTES_SOLICITADOS") || 
         n.archivo_nombre.includes("CONFIRMADO_RECIBIDO") || 
-        n.archivo_nombre.includes("SOLICITUD_REUNION")
+        n.archivo_nombre.includes("SOLICITUD_REUNION") ||
+        n.archivo_nombre.includes("CORRECCION_MODELADOR")
     );
 
     if (error || interaccionesHumanas.length === 0) {
@@ -262,7 +274,9 @@ async function evaluarNotasTecnicasActivas() {
     card.style.display = "flex";
     let html = "";
 
-    // Mantenemos orden descendente estricto (lo más reciente arriba)
+    // Mantenemos orden descendente estricto por ID/Hora
+    interaccionesHumanas.sort((a, b) => b.id - a.id);
+
     interaccionesHumanas.forEach(n => {
         let tipo = n.archivo_nombre.replace("NOTA_TECNICA_", "");
         let colorTexto = "#f8fafc";
@@ -271,6 +285,7 @@ async function evaluarNotasTecnicasActivas() {
         if (tipo === "AJUSTES_SOLICITADOS") { colorTexto = "#ef4444"; icono = "🚨 Cliente:"; }
         else if (tipo === "CONFIRMADO_RECIBIDO") { colorTexto = "#10b981"; icono = "✅ Modelador:"; }
         else if (tipo === "SOLICITUD_REUNION") { colorTexto = "#d97706"; icono = "📅 Modelador:"; }
+        else if (tipo === "CORRECCION_MODELADOR") { colorTexto = "#f59e0b"; icono = "⚠️ Revisor a Modelador:"; }
 
         let mensajeCompleto = n.drive_file_url || "";
         let partesMensaje = mensajeCompleto.split(" | Detalle: ");
@@ -290,27 +305,42 @@ async function evaluarNotasTecnicasActivas() {
     threadContainer.innerHTML = html;
 
     const esModelador = currentUser.cargo.includes("MODELADOR") || currentUser.cargo.includes("SUPER_ADMIN");
+    const esRevisor = currentUser.cargo.includes("REVISOR") || currentUser.cargo.includes("SUPER_ADMIN");
+
     if (actionsContainer) {
-        actionsContainer.style.display = esModelador ? "flex" : "none";
+        actionsContainer.style.display = "flex";
     }
 
     const btnConfirmar = document.getElementById("btnConfirmarLectura");
     if (btnConfirmar) {
+        btnConfirmar.style.display = esModelador ? "inline-block" : "none";
         btnConfirmar.onclick = function() {
-            responderNotaTecnica('CONFIRMADO_RECIBIDO', 'Entendido. Se inician ajustes en modelos nativos.');
+            responderNotaTecnica('CONFIRMADO_RECIBIDO', 'Entendido. Se inician ajustes en modelos nativos en WIP.');
         };
     }
 
     const btnComite = document.getElementById("btnSolicitarComite");
     if (btnComite) {
+        btnComite.style.display = esModelador ? "inline-block" : "none";
         btnComite.onclick = function() {
             responderNotaTecnica('SOLICITUD_REUNION', 'Solicitud de mesa de trabajo técnica para aclarar observaciones.');
+        };
+    }
+
+    const btnCorregirModelador = document.getElementById("btnSolicitarCorreccionModelador");
+    if (btnCorregirModelador) {
+        btnCorregirModelador.style.display = esRevisor ? "inline-block" : "none";
+        btnCorregirModelador.onclick = function() {
+            let observacionTécnica = prompt("Escriba la instrucción técnica para el Modelador:");
+            if (observacionTécnica) {
+                responderNotaTecnica('CORRECCION_MODELADOR', observacionTécnica);
+            }
         };
     }
 }
 
 async function responderNotaTecnica(tipoRespuesta, comentario) {
-    if (!confirm("¿Confirma registrar esta respuesta en la bitácora del proyecto?")) return;
+    if (!confirm("¿Confirma registrar esta respuesta en el hilo técnico del proyecto?")) return;
 
     const payload = {
         accion: "RESPUESTA_NOTA_TECNICA",
@@ -338,7 +368,7 @@ async function responderNotaTecnica(tipoRespuesta, comentario) {
 }
 
 // ==============================================================================
-// BITÁCORA REAL (ORDEN CRONOLÓGICO DESCENDENTE CON ASUNTO CORTO)
+// BITÁCORA REAL (ORDEN CRONOLÓGICO DESCENDENTE ESTRICTO POR ID)
 // ==============================================================================
 async function cargarTimelineActividad() {
     let timelineDiv = document.getElementById("activityTimeline");
@@ -349,12 +379,15 @@ async function cargarTimelineActividad() {
         .select("*")
         .eq("proyecto_id", activeProjectId)
         .order("id", { ascending: false })
-        .limit(20);
+        .limit(25);
 
     if (error || !logs || logs.length === 0) {
         timelineDiv.innerHTML = "<small style='color: var(--text-muted);'>Sin actividad registrada.</small>";
         return;
     }
+
+    // Ordenamiento descendente por ID explícito
+    logs.sort((a, b) => b.id - a.id);
 
     let html = "<ul style='margin-left: 15px; margin-top: 2px; padding: 0; list-style-type: square; font-size: 0.8rem;'>";
     
@@ -369,6 +402,7 @@ async function cargarTimelineActividad() {
         else if (eventoNombre.includes("AJUSTES")) { icono = "🚨"; estiloTexto = "color: #f87171;"; }
         else if (eventoNombre.includes("CONFIRMADO")) { icono = "✅"; estiloTexto = "color: #10b981;"; }
         else if (eventoNombre.includes("REEMPLAZO")) { icono = "📦"; estiloTexto = "color: #fbbf24;"; }
+        else if (eventoNombre.includes("CORRECCION")) { icono = "⚠️"; estiloTexto = "color: #f59e0b;"; }
 
         let mensajeOriginal = l.drive_file_url || "";
         let asuntoCorto = mensajeOriginal.split(" | Detalle: ")[0];
@@ -381,9 +415,20 @@ async function cargarTimelineActividad() {
 }
 
 // ==============================================================================
-// GESTIÓN DE SUBIDAS Y VALIDACIÓN DE ESTADO ISO 19650
+// GESTIÓN DE SUBIDAS Y VALIDACIÓN POR ROL Y NOMENCLATURA
 // ==============================================================================
 function openUploadModal() {
+    const optWip = document.getElementById("optUploadWip");
+    const optShared = document.getElementById("optUploadShared");
+    const selectTarget = document.getElementById("uploadTargetTab");
+
+    if (currentUser && currentUser.cargo.includes("REVISOR")) {
+        if (optWip) optWip.style.display = "none";
+        if (optShared) optShared.selected = true;
+    } else {
+        if (optWip) optWip.style.display = "block";
+    }
+
     const modal = document.getElementById("uploadModal");
     if (modal) modal.className = "modal-overlay";
 }
@@ -453,7 +498,6 @@ async function handleFileUpload(e) {
         return;
     }
 
-    // --- VALIDACIÓN DE ESTADO ISO vs CARPETA DESTINO ---
     const estadoArchivo = extraerEstadoDeNombre(isoNameInput);
 
     if (targetTab === "01_WIP" && estadoArchivo !== "S0" && !estadoArchivo.startsWith("P0")) {
@@ -696,20 +740,17 @@ async function generarPDFActaRecibo(observaciones) {
 }
 
 // ==============================================================================
-// GESTIÓN DEL VISOR EN MODAL FLOTANTE
+// GESTIÓN DEL VISOR EN MODAL FLOTANTE LIMPIO
 // ==============================================================================
 function openViewerModal(driveUrl, nombreArchivo) {
     const modal = document.getElementById("viewerModal");
     const frame = document.getElementById("modalViewerFrame");
     const title = document.getElementById("viewerTitle");
-    const externalLink = document.getElementById("viewerExternalLink");
 
     if (!modal || !frame) return;
 
     title.innerText = `Previsualizando: ${nombreArchivo}`;
-    externalLink.href = driveUrl;
 
-    // Si es un PDF de Drive, convertimos a URL de visualización embebida limpia
     let previewUrl = driveUrl;
     if (driveUrl.includes("drive.google.com/file/d/")) {
         previewUrl = driveUrl.replace("/view?usp=drivesdk", "/preview").replace("/view", "/preview");
@@ -727,7 +768,7 @@ function closeViewerModal() {
 }
 
 // ==============================================================================
-// RENDERIZADO DE ENTREGABLES
+// RENDERIZADO DE ENTREGABLES Y MANEJO DE HISTORIAL EN 04_ARCHIVED
 // ==============================================================================
 async function loadFiles() {
     const tbody = document.getElementById("filesTableBody");
@@ -757,40 +798,49 @@ async function loadFiles() {
         return;
     }
 
-    const mapaUnicos = new Map();
+    let listaAProcesar = [];
 
-    files.forEach(f => {
-        if (f.archivo_nombre.startsWith("ACTA_DECISION_CLIENTE") || f.archivo_nombre.startsWith("NOTA_TECNICA_")) {
-            return;
-        }
+    if (activeTab === "04_ARCHIVED") {
+        // En 04_ARCHIVED NO deduplicamos: Mostramos el historial completo de versiones
+        listaAProcesar = files.filter(f => f.estado_origen === "04_ARCHIVED" || f.estado_destino === "04_ARCHIVED");
+    } else {
+        // Deduplicación normal para carpetas activas (WIP, SHARED, PUBLISHED)
+        const mapaUnicos = new Map();
 
-        const eDestino = f.estado_destino || "";
-        const eOrigen = f.estado_origen || "";
-
-        let perteneceAPestana = (eDestino === activeTab || eOrigen === activeTab);
-
-        const partes = f.archivo_nombre.split("_");
-        if (!perteneceAPestana && partes.length >= 6) {
-            const codigoEstado = partes[5].split(".")[0].toUpperCase();
-            if (activeTab === "01_WIP" && (codigoEstado === "S0" || eOrigen === "01_WIP")) perteneceAPestana = true;
-            if (activeTab === "02_SHARED" && (codigoEstado === "S1" || eOrigen === "02_SHARED")) perteneceAPestana = true;
-            if (activeTab === "03_PUBLISHED" && (codigoEstado.startsWith("A") || eOrigen === "03_PUBLISHED")) perteneceAPestana = true;
-            if (activeTab === "04_ARCHIVED" && eOrigen === "04_ARCHIVED") perteneceAPestana = true;
-        }
-
-        if (perteneceAPestana) {
-            if (!mapaUnicos.has(f.archivo_nombre)) {
-                mapaUnicos.set(f.archivo_nombre, f);
+        files.forEach(f => {
+            if (f.archivo_nombre.startsWith("ACTA_DECISION_CLIENTE") || f.archivo_nombre.startsWith("NOTA_TECNICA_")) {
+                return;
             }
-        }
-    });
 
-    if (mapaUnicos.size === 0) {
+            const eDestino = f.estado_destino || "";
+            const eOrigen = f.estado_origen || "";
+
+            let perteneceAPestana = (eDestino === activeTab || eOrigen === activeTab);
+
+            const partes = f.archivo_nombre.split("_");
+            if (!perteneceAPestana && partes.length >= 6) {
+                const codigoEstado = partes[5].split(".")[0].toUpperCase();
+                if (activeTab === "01_WIP" && (codigoEstado === "S0" || eOrigen === "01_WIP")) perteneceAPestana = true;
+                if (activeTab === "02_SHARED" && (codigoEstado === "S1" || eOrigen === "02_SHARED")) perteneceAPestana = true;
+                if (activeTab === "03_PUBLISHED" && (codigoEstado.startsWith("A") || eOrigen === "03_PUBLISHED")) perteneceAPestana = true;
+            }
+
+            if (perteneceAPestana) {
+                if (!mapaUnicos.has(f.archivo_nombre)) {
+                    mapaUnicos.set(f.archivo_nombre, f);
+                }
+            }
+        });
+
+        listaAProcesar = Array.from(mapaUnicos.values());
+    }
+
+    if (listaAProcesar.length === 0) {
         tbody.innerHTML = `<tr><td colspan="5">No hay entregables en la pestaña <strong>${activeTab}</strong>.</td></tr>`;
         return;
     }
 
-    mapaUnicos.forEach(f => {
+    listaAProcesar.forEach(f => {
         const nombreCompleto = f.archivo_nombre || "";
         const parts = nombreCompleto.split("_");
         
@@ -801,6 +851,20 @@ async function loadFiles() {
         const ext = nombreCompleto.split('.').pop().toLowerCase();
         const esVisualizable = ["pdf", "png", "jpg", "jpeg", "html", "htm"].includes(ext);
         const fechaUltimaModificacion = f.version || "N/A";
+
+        // DESACTIVACIÓN TOTAL DE ACCIONES EN ARCHIVED
+        if (activeTab === "04_ARCHIVED") {
+            tbody.innerHTML += `
+                <tr style="opacity: 0.85;">
+                    <td style="font-size:0.85rem;">${nombreCompleto}</td>
+                    <td><strong>${disciplina}</strong></td>
+                    <td><span class="badge" style="background:#64748b;">${estadoISO}</span></td>
+                    <td><small style="color:var(--text-muted); font-size:0.75rem;">${fechaUltimaModificacion}</small></td>
+                    <td><small style="color:var(--text-muted); font-style:italic;">Solo Lectura / Histórico</small></td>
+                </tr>
+            `;
+            return;
+        }
 
         let botonPromocion = "";
         if (currentUser && currentUser.cargo !== "CLIENTE") {
