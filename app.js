@@ -391,7 +391,7 @@ async function cargarTimelineActividad() {
 }
 
 // ==============================================================================
-// SUBIDA DE ARCHIVOS POR FRAGMENTOS ULTRA-LIGEROS (1.5 MB)
+// IMPORTACIÓN Y RENOMBRADO POR ENLACE DE DRIVE
 // ==============================================================================
 function openUploadModal() {
     const modal = document.getElementById("uploadModal");
@@ -424,80 +424,57 @@ function recalcularEstadoEnNombre(nombreOriginal, nuevoEstadoISO) {
 
 async function handleFileUpload(e) {
     e.preventDefault();
-    const fileInput = document.getElementById("fileInput");
+    
+    const driveUrlInput = document.getElementById("driveUrlInput").value.trim();
+    const isoNameInput = document.getElementById("isoNameInput").value.trim();
     const targetTab = document.getElementById("uploadTargetTab").value;
     const btnSubmit = document.getElementById("btnSubmitUpload");
 
-    if (!fileInput.files || fileInput.files.length === 0) {
-        alert("Por favor seleccione un archivo.");
+    if (!driveUrlInput || !isoNameInput) {
+        alert("⚠️ Debe ingresar tanto el enlace del archivo como el nombre normado ISO 19650.");
         return;
     }
 
-    const file = fileInput.files[0];
-
-    if (!validarNomenclaturaISO19650(file.name) && !file.name.endsWith(".html")) {
-        alert(`❌ REGLA ISO 19650 INCUMPLIDA:\n\nEl archivo "${file.name}" no cumple con el estándar de denominación:\n[PROYECTO]_[ORIGINADOR]_[ZONA]_[TIPO]_[DISCIPLINA]_[ESTADO]\n\nEjemplo válido: PRY2026-001_INNOVARQZ_ZZ_M3_ARQ_S1.ifc`);
+    // Filtro de nomenclatura ISO 19650 antes de realizar cualquier llamada a servidor
+    if (!validarNomenclaturaISO19650(isoNameInput) && !isoNameInput.endsWith(".html")) {
+        alert(`❌ REGLA ISO 19650 INCUMPLIDA:\n\nEl nombre especificado "${isoNameInput}" NO es válido.\n\nDebe contener la estructura de 6 campos:\n[PROYECTO]_[ORIGINADOR]_[ZONA]_[TIPO]_[DISCIPLINA]_[ESTADO]\n\nEjemplo válido: PRY2026-001_INNOVARQZ_ZZ_M3_ARQ_S0.rvt\n\nPor favor corrija el nombre antes de continuar.`);
         return;
     }
 
     btnSubmit.disabled = true;
-
-    // Fragmentos ultraligeros de 1.5 MB para prevenir fallos HTTP
-    const chunkSize = 1.5 * 1024 * 1024;
-    const totalChunks = Math.ceil(file.size / chunkSize);
+    btnSubmit.innerText = "Importando y renombrando en Drive...";
 
     try {
-        for (let i = 0; i < totalChunks; i++) {
-            const start = i * chunkSize;
-            const end = Math.min(file.size, start + chunkSize);
-            const chunk = file.slice(start, end);
+        const payload = {
+            accion: "IMPORTAR_DESDE_URL",
+            proyecto_id: activeProjectId,
+            estado_destino: targetTab,
+            nombre_iso: isoNameInput,
+            url_origen: driveUrlInput,
+            usuario_nombre: currentUser.nombre_completo
+        };
 
-            const base64Chunk = await new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result.split(',')[1]);
-                reader.readAsDataURL(chunk);
-            });
+        const res = await fetch(WEBHOOK_APPS_SCRIPT, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify(payload)
+        });
 
-            const porcentaje = Math.round(((i + 1) / totalChunks) * 100);
-            btnSubmit.innerText = `Subiendo: ${porcentaje}% (${i + 1}/${totalChunks})`;
+        const data = await res.json();
 
-            const payload = {
-                accion: "SUBIR_CHUNK",
-                proyecto_id: activeProjectId,
-                estado_destino: targetTab,
-                nombre_archivo: file.name,
-                chunk_base64: base64Chunk,
-                chunk_index: i,
-                total_chunks: totalChunks,
-                es_ultimo: (i === totalChunks - 1),
-                mime_type: file.type || "application/octet-stream",
-                usuario_nombre: currentUser.nombre_completo
-            };
-
-            const res = await fetch(WEBHOOK_APPS_SCRIPT, {
-                method: "POST",
-                headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: JSON.stringify(payload)
-            });
-
-            const data = await res.json();
-
-            if (data.status !== "success") {
-                throw new Error(data.message || "Error procesando el bloque de modelo.");
-            }
-
-            if (data.completo) {
-                alert("✅ ¡Modelo subido e integrado exitosamente al CDE!");
-                closeUploadModal();
-                loadFiles();
-                cargarTimelineActividad();
-            }
+        if (data.status === "success") {
+            alert(`✅ ¡Modelo importado, renombrado a "${isoNameInput}" e integrado a tu Google Drive!`);
+            closeUploadModal();
+            loadFiles();
+            cargarTimelineActividad();
+        } else {
+            alert("⚠️ " + data.message);
         }
     } catch (err) {
-        alert("Error durante la transmisión: " + err.message);
+        alert("Error de comunicación: " + err.message);
     } finally {
         btnSubmit.disabled = false;
-        btnSubmit.innerText = "Subir al CDE";
+        btnSubmit.innerText = "Importar al CDE";
     }
 }
 
