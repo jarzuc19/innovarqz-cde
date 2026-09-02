@@ -12,6 +12,15 @@ let userPermissions = null;
 let activeProjectId = null;
 let activeProjectCode = null;
 let activeTab = "01_WIP";
+let activeSubfolder = "TODAS";
+
+// MAPA DE SUBCARPETAS ISO 19650 POR ESTADO
+const SUBCARPETAS_MAP = {
+    "01_WIP": ["TODAS", "ARQ_Arquitectura", "EST_Estructura", "MEP_Instalaciones"],
+    "02_SHARED": ["TODAS", "01_Modelos_3D", "02_Planos_Coordinados", "03_Informes_Interferencias"],
+    "03_PUBLISHED": ["TODAS", "01_Modelos_Aprobados", "02_Planos_Contractuales", "03_Actas_y_Memorias"],
+    "04_ARCHIVED": []
+};
 
 // ==============================================================================
 // INICIALIZACIÓN Y NAVEGACIÓN
@@ -35,6 +44,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const revisorForm = document.getElementById("revisorInstructionForm");
     if (revisorForm) revisorForm.addEventListener("submit", handleRevisorInstructionSubmit);
 
+    const isoNameInput = document.getElementById("isoNameInput");
+    if (isoNameInput) isoNameInput.addEventListener("input", actualizarPistaSubcarpetaModal);
+
+    const uploadTargetTab = document.getElementById("uploadTargetTab");
+    if (uploadTargetTab) uploadTargetTab.addEventListener("change", actualizarPistaSubcarpetaModal);
+
     setupDropdownWithOther("ubicacionSelect", "ubicacionOtherInput");
     setupDropdownWithOther("tipoSelect", "tipoOtherInput");
 
@@ -50,12 +65,14 @@ document.addEventListener("DOMContentLoaded", () => {
             document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
             e.target.classList.add("active");
             activeTab = requestedTab;
+            activeSubfolder = "TODAS";
             
             const clientCard = document.getElementById("clientApprovalCard");
             if (clientCard && currentUser) {
                 clientCard.style.display = (currentUser.cargo === "CLIENTE" && activeTab === "03_PUBLISHED") ? "block" : "none";
             }
-            
+
+            renderizarBarraSubcarpetas();
             loadFiles();
         });
     });
@@ -68,6 +85,72 @@ function validarAccesoPestana(tabName) {
     if (tabName === "03_PUBLISHED") return !!userPermissions.permiso_published;
     if (tabName === "04_ARCHIVED") return !!userPermissions.permiso_wip;
     return false;
+}
+
+function renderizarBarraSubcarpetas() {
+    const container = document.getElementById("subcarpetas-bar");
+    if (!container) return;
+
+    const subcarpetas = SUBCARPETAS_MAP[activeTab] || [];
+
+    if (subcarpetas.length === 0) {
+        container.style.display = "none";
+        return;
+    }
+
+    container.style.display = "flex";
+    container.innerHTML = `<span style="font-size:0.75rem; color:#94a3b8; font-weight:bold; margin-right:4px;">📂 Subcarpeta:</span>`;
+
+    subcarpetas.forEach(sub => {
+        const esActiva = activeSubfolder === sub;
+        const nombreLimpio = sub === "TODAS" ? "Ver Todas" : sub.replace(/_/g, " ");
+        
+        container.innerHTML += `
+            <button 
+                type="button"
+                onclick="filtrarPorSubcarpeta('${sub}')" 
+                style="font-size: 0.72rem; padding: 4px 10px; border-radius: 6px; border: 1px solid #475569; transition: all 0.2s; cursor: pointer; ${esActiva ? 'background: var(--accent-copper, #d97706); color: #fff; font-weight: bold; border-color: #d97706;' : 'background: #0f172a; color: #cbd5e1;'}"
+            >
+                ${nombreLimpio}
+            </button>
+        `;
+    });
+}
+
+function filtrarPorSubcarpeta(sub) {
+    activeSubfolder = sub;
+    renderizarBarraSubcarpetas();
+    loadFiles();
+}
+
+function actualizarPistaSubcarpetaModal() {
+    const isoName = document.getElementById("isoNameInput").value.trim().toUpperCase();
+    const targetTab = document.getElementById("uploadTargetTab").value;
+    const hintSpan = document.getElementById("hintFolderName");
+
+    if (!hintSpan) return;
+
+    if (!isoName) {
+        hintSpan.innerText = "Ingrese el nombre para detectar...";
+        hintSpan.style.color = "#94a3b8";
+        return;
+    }
+
+    let subDetectada = "Principal";
+
+    if (targetTab === "01_WIP") {
+        if (isoName.includes("_ARQ_")) subDetectada = "01_WIP / ARQ_Arquitectura";
+        else if (isoName.includes("_EST_")) subDetectada = "01_WIP / EST_Estructura";
+        else if (isoName.includes("_MEP_")) subDetectada = "01_WIP / MEP_Instalaciones";
+        else subDetectada = "01_WIP / ARQ_Arquitectura (Default)";
+    } else if (targetTab === "02_SHARED") {
+        if (isoName.includes("_M3_") || isoName.endsWith(".IFC") || isoName.endsWith(".RVT")) subDetectada = "02_SHARED / 01_Modelos_3D";
+        else if (isoName.includes("_PL_") || isoName.includes("_DR_") || isoName.endsWith(".DWG")) subDetectada = "02_SHARED / 02_Planos_Coordinados";
+        else subDetectada = "02_SHARED / 03_Informes_Interferencias";
+    }
+
+    hintSpan.innerText = subDetectada;
+    hintSpan.style.color = "#10b981";
 }
 
 // ==============================================================================
@@ -195,7 +278,9 @@ async function handleProjectChange(e) {
         activeTab = "01_WIP";
     }
 
+    activeSubfolder = "TODAS";
     aplicarRestriccionPestanasVisuales();
+    renderizarBarraSubcarpetas();
     evaluarNotasTecnicasActivas();
     cargarTimelineActividad();
     loadFiles();
@@ -237,7 +322,7 @@ function aplicarRestriccionPestanasVisuales() {
 }
 
 // ==============================================================================
-// HILO DE NOTAS TÉCNICAS (ORDENAMIENTO TEMPORAL NUMÉRICO STRICTO)
+// HILO DE NOTAS TÉCNICAS
 // ==============================================================================
 async function evaluarNotasTecnicasActivas() {
     const threadContainer = document.getElementById("interactionThreadContainer");
@@ -276,7 +361,6 @@ async function evaluarNotasTecnicasActivas() {
     card.style.display = "flex";
     let html = "";
 
-    // ORDENAMIENTO CRONOLÓGICO MILIMÉTRICO (Timestamp numérico descendente)
     interaccionesHumanas.sort((a, b) => {
         let timeA = new Date(a.version).getTime() || a.id;
         let timeB = new Date(b.version).getTime() || b.id;
@@ -392,7 +476,7 @@ async function responderNotaTecnica(tipoRespuesta, comentario) {
 }
 
 // ==============================================================================
-// BITÁCORA REAL (ORDEN CRONOLÓGICO NUMÉRICO DESCENDENTE INCORRUPTIBLE)
+// BITÁCORA REAL
 // ==============================================================================
 async function cargarTimelineActividad() {
     let timelineDiv = document.getElementById("activityTimeline");
@@ -410,7 +494,6 @@ async function cargarTimelineActividad() {
         return;
     }
 
-    // ORDENAMIENTO MATEMÁTICO POR TIMESTAMP EXACTO
     logs.sort((a, b) => {
         let timeA = new Date(a.version).getTime() || a.id;
         let timeB = new Date(b.version).getTime() || b.id;
@@ -456,6 +539,7 @@ function openUploadModal() {
         if (optWip) optWip.style.display = "block";
     }
 
+    actualizarPistaSubcarpetaModal();
     const modal = document.getElementById("uploadModal");
     if (modal) modal.className = "modal-overlay";
 }
@@ -525,7 +609,6 @@ async function handleFileUpload(e) {
         return;
     }
 
-    // --- BLOQUEO ESTRICTO DE ESTADO ISO vs CARPETA DESTINO ---
     const estadoArchivo = extraerEstadoDeNombre(isoNameInput);
 
     if (targetTab === "01_WIP" && estadoArchivo !== "S0" && !estadoArchivo.startsWith("P0")) {
@@ -727,7 +810,7 @@ async function procesarAprobacionCliente(estadoAprobacion) {
 }
 
 // ==============================================================================
-// GENERACIÓN DE ACTA PDF FORMAL Y COMPLEMENTADA (EXCLUSIVA 03_PUBLISHED)
+// GENERACIÓN DE ACTA PDF FORMAL
 // ==============================================================================
 async function generarPDFActaRecibo() {
     if (!window.PDFLib) {
@@ -745,28 +828,23 @@ async function generarPDFActaRecibo() {
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-    // Encabezado Institucional
     page.drawText("INNOVARQZ SOLUCIONES INTEGRALES S.A.S.", { x: 50, y: 740, size: 15, font: fontBold, color: rgb(0.85, 0.47, 0.02) });
     page.drawText("NIT: 901.654.321-0 | CDE ISO 19650 PLATFORM", { x: 50, y: 725, size: 9, font: fontRegular, color: rgb(0.4, 0.4, 0.4) });
     page.drawText("ACTA DE RECIBO A SATISFACCIÓN Y CIERRE DE HITO", { x: 50, y: 700, size: 12, font: fontBold });
 
-    // Datos del Proyecto y Cliente
     const fechaStr = new Date().toLocaleString();
     page.drawText(`Proyecto: ${activeProjectCode}`, { x: 50, y: 665, size: 10, font: fontBold });
     page.drawText(`Cliente / Razón Social: ${currentUser.nombre_completo}`, { x: 50, y: 650, size: 10, font: fontRegular });
     page.drawText(`Identificación / Correo: ${currentUser.email}`, { x: 50, y: 635, size: 10, font: fontRegular });
     page.drawText(`Fecha y Hora de Firma Digital: ${fechaStr}`, { x: 50, y: 620, size: 10, font: fontRegular });
 
-    // Declaración de Conformidad Formal
     page.drawText("DECLARACIÓN DE CONFORMIDAD", { x: 50, y: 585, size: 11, font: fontBold });
     const textoClausula = "Por medio del presente documento, el cliente hace constar que INNOVARQZ SOLUCIONES INTEGRALES S.A.S. cumplió a cabalidad con los entregables técnicos de información y modelos acordados. Se confirma la recepción a satisfacción de la documentación aprobada y se autoriza el cierre del hito correspondiente.";
     
-    // Renderizado con ajuste de línea
     page.drawText(textoClausula, { x: 50, y: 565, size: 9, font: fontRegular, maxWidth: 500, lineHeight: 12 });
 
     page.drawText("LISTA DE ENTREGABLES APROBADOS (03_PUBLISHED):", { x: 50, y: 505, size: 10, font: fontBold });
 
-    // FILTRO ESTRICTO: Solo archivos vigentes de 03_PUBLISHED
     const { data: files } = await supabaseClient
         .from("audit_logs")
         .select("*")
@@ -793,7 +871,6 @@ async function generarPDFActaRecibo() {
         page.drawText("• Sin entregables registrados en 03_PUBLISHED", { x: 60, y: yPos, size: 8, font: fontRegular });
     }
 
-    // Bloque Final de Firmas en 2 Columnas
     page.drawLine({ start: { x: 50, y: 130 }, end: { x: 250, y: 130 }, thickness: 1, color: rgb(0.3, 0.3, 0.3) });
     page.drawText("ARQ. JAMES RAMIRO ZUÑIGA CAIPE", { x: 50, y: 115, size: 9, font: fontBold });
     page.drawText("Representante Legal", { x: 50, y: 102, size: 8, font: fontRegular });
@@ -809,7 +886,7 @@ async function generarPDFActaRecibo() {
 }
 
 // ==============================================================================
-// GESTIÓN DEL VISOR EN MODAL FLOTANTE LIMPIO
+// GESTIÓN DEL VISOR EN MODAL
 // ==============================================================================
 function openViewerModal(driveUrl, nombreArchivo) {
     const modal = document.getElementById("viewerModal");
@@ -837,7 +914,7 @@ function closeViewerModal() {
 }
 
 // ==============================================================================
-// RENDERIZADO DE ENTREGABLES Y HISTORIAL EN 04_ARCHIVED
+// RENDERIZADO DE ENTREGABLES CON FILTRO POR SUBCARPETAS
 // ==============================================================================
 async function loadFiles() {
     const tbody = document.getElementById("filesTableBody");
@@ -902,8 +979,30 @@ async function loadFiles() {
         listaAProcesar = Array.from(mapaUnicos.values());
     }
 
+    // FILTRADO ADICIONAL POR SUBCARPERTA SELECCIONADA
+    if (activeSubfolder !== "TODAS" && activeTab !== "04_ARCHIVED") {
+        listaAProcesar = listaAProcesar.filter(f => {
+            const nameUpper = f.archivo_nombre.toUpperCase();
+            
+            if (activeTab === "01_WIP") {
+                if (activeSubfolder === "ARQ_Arquitectura") return nameUpper.includes("_ARQ_");
+                if (activeSubfolder === "EST_Estructura") return nameUpper.includes("_EST_");
+                if (activeSubfolder === "MEP_Instalaciones") return nameUpper.includes("_MEP_");
+            } else if (activeTab === "02_SHARED") {
+                if (activeSubfolder === "01_Modelos_3D") return nameUpper.includes("_M3_") || nameUpper.endsWith(".IFC") || nameUpper.endsWith(".RVT");
+                if (activeSubfolder === "02_Planos_Coordinados") return nameUpper.includes("_PL_") || nameUpper.includes("_DR_") || nameUpper.endsWith(".DWG");
+                if (activeSubfolder === "03_Informes_Interferencias") return !nameUpper.includes("_M3_") && !nameUpper.includes("_PL_") && !nameUpper.endsWith(".DWG");
+            } else if (activeTab === "03_PUBLISHED") {
+                if (activeSubfolder === "01_Modelos_Aprobados") return nameUpper.includes("_M3_") || nameUpper.endsWith(".IFC");
+                if (activeSubfolder === "02_Planos_Contractuales") return nameUpper.includes("_PL_") || nameUpper.includes("_DR_");
+                if (activeSubfolder === "03_Actas_y_Memorias") return !nameUpper.includes("_M3_") && !nameUpper.includes("_PL_");
+            }
+            return true;
+        });
+    }
+
     if (listaAProcesar.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5">No hay entregables en la pestaña <strong>${activeTab}</strong>.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5">No hay entregables en ${activeTab} ${activeSubfolder !== "TODAS" ? `(${activeSubfolder.replace(/_/g, " ")})` : ''}.</td></tr>`;
         return;
     }
 
@@ -919,7 +1018,6 @@ async function loadFiles() {
         const esVisualizable = ["pdf", "png", "jpg", "jpeg", "html", "htm"].includes(ext);
         const fechaUltimaModificacion = f.version || "N/A";
 
-        // VISTA SOLO LECTURA EN ARCHIVED
         if (activeTab === "04_ARCHIVED") {
             tbody.innerHTML += `
                 <tr style="opacity: 0.85;">
