@@ -46,7 +46,7 @@
                 <button class="tab-btn" data-tab="04_ARCHIVED">04_ARCHIVED (Archivado)</button>
             </div>
 
-            <!-- MÓDULO UNIFICADO DE INTERACCIÓN TÉCNICA Y NOTAS -->
+            <!-- MÓDULO UNIFICADO DE INTERACCIÓN TÉCNICA Y NOTAS (SOLO INTERACCIONES HUMANAS) -->
             <div id="technicalNoteCard" class="card" style="display: none; margin-bottom: 1.5rem; padding: 1.2rem;"></div>
 
             <!-- VISTO BUENO Y FIRMA DIGITAL (EXCLUSIVO CLIENTE) -->
@@ -62,7 +62,7 @@
                 </div>
             </div>
 
-            <!-- BITÁCORA DE EVENTOS E INTERACCIONES -->
+            <!-- BITÁCORA DE EVENTOS E INTERACCIONES (CRONOLÓGICA GENERAL) -->
             <div id="activityTimeline" class="card" style="display: none; background: rgba(15, 23, 42, 0.6); padding: 12px 18px; margin-bottom: 1.5rem; border-left: 4px solid var(--accent-copper); font-size: 0.88rem;"></div>
 
             <!-- TABLA PRINCIPAL DE ENTREGABLES -->
@@ -91,18 +91,41 @@
         </div>
     </div>
 
-    <!-- MODAL DE SUBIDA POR ENLACE -->
+    <!-- MODAL DE SUBIDA HÍBRIDA (DIRECTA O POR ENLACE) -->
     <div id="uploadModal" class="modal-hidden">
         <div class="modal-content card" style="max-width: 520px;">
-            <h3>Importar y Registrar Entregable (ISO 19650)</h3>
-            <form id="uploadForm">
-                <label><small>1. Enlace compartido del archivo en Google Drive:</small></label>
-                <input type="url" id="driveUrlInput" placeholder="https://drive.google.com/file/d/..." required style="width: 100%; margin-top: 4px; margin-bottom: 12px; padding: 8px; border-radius: 6px; background: #0f172a; color: #fff; border: 1px solid #334155;">
+            <h3>Subir / Registrar Entregable (ISO 19650)</h3>
+            
+            <div style="margin-bottom: 12px; font-size: 0.82rem; color: #94a3b8; background: rgba(30,41,59,0.7); padding: 8px 12px; border-radius: 6px; border-left: 3px solid var(--accent-copper);">
+                ℹ️ <strong>Instrucciones de Carga:</strong><br>
+                • Archivos ligeros (&le; 15 MB): Adjunte directamente el archivo.<br>
+                • Modelos pesados (&gt; 15 MB): Ingrese el enlace público de Google Drive.<br>
+                • Verifique que la extensión (.rvt, .ifc, .jpg, .pdf) coincida exactamente con la del entregable real.
+            </div>
 
-                <label><small>2. Nombre del Archivo Bajo Norma ISO 19650:</small></label>
+            <form id="uploadForm">
+                <label><small>Método de Carga:</small></label>
+                <select id="uploadMethodSelect" onchange="toggleUploadMethod()" style="width: 100%; margin-top: 4px; margin-bottom: 12px; padding: 8px; border-radius: 6px; background: #0f172a; color: #fff; border: 1px solid #334155;">
+                    <option value="LINK">Importación por Enlace Google Drive (&gt; 15 MB)</option>
+                    <option value="DIRECT">Carga Directa de Archivo Local (&le; 15 MB)</option>
+                </select>
+
+                <!-- CAMPO ENLACE DRIVE -->
+                <div id="linkMethodGroup">
+                    <label><small>Enlace compartido de Google Drive:</small></label>
+                    <input type="url" id="driveUrlInput" placeholder="https://drive.google.com/file/d/..." style="width: 100%; margin-top: 4px; margin-bottom: 12px; padding: 8px; border-radius: 6px; background: #0f172a; color: #fff; border: 1px solid #334155;">
+                </div>
+
+                <!-- CAMPO ARCHIVO LOCAL -->
+                <div id="directMethodGroup" style="display: none;">
+                    <label><small>Seleccionar Archivo Local (&le; 15 MB):</small></label>
+                    <input type="file" id="fileLocalInput" style="width: 100%; margin-top: 4px; margin-bottom: 12px; padding: 6px; color: #fff;">
+                </div>
+
+                <label><small>Nombre del Archivo Bajo Norma ISO 19650 (con extensión):</small></label>
                 <input type="text" id="isoNameInput" placeholder="Ej: PRY2026-001_INNOVARQZ_ZZ_M3_ARQ_S0.rvt" required style="width: 100%; margin-top: 4px; margin-bottom: 12px; padding: 8px; border-radius: 6px; background: #0f172a; color: #fff; border: 1px solid #334155;">
 
-                <label><small>3. Pestaña Destino:</small></label>
+                <label><small>Pestaña Destino:</small></label>
                 <select id="uploadTargetTab" required style="width: 100%; margin-top: 4px; margin-bottom: 15px; padding: 8px; border-radius: 6px; background: #0f172a; color: #fff; border: 1px solid #334155;">
                     <option value="01_WIP">01_WIP (Modelador - Nativos/Trabajo)</option>
                     <option value="02_SHARED">02_SHARED (Coordinación / Intercambio BEP)</option>
@@ -110,7 +133,7 @@
 
                 <div class="modal-actions" style="margin-top:15px; display: flex; justify-content: flex-end; gap: 10px;">
                     <button type="button" class="btn-secondary" onclick="closeUploadModal()">Cancelar</button>
-                    <button type="submit" class="btn-primary" id="btnSubmitUpload">Importar al CDE</button>
+                    <button type="submit" class="btn-primary" id="btnSubmitUpload">Procesar Entregable</button>
                 </div>
             </form>
         </div>
