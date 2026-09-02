@@ -16,7 +16,7 @@
     </header>
 
     <div class="container">
-        <!-- LOGIN -->
+        <!-- VISTA LOGIN -->
         <div id="loginView" class="card login-card">
             <h2>Acceso al Portal CDE</h2>
             <form id="loginForm">
@@ -26,8 +26,10 @@
             </form>
         </div>
 
-        <!-- DASHBOARD -->
+        <!-- VISTA DASHBOARD (LAYOUT DIVIDIDO EN 2 COLUMNAS) -->
         <div id="dashboardView" class="dashboard-hidden">
+            
+            <!-- BARRA SUPERIOR DE PROYECTOS Y ACCIONES -->
             <div class="controls-bar card">
                 <div class="control-group">
                     <label for="projectSelect">Proyecto Activo:</label>
@@ -39,91 +41,119 @@
                 </div>
             </div>
 
-            <div class="tabs">
-                <button class="tab-btn" data-tab="01_WIP">01_WIP (Trabajo en Progreso)</button>
-                <button class="tab-btn" data-tab="02_SHARED">02_SHARED (Compartido)</button>
-                <button class="tab-btn" data-tab="03_PUBLISHED">03_PUBLISHED (Publicado)</button>
-                <button class="tab-btn" data-tab="04_ARCHIVED">04_ARCHIVED (Archivado)</button>
-            </div>
+            <!-- CONTENEDOR PRINCIPAL ASIMÉTRICO (60% - 40%) -->
+            <div class="cde-split-layout">
+                
+                <!-- COLUMNA IZQUIERDA (60%): PESTAÑAS Y ENTREGABLES -->
+                <div class="cde-main-column">
+                    <div class="tabs">
+                        <button class="tab-btn active" data-tab="01_WIP">01_WIP (Trabajo)</button>
+                        <button class="tab-btn" data-tab="02_SHARED">02_SHARED (Compartido)</button>
+                        <button class="tab-btn" data-tab="03_PUBLISHED">03_PUBLISHED (Publicado)</button>
+                        <button class="tab-btn" data-tab="04_ARCHIVED">04_ARCHIVED (Archivado)</button>
+                    </div>
 
-            <!-- MÓDULO UNIFICADO DE INTERACCIÓN TÉCNICA Y NOTAS (SOLO INTERACCIONES HUMANAS) -->
-            <div id="technicalNoteCard" class="card" style="display: none; margin-bottom: 1.5rem; padding: 1.2rem;"></div>
+                    <!-- VISTO BUENO Y FIRMA DIGITAL (SOLO CLIENTE) -->
+                    <div id="clientApprovalCard" class="card" style="display: none; border-left: 4px solid var(--accent-copper); background: rgba(217, 119, 6, 0.05); margin-bottom: 1rem;">
+                        <h3>📜 Visto Bueno & Firma del Acta de Recibo</h3>
+                        <p><small>Al autorizar, el sistema generará el Acta de Recibo en PDF con el checklist de entregables.</small></p>
+                        
+                        <div style="margin-top: 8px;">
+                            <input type="text" id="clientSubject" placeholder="Asunto / Resumen corto de la firma..." style="width: 100%; padding: 8px; margin-bottom: 6px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #fff;" required>
+                            <textarea id="clientComments" placeholder="Escriba sus observaciones detalladas sobre los entregables..." style="width: 100%; height: 60px; padding: 8px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #fff;"></textarea>
+                        </div>
+                        <div style="margin-top: 8px; display: flex; gap: 10px;">
+                            <button class="btn-primary" onclick="procesarAprobacionCliente('APROBADO')">Aprobar y Generar Acta PDF</button>
+                            <button class="btn-secondary" style="background: #ef4444; color: #fff; border:none;" onclick="procesarAprobacionCliente('RECHAZADO')">Solicitar Ajustes</button>
+                        </div>
+                    </div>
 
-            <!-- VISTO BUENO Y FIRMA DIGITAL (EXCLUSIVO CLIENTE) -->
-            <div id="clientApprovalCard" class="card" style="display: none; border-left: 4px solid var(--accent-copper); background: rgba(217, 119, 6, 0.05); margin-bottom: 1.5rem;">
-                <h3>📜 Visto Bueno & Firma del Acta de Recibo</h3>
-                <p><small>Al autorizar la aprobación, el sistema compilará automáticamente el Acta de Recibo en PDF con el sello digital y el checklist de entregables.</small></p>
-                <div style="margin-top: 10px;">
-                    <textarea id="clientComments" placeholder="Escriba sus observaciones o comentarios sobre los entregables..." style="width: 100%; height: 70px; padding: 8px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #fff;"></textarea>
+                    <!-- TABLA PRINCIPAL CON SCROLL INDEPENDIENTE -->
+                    <div class="card table-card scrollable-panel">
+                        <table id="filesTable">
+                            <thead>
+                                <tr>
+                                    <th>Entregable (ISO 19650)</th>
+                                    <th>Disc.</th>
+                                    <th>Est.</th>
+                                    <th>Modificación</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="filesTableBody">
+                                <tr><td colspan="5">Seleccione un proyecto para cargar archivos.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-                <div style="margin-top: 10px; display: flex; gap: 10px; align-items: center;">
-                    <button class="btn-primary" onclick="procesarAprobacionCliente('APROBADO')">Aprobar y Generar Acta PDF</button>
-                    <button class="btn-secondary" style="background: #ef4444; color: #fff; border:none;" onclick="procesarAprobacionCliente('RECHAZADO')">Solicitar Ajustes</button>
+
+                <!-- COLUMNA DERECHA (40%): CENTRO DE MONITOREO Y MENSAJERÍA -->
+                <div class="cde-sidebar-column">
+                    
+                    <!-- PANEL SUPERIOR: HILO DE CHAT Y NOTAS TÉCNICAS -->
+                    <div id="technicalNoteCard" class="card monitoring-panel">
+                        <h4 style="color: var(--accent-copper); margin-bottom: 8px;">💬 Hilo de Interacción Técnica</h4>
+                        <div id="interactionThreadContainer" class="thread-content scrollable-panel">
+                            <!-- Se renderiza dinámicamente -->
+                        </div>
+                        <div id="threadActionsContainer" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #334155; display: none; gap: 8px;">
+                            <button id="btnConfirmarLectura" class="btn-primary" style="background: #10b981; font-size: 0.78rem; padding: 6px 10px;">✅ Confirmar Lectura</button>
+                            <button id="btnSolicitarComite" class="btn-secondary" style="background: #d97706; color: #fff; font-size: 0.78rem; padding: 6px 10px;">📅 Solicitar Comité</button>
+                        </div>
+                    </div>
+
+                    <!-- PANEL INFERIOR: BITÁCORA ISO 19650 (AUDITORÍA DESCENDENTE) -->
+                    <div class="card monitoring-panel">
+                        <h4 style="color: #38bdf8; margin-bottom: 8px;">🕒 Bitácora de Eventos (ISO 19650)</h4>
+                        <div id="activityTimeline" class="audit-content scrollable-panel">
+                            <!-- Se renderiza dinámicamente -->
+                        </div>
+                    </div>
+
                 </div>
-            </div>
 
-            <!-- BITÁCORA DE EVENTOS E INTERACCIONES (CRONOLÓGICA GENERAL) -->
-            <div id="activityTimeline" class="card" style="display: none; background: rgba(15, 23, 42, 0.6); padding: 12px 18px; margin-bottom: 1.5rem; border-left: 4px solid var(--accent-copper); font-size: 0.88rem;"></div>
-
-            <!-- TABLA PRINCIPAL DE ENTREGABLES -->
-            <div class="card table-card">
-                <table id="filesTable">
-                    <thead>
-                        <tr>
-                            <th>Nombre del Archivo (ISO 19650)</th>
-                            <th>Discipl.</th>
-                            <th>Estado</th>
-                            <th>Última Modificación (Drive)</th>
-                            <th>Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody id="filesTableBody">
-                        <tr><td colspan="5">Seleccione un proyecto para cargar archivos.</td></tr>
-                    </tbody>
-                </table>
             </div>
 
             <!-- VISOR DE ARCHIVOS -->
-            <div id="viewerContainer" class="card viewer-card hidden" style="position: relative;">
+            <div id="viewerContainer" class="card viewer-card hidden" style="position: relative; margin-top: 1rem;">
                 <button class="close-viewer" onclick="closeViewer()" style="position: absolute; top: 12px; right: 12px; z-index: 1000; cursor: pointer;">✕</button>
-                <iframe id="ifcViewerFrame" src="" frameborder="0" style="width: 100%; height: 550px; border: none; display: none;"></iframe>
+                <iframe id="ifcViewerFrame" src="" frameborder="0" style="width: 100%; height: 500px; border: none; display: none;"></iframe>
             </div>
+
         </div>
     </div>
 
-    <!-- MODAL DE SUBIDA HÍBRIDA (DIRECTA O POR ENLACE) -->
+    <!-- MODAL DE SUBIDA HÍBRIDA -->
     <div id="uploadModal" class="modal-hidden">
         <div class="modal-content card" style="max-width: 520px;">
             <h3>Subir / Registrar Entregable (ISO 19650)</h3>
             
-            <div style="margin-bottom: 12px; font-size: 0.82rem; color: #94a3b8; background: rgba(30,41,59,0.7); padding: 8px 12px; border-radius: 6px; border-left: 3px solid var(--accent-copper);">
-                ℹ️ <strong>Instrucciones de Carga:</strong><br>
-                • Archivos ligeros (&le; 15 MB): Adjunte directamente el archivo.<br>
-                • Modelos pesados (&gt; 15 MB): Ingrese el enlace público de Google Drive.<br>
-                • Verifique que la extensión (.rvt, .ifc, .jpg, .pdf) coincida exactamente con la del entregable real.
+            <div style="margin-bottom: 12px; font-size: 0.8rem; color: #94a3b8; background: rgba(30,41,59,0.8); padding: 8px 12px; border-radius: 6px; border-left: 3px solid var(--accent-copper);">
+                ℹ️ <strong>Instrucciones:</strong><br>
+                • Archivos &le; 15 MB: Adjunte directamente el archivo.<br>
+                • Modelos &gt; 15 MB: Use enlace de Google Drive.<br>
+                • Verifique que la extensión (.rvt, .ifc, .jpg, .pdf) coincida con la del nombre normado.
             </div>
 
             <form id="uploadForm">
                 <label><small>Método de Carga:</small></label>
-                <select id="uploadMethodSelect" onchange="toggleUploadMethod()" style="width: 100%; margin-top: 4px; margin-bottom: 12px; padding: 8px; border-radius: 6px; background: #0f172a; color: #fff; border: 1px solid #334155;">
+                <select id="uploadMethodSelect" onchange="toggleUploadMethod()" style="width: 100%; margin-top: 4px; margin-bottom: 10px; padding: 8px; border-radius: 6px; background: #0f172a; color: #fff; border: 1px solid #334155;">
                     <option value="LINK">Importación por Enlace Google Drive (&gt; 15 MB)</option>
                     <option value="DIRECT">Carga Directa de Archivo Local (&le; 15 MB)</option>
                 </select>
 
-                <!-- CAMPO ENLACE DRIVE -->
                 <div id="linkMethodGroup">
                     <label><small>Enlace compartido de Google Drive:</small></label>
-                    <input type="url" id="driveUrlInput" placeholder="https://drive.google.com/file/d/..." style="width: 100%; margin-top: 4px; margin-bottom: 12px; padding: 8px; border-radius: 6px; background: #0f172a; color: #fff; border: 1px solid #334155;">
+                    <input type="url" id="driveUrlInput" placeholder="https://drive.google.com/file/d/..." style="width: 100%; margin-top: 4px; margin-bottom: 10px; padding: 8px; border-radius: 6px; background: #0f172a; color: #fff; border: 1px solid #334155;">
                 </div>
 
-                <!-- CAMPO ARCHIVO LOCAL -->
                 <div id="directMethodGroup" style="display: none;">
                     <label><small>Seleccionar Archivo Local (&le; 15 MB):</small></label>
-                    <input type="file" id="fileLocalInput" style="width: 100%; margin-top: 4px; margin-bottom: 12px; padding: 6px; color: #fff;">
+                    <input type="file" id="fileLocalInput" style="width: 100%; margin-top: 4px; margin-bottom: 10px; padding: 6px; color: #fff;">
                 </div>
 
                 <label><small>Nombre del Archivo Bajo Norma ISO 19650 (con extensión):</small></label>
-                <input type="text" id="isoNameInput" placeholder="Ej: PRY2026-001_INNOVARQZ_ZZ_M3_ARQ_S0.rvt" required style="width: 100%; margin-top: 4px; margin-bottom: 12px; padding: 8px; border-radius: 6px; background: #0f172a; color: #fff; border: 1px solid #334155;">
+                <input type="text" id="isoNameInput" placeholder="Ej: PRY2026-001_INNOVARQZ_ZZ_M3_ARQ_S0.rvt" required style="width: 100%; margin-top: 4px; margin-bottom: 10px; padding: 8px; border-radius: 6px; background: #0f172a; color: #fff; border: 1px solid #334155;">
 
                 <label><small>Pestaña Destino:</small></label>
                 <select id="uploadTargetTab" required style="width: 100%; margin-top: 4px; margin-bottom: 15px; padding: 8px; border-radius: 6px; background: #0f172a; color: #fff; border: 1px solid #334155;">
@@ -139,13 +169,13 @@
         </div>
     </div>
 
-    <!-- MODAL CREACIÓN DE PROYECTOS -->
+    <!-- MODAL NUEVO PROYECTO -->
     <div id="projectModal" class="modal-hidden">
         <div class="modal-content card">
             <h3>Crear Nuevo Proyecto en CDE</h3>
             <form id="createProjectForm">
                 <label><small>Código Autogenerado:</small></label>
-                <input type="text" id="codigoProj" placeholder="Código (Ej: PRY2026-001)" required readonly>
+                <input type="text" id="codigoProj" required readonly>
 
                 <label><small>Cliente:</small></label>
                 <input type="text" id="clienteProj" placeholder="Cliente (Ej: AlcaldiaPasto)" required>
