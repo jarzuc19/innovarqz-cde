@@ -52,6 +52,11 @@
                         <button class="tab-btn" data-tab="04_ARCHIVED">04_ARCHIVED (Archivado)</button>
                     </div>
 
+                    <!-- BARRA DINÁMICA DE SUBCARPETAS (JERARQUÍA ISO 19650) -->
+                    <div id="subcarpetas-bar" class="card" style="display: none; padding: 8px 12px; margin-bottom: 12px; background: rgba(30, 41, 59, 0.6); border: 1px solid #334155; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                        <!-- Se puebla dinámicamente con app.js -->
+                    </div>
+
                     <!-- VISTO BUENO Y FIRMA DIGITAL (EXCLUSIVO CLIENTE) -->
                     <div id="clientApprovalCard" class="card" style="display: none; border-left: 4px solid var(--accent-copper); background: rgba(217, 119, 6, 0.05); margin-bottom: 1rem;">
                         <h3>📜 Visto Bueno & Firma del Acta de Recibo</h3>
@@ -147,7 +152,11 @@
                 </div>
 
                 <label><small>Nombre del Archivo Bajo Norma ISO 19650 (con extensión):</small></label>
-                <input type="text" id="isoNameInput" placeholder="Ej: PRY2026-001_INNOVARQZ_ZZ_M3_ARQ_S0.rvt" required style="width: 100%; margin-top: 4px; margin-bottom: 10px; padding: 8px; border-radius: 6px; background: #0f172a; color: #fff; border: 1px solid #334155;">
+                <input type="text" id="isoNameInput" placeholder="Ej: PRY2026-001_INNOVARQZ_ZZ_M3_ARQ_S0.rvt" required style="width: 100%; margin-top: 4px; margin-bottom: 4px; padding: 8px; border-radius: 6px; background: #0f172a; color: #fff; border: 1px solid #334155;">
+                
+                <div id="subfolderTargetHint" style="font-size: 0.75rem; color: #38bdf8; margin-bottom: 10px; font-weight: bold;">
+                    📍 Subcarpeta Destino: <span id="hintFolderName">Auto-Detectando...</span>
+                </div>
 
                 <label><small>Pestaña Destino:</small></label>
                 <select id="uploadTargetTab" required style="width: 100%; margin-top: 4px; margin-bottom: 15px; padding: 8px; border-radius: 6px; background: #0f172a; color: #fff; border: 1px solid #334155;">
