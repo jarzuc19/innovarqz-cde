@@ -29,13 +29,11 @@
         <!-- VISTA DASHBOARD -->
         <div id="dashboardView" class="dashboard-hidden">
             
-            <!-- CONTENEDOR PRINCIPAL ASIMÉTRICO (60% - 40%) -->
             <div class="cde-split-layout">
                 
                 <!-- COLUMNA IZQUIERDA (60%): CONTROLES Y ENTREGABLES -->
                 <div class="cde-main-column">
                     
-                    <!-- BARRA SUPERIOR ALINEADA AL ANCHO DE LA TABLA -->
                     <div class="controls-bar card">
                         <div class="control-group">
                             <label for="projectSelect">Proyecto:</label>
@@ -54,13 +52,13 @@
                         <button class="tab-btn" data-tab="04_ARCHIVED">04_ARCHIVED (Archivado)</button>
                     </div>
 
-                    <!-- VISTO BUENO Y FIRMA DIGITAL (EXCLUSIVO CLIENTE EN PUBLISHED) -->
+                    <!-- VISTO BUENO Y FIRMA DIGITAL (EXCLUSIVO CLIENTE) -->
                     <div id="clientApprovalCard" class="card" style="display: none; border-left: 4px solid var(--accent-copper); background: rgba(217, 119, 6, 0.05); margin-bottom: 1rem;">
                         <h3>📜 Visto Bueno & Firma del Acta de Recibo</h3>
-                        <p><small>Al autorizar, el sistema generará el Acta de Recibo en PDF con el checklist de entregables.</small></p>
+                        <p><small>Al autorizar, el sistema generará el Acta de Recibo en PDF formal con el checklist de entregables vigentes en 03_PUBLISHED.</small></p>
                         
                         <div style="margin-top: 8px;">
-                            <input type="text" id="clientSubject" placeholder="Asunto / Resumen corto..." style="width: 100%; padding: 8px; margin-bottom: 6px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #fff;" required>
+                            <input type="text" id="clientSubject" placeholder="Asunto / Resumen corto de la firma o revisión..." style="width: 100%; padding: 8px; margin-bottom: 6px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #fff;" required>
                             <textarea id="clientComments" placeholder="Escriba sus observaciones detalladas..." style="width: 100%; height: 60px; padding: 8px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #fff;"></textarea>
                         </div>
                         <div style="margin-top: 8px; display: flex; gap: 10px;">
@@ -88,10 +86,10 @@
                     </div>
                 </div>
 
-                <!-- COLUMNA DERECHA (40%): CENTRO DE MONITOREO Y MENSAJERÍA -->
+                <!-- COLUMNA DERECHA (40%): CENTRO DE MONITOREO -->
                 <div class="cde-sidebar-column">
                     
-                    <!-- PANEL SUPERIOR: HILO DE DEBATE TÉCNICO INTERNO (OCULTO AL CLIENTE) -->
+                    <!-- HILO TÉCNICO INTERNO -->
                     <div id="technicalNoteCard" class="card monitoring-panel">
                         <h4 style="color: var(--accent-copper); margin-bottom: 8px;">💬 Hilo de Interacción Técnica</h4>
                         <div id="interactionThreadContainer" class="thread-content scrollable-panel">
@@ -104,7 +102,7 @@
                         </div>
                     </div>
 
-                    <!-- PANEL INFERIOR: BITÁCORA ISO 19650 (DESCENDENTE ESTRICTA) -->
+                    <!-- BITÁCORA ISO 19650 -->
                     <div id="auditLogCard" class="card monitoring-panel">
                         <h4 style="color: #38bdf8; margin-bottom: 8px;">🕒 Bitácora de Eventos (ISO 19650)</h4>
                         <div id="activityTimeline" class="audit-content scrollable-panel">
@@ -125,10 +123,10 @@
             <h3>Subir / Registrar Entregable (ISO 19650)</h3>
             
             <div style="margin-bottom: 12px; font-size: 0.8rem; color: #94a3b8; background: rgba(30,41,59,0.8); padding: 8px 12px; border-radius: 6px; border-left: 3px solid var(--accent-copper);">
-                ℹ️ <strong>Instrucciones:</strong><br>
-                • Archivos &le; 15 MB: Adjunte directamente el archivo.<br>
-                • Modelos &gt; 15 MB: Use enlace de Google Drive.<br>
-                • El estado del archivo debe coincidir con la carpeta seleccionada.
+                ℹ️ <strong>Instrucciones ISO 19650:</strong><br>
+                • Estado <strong>S0</strong> exclusivo para <strong>01_WIP</strong>.<br>
+                • Estados <strong>S1, S2...</strong> exclusivos para <strong>02_SHARED</strong>.<br>
+                • Estados <strong>A1, A2...</strong> exclusivos para <strong>03_PUBLISHED</strong>.
             </div>
 
             <form id="uploadForm">
@@ -153,13 +151,34 @@
 
                 <label><small>Pestaña Destino:</small></label>
                 <select id="uploadTargetTab" required style="width: 100%; margin-top: 4px; margin-bottom: 15px; padding: 8px; border-radius: 6px; background: #0f172a; color: #fff; border: 1px solid #334155;">
-                    <option value="01_WIP" id="optUploadWip">01_WIP (Nativos - Debe usar estado S0)</option>
-                    <option value="02_SHARED" id="optUploadShared">02_SHARED (Coordinación - Debe usar estado S1, S2, etc.)</option>
+                    <option value="01_WIP" id="optUploadWip">01_WIP (Nativos - Requiere estado S0)</option>
+                    <option value="02_SHARED" id="optUploadShared">02_SHARED (Coordinación - Requiere estado S1, S2, etc.)</option>
                 </select>
 
                 <div class="modal-actions" style="margin-top:15px; display: flex; justify-content: flex-end; gap: 10px;">
                     <button type="button" class="btn-secondary" onclick="closeUploadModal()">Cancelar</button>
                     <button type="submit" class="btn-primary" id="btnSubmitUpload">Procesar Entregable</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL REVISOR: INSTRUCCIÓN TÉCNICA MULTILÍNEA -->
+    <div id="revisorInstructionModal" class="modal-hidden">
+        <div class="modal-content card" style="max-width: 550px;">
+            <h3 style="color: var(--accent-copper);">Emitir Instrucción Técnica a Modelador</h3>
+            <p><small style="color: var(--text-muted);">Escriba las observaciones técnicas que deben ser corregidas en el modelo nativo (WIP).</small></p>
+            
+            <form id="revisorInstructionForm" style="margin-top: 10px;">
+                <label><small>Asunto / Título de la Observación:</small></label>
+                <input type="text" id="revisorSubjectInput" placeholder="Ej: Ajuste comercial de dimensiones de puertas" required style="width: 100%; margin-top: 4px; margin-bottom: 10px; padding: 8px; border-radius: 6px; background: #0f172a; color: #fff; border: 1px solid #334155;">
+
+                <label><small>Detalle Extenso e Instrucciones Específicas:</small></label>
+                <textarea id="revisorDetailInput" placeholder="Detalle aquí todas las especificaciones, grosores, alturas o choques detectados..." required style="width: 100%; height: 120px; margin-top: 4px; margin-bottom: 15px; padding: 8px; border-radius: 6px; background: #0f172a; color: #fff; border: 1px solid #334155; resize: vertical;"></textarea>
+
+                <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 10px;">
+                    <button type="button" class="btn-secondary" onclick="closeRevisorInstructionModal()">Cancelar</button>
+                    <button type="submit" class="btn-primary" style="background: #ef4444;">Enviar Instrucción al Hilo</button>
                 </div>
             </form>
         </div>
