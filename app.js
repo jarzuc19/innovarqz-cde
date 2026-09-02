@@ -224,11 +224,14 @@ function aplicarRestriccionPestanasVisuales() {
 }
 
 // ==============================================================================
-// HILO DE NOTAS TÉCNICAS (FILTRO EXCLUSIVO DE MENSANERÍA HUMANA)
+// HILO DE NOTAS TÉCNICAS (CON ASUNTO Y DESCRIPCIÓN DETALLADA)
 // ==============================================================================
 async function evaluarNotasTecnicasActivas() {
+    const threadContainer = document.getElementById("interactionThreadContainer");
+    const actionsContainer = document.getElementById("threadActionsContainer");
     const card = document.getElementById("technicalNoteCard");
-    if (!card || !activeProjectId) return;
+
+    if (!threadContainer || !activeProjectId) return;
 
     if (currentUser.cargo === "CLIENTE") {
         card.style.display = "none";
@@ -243,7 +246,6 @@ async function evaluarNotasTecnicasActivas() {
         .order("id", { ascending: false })
         .limit(10);
 
-    // Filtramos unicamente interacciones humanas directas
     const interaccionesHumanas = (notas || []).filter(n => 
         n.archivo_nombre.includes("AJUSTES_SOLICITADOS") || 
         n.archivo_nombre.includes("CONFIRMADO_RECIBIDO") || 
@@ -251,31 +253,16 @@ async function evaluarNotasTecnicasActivas() {
     );
 
     if (error || interaccionesHumanas.length === 0) {
-        card.style.display = "none";
+        card.style.display = "block";
+        threadContainer.innerHTML = "<small style='color: var(--text-muted);'>No hay interacciones recientes en este proyecto.</small>";
+        if (actionsContainer) actionsContainer.style.display = "none";
         return;
     }
 
-    card.style.display = "block";
-    const ultimaNota = interaccionesHumanas[0];
-    const esSolicitudCliente = ultimaNota.archivo_nombre.includes("AJUSTES_SOLICITADOS");
-    const esModelador = currentUser.cargo.includes("MODELADOR") || currentUser.cargo.includes("SUPER_ADMIN");
+    card.style.display = "flex";
+    let html = "";
 
-    if (esSolicitudCliente) {
-        card.style.borderColor = "#ef4444";
-        card.style.background = "rgba(239, 68, 68, 0.08)";
-    } else if (ultimaNota.archivo_nombre.includes("CONFIRMADO_RECIBIDO")) {
-        card.style.borderColor = "#10b981";
-        card.style.background = "rgba(16, 185, 129, 0.08)";
-    } else {
-        card.style.borderColor = "#d97706";
-        card.style.background = "rgba(217, 119, 6, 0.08)";
-    }
-
-    let html = `<h4 style="color: var(--accent-copper); margin-bottom: 10px;">💬 Hilo de Interacción y Notas Técnicas</h4>`;
-    html += `<div style="max-height: 220px; overflow-y: auto; padding-right: 5px; margin-bottom: 12px;">`;
-
-    const notasInvertidas = [...interaccionesHumanas].reverse();
-    notasInvertidas.forEach(n => {
+    interaccionesHumanas.forEach(n => {
         let tipo = n.archivo_nombre.replace("NOTA_TECNICA_", "");
         let colorTexto = "#f8fafc";
         let icono = "💬";
@@ -284,33 +271,27 @@ async function evaluarNotasTecnicasActivas() {
         else if (tipo === "CONFIRMADO_RECIBIDO") { colorTexto = "#10b981"; icono = "✅ Modelador:"; }
         else if (tipo === "SOLICITUD_REUNION") { colorTexto = "#d97706"; icono = "📅 Modelador:"; }
 
+        let mensajeCompleto = n.drive_file_url || "";
+        let partesMensaje = mensajeCompleto.split(" | Detalle: ");
+        let asunto = partesMensaje[0] || mensajeCompleto;
+        let detalle = partesMensaje[1] || "";
+
         html += `
-            <div style="background: rgba(15, 23, 42, 0.6); padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; border-left: 3px solid ${colorTexto};">
-                <strong style="color: ${colorTexto}; font-size: 0.85rem;">${icono}</strong> 
-                <span style="font-size: 0.88rem; color: #fff;">${n.drive_file_url}</span>
-                <div style="text-align: right;"><small style="color: var(--text-muted); font-size: 0.72rem;">${n.version}</small></div>
+            <div style="background: rgba(15, 23, 42, 0.6); padding: 8px 10px; border-radius: 6px; margin-bottom: 6px; border-left: 3px solid ${colorTexto};">
+                <strong style="color: ${colorTexto}; font-size: 0.82rem;">${icono}</strong> 
+                <span style="font-size: 0.85rem; color: #fff; font-weight: bold;">${asunto}</span>
+                ${detalle ? `<div style="font-size: 0.78rem; color: #cbd5e1; margin-top: 2px;">${detalle}</div>` : ''}
+                <div style="text-align: right;"><small style="color: var(--text-muted); font-size: 0.7rem;">${n.version}</small></div>
             </div>
         `;
     });
 
-    html += `</div>`;
+    threadContainer.innerHTML = html;
 
-    if (esModelador) {
-        html += `
-            <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #334155; display: flex; gap: 10px;">
-                <button id="btnConfirmarLectura" class="btn-primary" style="background: #10b981; font-size: 0.82rem;">
-                    ✅ Confirmar Lectura
-                </button>
-                <button id="btnSolicitarComite" class="btn-secondary" style="background: #d97706; color: #fff; font-size: 0.82rem;">
-                    📅 Solicitar Comité Técnico
-                </button>
-            </div>
-        `;
-    } else {
-        html += `<small style="color: var(--text-muted); display: block; margin-top: 5px;"><em>Vista de supervisión para Revisor / SuperAdmin.</em></small>`;
+    const esModelador = currentUser.cargo.includes("MODELADOR") || currentUser.cargo.includes("SUPER_ADMIN");
+    if (actionsContainer) {
+        actionsContainer.style.display = esModelador ? "flex" : "none";
     }
-
-    card.innerHTML = html;
 
     const btnConfirmar = document.getElementById("btnConfirmarLectura");
     if (btnConfirmar) {
@@ -356,7 +337,7 @@ async function responderNotaTecnica(tipoRespuesta, comentario) {
 }
 
 // ==============================================================================
-// BITÁCORA REAL (CRONOLOGÍA GENERAL DESCENDENTE COMPLETA)
+// BITÁCORA REAL (ORDEN CRONOLÓGICO DESCENDENTE CON ASUNTO CORTO)
 // ==============================================================================
 async function cargarTimelineActividad() {
     let timelineDiv = document.getElementById("activityTimeline");
@@ -370,13 +351,11 @@ async function cargarTimelineActividad() {
         .limit(20);
 
     if (error || !logs || logs.length === 0) {
-        timelineDiv.style.display = "block";
-        timelineDiv.innerHTML = "🕒 <strong>Bitácora de Eventos:</strong> El proyecto se encuentra sin actividad registrada.";
+        timelineDiv.innerHTML = "<small style='color: var(--text-muted);'>Sin actividad registrada.</small>";
         return;
     }
 
-    timelineDiv.style.display = "block";
-    let html = "🕒 <strong>Bitácora de Eventos e Interacciones (ISO 19650):</strong><ul style='margin-left: 20px; margin-top: 5px; list-style-type: square;'>";
+    let html = "<ul style='margin-left: 15px; margin-top: 2px; padding: 0; list-style-type: square; font-size: 0.8rem;'>";
     
     logs.forEach(l => {
         const fecha = l.version || "Sin fecha";
@@ -389,7 +368,10 @@ async function cargarTimelineActividad() {
         else if (eventoNombre.includes("AJUSTES")) { icono = "🚨"; estiloTexto = "color: #f87171;"; }
         else if (eventoNombre.includes("CONFIRMADO")) { icono = "✅"; estiloTexto = "color: #10b981;"; }
 
-        html += `<li style='${estiloTexto}'><strong>${fecha}</strong> — ${icono} <strong>[${eventoNombre}]</strong>: <em>${l.drive_file_url}</em></li>`;
+        let mensajeOriginal = l.drive_file_url || "";
+        let asuntoCorto = mensajeOriginal.split(" | Detalle: ")[0];
+
+        html += `<li style='${estiloTexto}; margin-bottom: 4px;'><strong>${fecha}</strong> — ${icono} <strong>[${eventoNombre}]</strong>: <em>${asuntoCorto}</em></li>`;
     });
     
     html += "</ul>";
@@ -397,7 +379,7 @@ async function cargarTimelineActividad() {
 }
 
 // ==============================================================================
-// GESTIÓN DE MODAL Y MÉTODOS DE SUBIDA HÍBRIDOS
+// GESTIÓN DE SUBIDAS Y PROCESAMIENTO
 // ==============================================================================
 function openUploadModal() {
     const modal = document.getElementById("uploadModal");
@@ -455,7 +437,6 @@ async function handleFileUpload(e) {
         return;
     }
 
-    // Validation ISO 19650
     if (!validarNomenclaturaISO19650(isoNameInput) && !isoNameInput.endsWith(".html")) {
         alert(`❌ REGLA ISO 19650 INCUMPLIDA:\n\nEl nombre "${isoNameInput}" no cumple la estructura:\n[PROYECTO]_[ORIGINADOR]_[ZONA]_[TIPO]_[DISCIPLINA]_[ESTADO].[ext]\n\nEjemplo: PRY2026-001_INNOVARQZ_ZZ_M3_ARQ_S0.rvt`);
         return;
@@ -464,7 +445,7 @@ async function handleFileUpload(e) {
     const extEscrita = isoNameInput.split('.').pop().toLowerCase();
 
     btnSubmit.disabled = true;
-    btnSubmit.innerText = "Procesando e integrando al CDE...";
+    btnSubmit.innerText = "Procesando...";
 
     try {
         let payload = {
@@ -478,7 +459,7 @@ async function handleFileUpload(e) {
         if (method === "LINK") {
             const driveUrlInput = document.getElementById("driveUrlInput").value.trim();
             if (!driveUrlInput) {
-                alert("⚠️ Por favor ingrese el enlace público del archivo en Google Drive.");
+                alert("⚠️ Por favor ingrese el enlace público de Google Drive.");
                 btnSubmit.disabled = false;
                 btnSubmit.innerText = "Procesar Entregable";
                 return;
@@ -498,7 +479,7 @@ async function handleFileUpload(e) {
             const extReal = file.name.split('.').pop().toLowerCase();
 
             if (extReal !== extEscrita) {
-                alert(`❌ CONFLICTO DE EXTENSIÓN:\n\nEl archivo seleccionado es (.${extReal}) pero en el nombre escribió (.${extEscrita}).\n\nPor favor corrija el nombre para que coincida exactamente.`);
+                alert(`❌ CONFLICTO DE EXTENSIÓN:\n\nEl archivo es (.${extReal}) pero escribió (.${extEscrita}). Corrija el nombre.`);
                 btnSubmit.disabled = false;
                 btnSubmit.innerText = "Procesar Entregable";
                 return;
@@ -524,7 +505,7 @@ async function handleFileUpload(e) {
         const data = await res.json();
 
         if (data.status === "success") {
-            alert(`✅ ¡Entregable "${isoNameInput}" procesado e integrado exitosamente!`);
+            alert(`✅ ¡Entregable "${isoNameInput}" procesado e integrado al CDE!`);
             closeUploadModal();
             loadFiles();
             cargarTimelineActividad();
@@ -566,7 +547,7 @@ async function promoverArchivo(nombreArchivo, estadoOrigen, estadoDestino) {
         const responseData = await res.json();
 
         if (responseData.status === "success") {
-            alert("¡Promoción física en Drive y renombrado procesado exitosamente!");
+            alert("¡Promoción física en Drive procesada exitosamente!");
             loadFiles();
             cargarTimelineActividad();
         } else {
@@ -578,10 +559,16 @@ async function promoverArchivo(nombreArchivo, estadoOrigen, estadoDestino) {
 }
 
 async function procesarAprobacionCliente(estadoAprobacion) {
+    const asunto = document.getElementById("clientSubject").value.trim();
     const observaciones = document.getElementById("clientComments").value.trim();
 
+    if (!asunto) {
+        alert("⚠️ Por favor ingrese un asunto/resumen corto para la firma/solicitud.");
+        return;
+    }
+
     if (estadoAprobacion === "RECHAZADO" && !observaciones) {
-        alert("⚠️ Por favor ingrese sus observaciones especificando los ajustes requeridos.");
+        alert("⚠️ Por favor ingrese sus observaciones detalladas.");
         return;
     }
 
@@ -598,6 +585,7 @@ async function procesarAprobacionCliente(estadoAprobacion) {
             usuario_nombre: currentUser.nombre_completo,
             usuario_email: currentUser.email,
             estado_aprobacion: "APROBADO",
+            asunto: asunto,
             observaciones: observaciones,
             pdf_acta_base64: pdfBase64,
             nombre_acta: `${activeProjectCode}_INNOVARQZ_ZZ_ACTA_CLI_A1.pdf`
@@ -610,7 +598,7 @@ async function procesarAprobacionCliente(estadoAprobacion) {
         });
         const data = await res.json();
         if (data.status === "success") {
-            alert("✅ Acta formal generada, notificada e integrada en Drive.");
+            alert("✅ Acta formal generada e integrada en Drive.");
             loadFiles();
             cargarTimelineActividad();
         }
@@ -622,6 +610,7 @@ async function procesarAprobacionCliente(estadoAprobacion) {
             usuario_nombre: currentUser.nombre_completo,
             usuario_email: currentUser.email,
             estado_aprobacion: "RECHAZADO",
+            asunto: asunto,
             observaciones: observaciones
         };
 
@@ -630,7 +619,7 @@ async function procesarAprobacionCliente(estadoAprobacion) {
             headers: { "Content-Type": "text/plain;charset=utf-8" },
             body: JSON.stringify(payload)
         });
-        alert("🚨 Solicitud de ajustes notificada y registrada en la bitácora.");
+        alert("🚨 Solicitud de ajustes notificada en la bitácora.");
         evaluarNotasTecnicasActivas();
         cargarTimelineActividad();
     }
@@ -690,7 +679,7 @@ async function loadFiles() {
     if (!tbody || !activeProjectId) return;
 
     if (!validarAccesoPestana(activeTab)) {
-        tbody.innerHTML = `<tr><td colspan="5" style="color:#ef4444; font-weight:bold;">⛔ Acceso restringido a la carpeta ${activeTab} según su perfil de usuario.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" style="color:#ef4444; font-weight:bold;">⛔ Acceso restringido a ${activeTab}.</td></tr>`;
         return;
     }
 
@@ -704,7 +693,6 @@ async function loadFiles() {
     tbody.innerHTML = "";
 
     if (error) {
-        console.error("Error al consultar Supabase:", error);
         tbody.innerHTML = `<tr><td colspan="5" style="color:#ef4444;">Error al cargar datos: ${error.message}</td></tr>`;
         return;
     }
@@ -743,7 +731,7 @@ async function loadFiles() {
     });
 
     if (mapaUnicos.size === 0) {
-        tbody.innerHTML = `<tr><td colspan="5">No hay entregables en la pestaña <strong>${activeTab}</strong> para este proyecto.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5">No hay entregables en la pestaña <strong>${activeTab}</strong>.</td></tr>`;
         return;
     }
 
@@ -762,22 +750,22 @@ async function loadFiles() {
         let botonPromocion = "";
         if (currentUser && currentUser.cargo !== "CLIENTE") {
             if (activeTab === "01_WIP" && (currentUser.cargo.includes("MODELADOR") || currentUser.cargo.includes("SUPER_ADMIN") || currentUser.cargo.includes("BIM Manager"))) {
-                botonPromocion = `<button class="btn-secondary" style="font-size:0.75rem; padding:0.3rem 0.6rem;" onclick="promoverArchivo('${nombreCompleto}', '01_WIP', '02_SHARED')">Promover a SHARED</button>`;
+                botonPromocion = `<button class="btn-secondary" style="font-size:0.75rem; padding:0.25rem 0.5rem;" onclick="promoverArchivo('${nombreCompleto}', '01_WIP', '02_SHARED')">Promover a SHARED</button>`;
             } else if (activeTab === "02_SHARED" && (currentUser.cargo.includes("REVISOR") || currentUser.cargo.includes("SUPER_ADMIN") || currentUser.cargo.includes("BIM Manager"))) {
-                botonPromocion = `<button class="btn-secondary" style="font-size:0.75rem; padding:0.3rem 0.6rem; background:#10b981; color:#fff;" onclick="promoverArchivo('${nombreCompleto}', '02_SHARED', '03_PUBLISHED')">Publicar a Cliente</button>`;
+                botonPromocion = `<button class="btn-secondary" style="font-size:0.75rem; padding:0.25rem 0.5rem; background:#10b981; color:#fff;" onclick="promoverArchivo('${nombreCompleto}', '02_SHARED', '03_PUBLISHED')">Publicar a Cliente</button>`;
             }
         }
 
         if (esValidoISO || ext === "html") {
             tbody.innerHTML += `
                 <tr>
-                    <td>${nombreCompleto}</td>
+                    <td style="font-size:0.85rem;">${nombreCompleto}</td>
                     <td><strong>${disciplina}</strong></td>
                     <td><span class="badge">${estadoISO}</span></td>
-                    <td><small style="color:var(--text-muted);">${fechaUltimaModificacion}</small></td>
+                    <td><small style="color:var(--text-muted); font-size:0.75rem;">${fechaUltimaModificacion}</small></td>
                     <td>
-                        ${esVisualizable ? `<button class="btn-secondary" onclick="openViewer('${f.drive_file_url}', '${nombreCompleto}')">Ver</button>` : ''}
-                        <a href="${f.drive_file_url}" target="_blank" class="btn-primary" style="text-decoration:none; font-size: 0.8rem; padding: 0.4rem 0.8rem;">Descargar</a>
+                        ${esVisualizable ? `<button class="btn-secondary" style="font-size:0.75rem; padding:0.25rem 0.5rem;" onclick="openViewer('${f.drive_file_url}', '${nombreCompleto}')">Ver</button>` : ''}
+                        <a href="${f.drive_file_url}" target="_blank" class="btn-primary" style="text-decoration:none; font-size: 0.75rem; padding: 0.25rem 0.5rem;">Descargar</a>
                         ${botonPromocion}
                     </td>
                 </tr>
@@ -785,13 +773,11 @@ async function loadFiles() {
         } else {
             tbody.innerHTML += `
                 <tr style="background-color: rgba(239, 68, 68, 0.05);">
-                    <td style="color: #ef4444;">${nombreCompleto}</td>
+                    <td style="color: #ef4444; font-size:0.85rem;">${nombreCompleto}</td>
                     <td><strong style="color: #ef4444;">${disciplina}</strong></td>
                     <td><span class="badge" style="background: #ef4444;">NO_CONFORME</span></td>
-                    <td><small style="color:#ef4444;">${fechaUltimaModificacion}</small></td>
-                    <td>
-                        <small style="color: #ef4444; display: block; line-height: 1.2;">⚠️ Renombrar bajo ISO 19650 ([PROY]_[ORIG]_[ZONA]_[TIPO]_[DISC]_[EST])</small>
-                    </td>
+                    <td><small style="color:#ef4444; font-size:0.75rem;">${fechaUltimaModificacion}</small></td>
+                    <td><small style="color: #ef4444;">⚠️ Renombrar bajo ISO 19650</small></td>
                 </tr>
             `;
         }
@@ -873,15 +859,7 @@ async function handleCreateProject(e) {
     const tipoObra = obtenerValorCampo("tipoSelect", "tipoOtherInput");
 
     if (!esValidoTextoCampo(cliente)) {
-        alert("⚠️ El cliente ingresado no es válido (mínimo 3 letras, no sólo números).");
-        return;
-    }
-    if (!esValidoTextoCampo(ubicacion)) {
-        alert("⚠️ La ubicación especificada no es válida.");
-        return;
-    }
-    if (!esValidoTextoCampo(tipoObra)) {
-        alert("⚠️ El tipo de obra especificado no es válido.");
+        alert("⚠️ El cliente ingresado no es válido.");
         return;
     }
 
@@ -905,7 +883,7 @@ async function handleCreateProject(e) {
 
         if (responseData.status === "success") {
             closeProjectModal();
-            alert("¡Estructura generada exitosamente! Actualizando...");
+            alert("¡Estructura generada exitosamente!");
             loadProjects();
         } else {
             alert("⚠️ Error en creación: " + responseData.message);
