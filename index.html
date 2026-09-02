@@ -35,7 +35,7 @@
                 <!-- COLUMNA IZQUIERDA (60%): CONTROLES Y ENTREGABLES -->
                 <div class="cde-main-column">
                     
-                    <!-- BARRA SUPERIOR AJUSTADA AL ANCHO DE ENTREGABLES -->
+                    <!-- BARRA SUPERIOR ALINEADA AL ANCHO DE LA TABLA -->
                     <div class="controls-bar card">
                         <div class="control-group">
                             <label for="projectSelect">Proyecto:</label>
@@ -54,14 +54,14 @@
                         <button class="tab-btn" data-tab="04_ARCHIVED">04_ARCHIVED (Archivado)</button>
                     </div>
 
-                    <!-- VISTO BUENO Y FIRMA DIGITAL (EXCLUSIVO CLIENTE) -->
+                    <!-- VISTO BUENO Y FIRMA DIGITAL (EXCLUSIVO CLIENTE EN PUBLISHED) -->
                     <div id="clientApprovalCard" class="card" style="display: none; border-left: 4px solid var(--accent-copper); background: rgba(217, 119, 6, 0.05); margin-bottom: 1rem;">
                         <h3>📜 Visto Bueno & Firma del Acta de Recibo</h3>
                         <p><small>Al autorizar, el sistema generará el Acta de Recibo en PDF con el checklist de entregables.</small></p>
                         
                         <div style="margin-top: 8px;">
-                            <input type="text" id="clientSubject" placeholder="Asunto / Resumen corto de la firma..." style="width: 100%; padding: 8px; margin-bottom: 6px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #fff;" required>
-                            <textarea id="clientComments" placeholder="Escriba sus observaciones detalladas sobre los entregables..." style="width: 100%; height: 60px; padding: 8px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #fff;"></textarea>
+                            <input type="text" id="clientSubject" placeholder="Asunto / Resumen corto..." style="width: 100%; padding: 8px; margin-bottom: 6px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #fff;" required>
+                            <textarea id="clientComments" placeholder="Escriba sus observaciones detalladas..." style="width: 100%; height: 60px; padding: 8px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #fff;"></textarea>
                         </div>
                         <div style="margin-top: 8px; display: flex; gap: 10px;">
                             <button class="btn-primary" onclick="procesarAprobacionCliente('APROBADO')">Aprobar y Generar Acta PDF</button>
@@ -69,7 +69,7 @@
                         </div>
                     </div>
 
-                    <!-- TABLA PRINCIPAL DE ENTREGABLES CON SCROLL INDEPENDIENTE -->
+                    <!-- TABLA PRINCIPAL DE ENTREGABLES -->
                     <div class="card table-card scrollable-panel">
                         <table id="filesTable">
                             <thead>
@@ -91,20 +91,21 @@
                 <!-- COLUMNA DERECHA (40%): CENTRO DE MONITOREO Y MENSAJERÍA -->
                 <div class="cde-sidebar-column">
                     
-                    <!-- PANEL SUPERIOR: HILO DE CHAT Y NOTAS TÉCNICAS -->
+                    <!-- PANEL SUPERIOR: HILO DE DEBATE TÉCNICO INTERNO (OCULTO AL CLIENTE) -->
                     <div id="technicalNoteCard" class="card monitoring-panel">
                         <h4 style="color: var(--accent-copper); margin-bottom: 8px;">💬 Hilo de Interacción Técnica</h4>
                         <div id="interactionThreadContainer" class="thread-content scrollable-panel">
                             <!-- Se renderiza dinámicamente -->
                         </div>
-                        <div id="threadActionsContainer" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #334155; display: none; gap: 8px;">
-                            <button id="btnConfirmarLectura" class="btn-primary" style="background: #10b981; font-size: 0.78rem; padding: 6px 10px;">✅ Confirmar Lectura</button>
-                            <button id="btnSolicitarComite" class="btn-secondary" style="background: #d97706; color: #fff; font-size: 0.78rem; padding: 6px 10px;">📅 Solicitar Comité</button>
+                        <div id="threadActionsContainer" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #334155; display: none; gap: 6px; flex-wrap: wrap;">
+                            <button id="btnConfirmarLectura" class="btn-primary" style="background: #10b981; font-size: 0.75rem; padding: 6px 8px;">✅ Confirmar Lectura</button>
+                            <button id="btnSolicitarComite" class="btn-secondary" style="background: #d97706; color: #fff; font-size: 0.75rem; padding: 6px 8px;">📅 Solicitar Comité</button>
+                            <button id="btnSolicitarCorreccionModelador" class="btn-secondary" style="background: #ef4444; color: #fff; font-size: 0.75rem; padding: 6px 8px; display:none;">🚨 Corregir Modelador</button>
                         </div>
                     </div>
 
-                    <!-- PANEL INFERIOR: BITÁCORA ISO 19650 (AUDITORÍA DESCENDENTE) -->
-                    <div class="card monitoring-panel">
+                    <!-- PANEL INFERIOR: BITÁCORA ISO 19650 (DESCENDENTE ESTRICTA) -->
+                    <div id="auditLogCard" class="card monitoring-panel">
                         <h4 style="color: #38bdf8; margin-bottom: 8px;">🕒 Bitácora de Eventos (ISO 19650)</h4>
                         <div id="activityTimeline" class="audit-content scrollable-panel">
                             <!-- Se renderiza dinámicamente -->
@@ -127,7 +128,7 @@
                 ℹ️ <strong>Instrucciones:</strong><br>
                 • Archivos &le; 15 MB: Adjunte directamente el archivo.<br>
                 • Modelos &gt; 15 MB: Use enlace de Google Drive.<br>
-                • El estado en el nombre (S0, S1, A1) debe coincidir con la carpeta destino.
+                • El estado del archivo debe coincidir con la carpeta seleccionada.
             </div>
 
             <form id="uploadForm">
@@ -152,8 +153,8 @@
 
                 <label><small>Pestaña Destino:</small></label>
                 <select id="uploadTargetTab" required style="width: 100%; margin-top: 4px; margin-bottom: 15px; padding: 8px; border-radius: 6px; background: #0f172a; color: #fff; border: 1px solid #334155;">
-                    <option value="01_WIP">01_WIP (Nativos - Debe usar estado S0)</option>
-                    <option value="02_SHARED">02_SHARED (Coordinación - Debe usar estado S1, S2, etc.)</option>
+                    <option value="01_WIP" id="optUploadWip">01_WIP (Nativos - Debe usar estado S0)</option>
+                    <option value="02_SHARED" id="optUploadShared">02_SHARED (Coordinación - Debe usar estado S1, S2, etc.)</option>
                 </select>
 
                 <div class="modal-actions" style="margin-top:15px; display: flex; justify-content: flex-end; gap: 10px;">
@@ -164,15 +165,12 @@
         </div>
     </div>
 
-    <!-- MODAL DE VISOR EN VENTANA EMERGENTE -->
+    <!-- MODAL DE VISOR LIMPIO EN VENTANA EMERGENTE -->
     <div id="viewerModal" class="modal-hidden">
         <div class="modal-content card" style="max-width: 900px; width: 90%; height: 85vh; display: flex; flex-direction: column; padding: 1rem; position: relative;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #334155; padding-bottom: 8px;">
-                <h4 id="viewerTitle" style="color: var(--accent-copper); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 75%;">Previsualización de Entregable</h4>
-                <div style="display: flex; gap: 8px; align-items: center;">
-                    <a id="viewerExternalLink" href="#" target="_blank" class="btn-secondary" style="font-size: 0.75rem; text-decoration: none; padding: 4px 8px;" title="Abrir en pestaña independiente">↗ Abrir Externo</a>
-                    <button onclick="closeViewerModal()" class="btn-secondary" style="background: #ef4444; border: none; color: #fff; padding: 4px 10px; font-weight: bold;">✕</button>
-                </div>
+                <h4 id="viewerTitle" style="color: var(--accent-copper); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 85%;">Previsualización de Entregable</h4>
+                <button onclick="closeViewerModal()" class="btn-secondary" style="background: #ef4444; border: none; color: #fff; padding: 4px 10px; font-weight: bold; cursor: pointer;">✕</button>
             </div>
             <div style="flex: 1; width: 100%; background: #000; border-radius: 6px; overflow: hidden; position: relative;">
                 <iframe id="modalViewerFrame" src="" frameborder="0" style="width: 100%; height: 100%; border: none;"></iframe>
