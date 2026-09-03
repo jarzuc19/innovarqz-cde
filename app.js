@@ -914,7 +914,7 @@ function closeViewerModal() {
 }
 
 // ==============================================================================
-// RENDERIZADO DE ENTREGABLES CON FILTRO POR SUBCARPETAS
+// RENDERIZADO DE ENTREGABLES CON FILTRO POR SUBCARPETAS Y EXCLUSIÓN _OLD_
 // ==============================================================================
 async function loadFiles() {
     const tbody = document.getElementById("filesTableBody");
@@ -947,12 +947,17 @@ async function loadFiles() {
     let listaAProcesar = [];
 
     if (activeTab === "04_ARCHIVED") {
-        listaAProcesar = files.filter(f => f.estado_origen === "04_ARCHIVED" || f.estado_destino === "04_ARCHIVED");
+        listaAProcesar = files.filter(f => f.estado_origen === "04_ARCHIVED" || f.estado_destino === "04_ARCHIVED" || f.archivo_nombre.includes("_OLD_"));
     } else {
         const mapaUnicos = new Map();
 
         files.forEach(f => {
             if (f.archivo_nombre.startsWith("ACTA_DECISION_CLIENTE") || f.archivo_nombre.startsWith("NOTA_TECNICA_")) {
+                return;
+            }
+
+            // EXCLUSIÓN ESTRICTA DE ENTREGABLES ARCHIVADOS (_OLD_)
+            if (f.archivo_nombre.includes("_OLD_")) {
                 return;
             }
 
