@@ -53,7 +53,7 @@
                     </div>
 
                     <!-- BARRA DINÁMICA DE SUBCARPETAS (JERARQUÍA ISO 19650) -->
-                    <div id="subcarpetas-bar" class="card" style="display: none; padding: 8px 12px; margin-bottom: 12px; background: rgba(30, 41, 59, 0.6); border: 1px solid #334155; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                    <div id="subcarpetas-bar" class="card" style="display: none; padding: 8px 12px; margin-bottom: 12px; background: rgba(30, 41, 59, 0.6); border: 1px solid #334155; gap: 8px; flex-wrap: wrap; align-items: center;">
                         <!-- Se puebla dinámicamente con app.js -->
                     </div>
 
@@ -131,7 +131,7 @@
                 ℹ️ <strong>Instrucciones ISO 19650:</strong><br>
                 • Estado <strong>S0</strong> exclusivo para <strong>01_WIP</strong>.<br>
                 • Estados <strong>S1, S2...</strong> exclusivos para <strong>02_SHARED</strong>.<br>
-                • Estados <strong>A1, A2...</strong> exclusivos para <strong>03_PUBLISHED</strong>.
+                • Estados <strong>A1, A2... o códigos (CR, ACT, AP)</strong> para <strong>03_PUBLISHED</strong>.
             </div>
 
             <form id="uploadForm">
@@ -162,6 +162,7 @@
                 <select id="uploadTargetTab" required style="width: 100%; margin-top: 4px; margin-bottom: 15px; padding: 8px; border-radius: 6px; background: #0f172a; color: #fff; border: 1px solid #334155;">
                     <option value="01_WIP" id="optUploadWip">01_WIP (Nativos - Requiere estado S0)</option>
                     <option value="02_SHARED" id="optUploadShared">02_SHARED (Coordinación - Requiere estado S1, S2, etc.)</option>
+                    <option value="03_PUBLISHED" id="optUploadPublished" style="display: none;">03_PUBLISHED (Aprobado / Administrativo - A1, ACT, CR, AP)</option>
                 </select>
 
                 <div class="modal-actions" style="margin-top:15px; display: flex; justify-content: flex-end; gap: 10px;">
@@ -193,7 +194,7 @@
         </div>
     </div>
 
-    <!-- MODAL DE VISOR LIMPIO EN VENTANA EMERGENTE -->
+    <!-- MODAL DE VISOR EN VENTANA EMERGENTE -->
     <div id="viewerModal" class="modal-hidden">
         <div class="modal-content card" style="max-width: 900px; width: 90%; height: 85vh; display: flex; flex-direction: column; padding: 1rem; position: relative;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #334155; padding-bottom: 8px;">
@@ -248,7 +249,6 @@
         </div>
     </div>
 
-    <script src="viewer.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
