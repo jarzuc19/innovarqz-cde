@@ -147,6 +147,17 @@ function actualizarPistaSubcarpetaModal() {
         if (isoName.includes("_M3_") || isoName.endsWith(".IFC") || isoName.endsWith(".RVT")) subDetectada = "02_SHARED / 01_Modelos_3D";
         else if (isoName.includes("_PL_") || isoName.includes("_DR_") || isoName.endsWith(".DWG")) subDetectada = "02_SHARED / 02_Planos_Coordinados";
         else subDetectada = "02_SHARED / 03_Informes_Interferencias";
+    } else if (targetTab === "03_PUBLISHED") {
+        // DETECCIÓN REQUERIDA: DOCUMENTOS ADMINISTRATIVOS DIRECTO A ACTAS Y MEMORIAS
+        if (isoName.includes("_ACT_") || isoName.includes("ACTA") || isoName.includes("_MEM_") || isoName.includes("_INF_") || isoName.includes("_CON_") || isoName.includes("_POL_")) {
+            subDetectada = "03_PUBLISHED / 03_Actas_y_Memorias";
+        } else if (isoName.includes("_M3_") || isoName.endsWith(".IFC")) {
+            subDetectada = "03_PUBLISHED / 01_Modelos_Aprobados";
+        } else if (isoName.includes("_PL_") || isoName.includes("_DR_") || isoName.endsWith(".DWG")) {
+            subDetectada = "03_PUBLISHED / 02_Planos_Contractuales";
+        } else {
+            subDetectada = "03_PUBLISHED / 03_Actas_y_Memorias (Default Admin)";
+        }
     }
 
     hintSpan.innerText = subDetectada;
@@ -526,13 +537,25 @@ async function cargarTimelineActividad() {
 }
 
 // ==============================================================================
-// GESTIÓN DE SUBIDAS Y VALIDACIÓN ESTRICTA $1:1$ DE ESTADO ISO 19650
+// GESTIÓN DE SUBIDAS Y VALIDACIÓN FLEXIBLE ISO 19650
 // ==============================================================================
 function openUploadModal() {
     const optWip = document.getElementById("optUploadWip");
     const optShared = document.getElementById("optUploadShared");
+    const optPublished = document.getElementById("optUploadPublished");
 
-    if (currentUser && currentUser.cargo.includes("REVISOR")) {
+    const esSuperAdminOBimManager = currentUser && (
+        currentUser.cargo.includes("SUPER_ADMIN") || 
+        currentUser.cargo.includes("BIM Manager") || 
+        currentUser.cargo.includes("Director General")
+    );
+
+    // CONTROL DINÁMICO DE VISIBILIDAD DE 03_PUBLISHED
+    if (optPublished) {
+        optPublished.style.display = esSuperAdminOBimManager ? "block" : "none";
+    }
+
+    if (currentUser && currentUser.cargo.includes("REVISOR") && !esSuperAdminOBimManager) {
         if (optWip) optWip.style.display = "none";
         if (optShared) optShared.selected = true;
     } else {
@@ -611,6 +634,7 @@ async function handleFileUpload(e) {
 
     const estadoArchivo = extraerEstadoDeNombre(isoNameInput);
 
+    // VALIDACIONES ESPECÍFICAS SEGÚN PESTAÑA DESTINO
     if (targetTab === "01_WIP" && estadoArchivo !== "S0" && !estadoArchivo.startsWith("P0")) {
         alert(`⛔ VIOLACIÓN DE NORMA ISO 19650:\n\nEl archivo tiene el estado "${estadoArchivo}". En la carpeta 01_WIP solo se permiten entregables nativos en estado "S0" (o borradores P0).\n\nRenombre el archivo a S0 o seleccione la carpeta correspondiente.`);
         return;
@@ -621,8 +645,12 @@ async function handleFileUpload(e) {
         return;
     }
 
-    if (targetTab === "03_PUBLISHED" && !estadoArchivo.startsWith("A")) {
-        alert(`⛔ VIOLACIÓN DE NORMA ISO 19650:\n\nEl archivo tiene el estado "${estadoArchivo}". En 03_PUBLISHED solo se permiten entregables aprobados en estado A1, A2, etc.\n\nPromueva el archivo desde SHARED para asignarle su estado publicado.`);
+    // REGLA FLEXIBLE PARA 03_PUBLISHED: A1, A2..., o Códigos Especiales (CR, ACT, AP, CON)
+    const estadosValidosPublished = ["CR", "ACT", "AP", "CON"];
+    const esValidoEnPublished = estadoArchivo.startsWith("A") || estadosValidosPublished.includes(estadoArchivo);
+
+    if (targetTab === "03_PUBLISHED" && !esValidoEnPublished) {
+        alert(`⛔ VIOLACIÓN DE NORMA ISO 19650:\n\nEl archivo tiene el estado "${estadoArchivo}". En 03_PUBLISHED solo se permiten entregables aprobados/contractuales en estado A1, A2... o códigos especiales (${estadosValidosPublished.join(', ')}).\n\nVerifique el nombre antes de proceder.`);
         return;
     }
 
@@ -969,9 +997,11 @@ async function loadFiles() {
             const partes = f.archivo_nombre.split("_");
             if (!perteneceAPestana && partes.length >= 6) {
                 const codigoEstado = partes[5].split(".")[0].toUpperCase();
+                const estadosValidosPublished = ["CR", "ACT", "AP", "CON"];
+                
                 if (activeTab === "01_WIP" && (codigoEstado === "S0" || eOrigen === "01_WIP")) perteneceAPestana = true;
                 if (activeTab === "02_SHARED" && (codigoEstado === "S1" || eOrigen === "02_SHARED")) perteneceAPestana = true;
-                if (activeTab === "03_PUBLISHED" && (codigoEstado.startsWith("A") || eOrigen === "03_PUBLISHED")) perteneceAPestana = true;
+                if (activeTab === "03_PUBLISHED" && (codigoEstado.startsWith("A") || estadosValidosPublished.includes(codigoEstado) || eOrigen === "03_PUBLISHED")) perteneceAPestana = true;
             }
 
             if (perteneceAPestana) {
@@ -984,7 +1014,7 @@ async function loadFiles() {
         listaAProcesar = Array.from(mapaUnicos.values());
     }
 
-    // FILTRADO ADICIONAL POR SUBCARPERTA SELECCIONADA
+    // FILTRADO ADICIONAL POR SUBCARPETA SELECCIONADA
     if (activeSubfolder !== "TODAS" && activeTab !== "04_ARCHIVED") {
         listaAProcesar = listaAProcesar.filter(f => {
             const nameUpper = f.archivo_nombre.toUpperCase();
@@ -1000,7 +1030,7 @@ async function loadFiles() {
             } else if (activeTab === "03_PUBLISHED") {
                 if (activeSubfolder === "01_Modelos_Aprobados") return nameUpper.includes("_M3_") || nameUpper.endsWith(".IFC");
                 if (activeSubfolder === "02_Planos_Contractuales") return nameUpper.includes("_PL_") || nameUpper.includes("_DR_");
-                if (activeSubfolder === "03_Actas_y_Memorias") return !nameUpper.includes("_M3_") && !nameUpper.includes("_PL_");
+                if (activeSubfolder === "03_Actas_y_Memorias") return nameUpper.includes("_ACT_") || nameUpper.includes("ACTA") || nameUpper.includes("_MEM_") || nameUpper.includes("_INF_") || (!nameUpper.includes("_M3_") && !nameUpper.includes("_PL_"));
             }
             return true;
         });
