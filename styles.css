@@ -125,7 +125,7 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
 }
 
 /* ==============================================================================
-   LAYOUT DIVIDIDO CDE - 2 COLUMNAS (60% / 40%)
+   LAYOUT DIVIDIDO CDE - 2 COLUMNAS (60% / 40%) - ESCRITORIO
    ============================================================================== */
 .cde-split-layout {
     display: flex;
@@ -171,7 +171,7 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
 .scrollable-panel::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
 .scrollable-panel::-webkit-scrollbar-thumb:hover { background: var(--accent-copper); }
 
-/* MODALES */
+/* MODALES BASE */
 .modal-overlay {
     position: fixed;
     top: 0; left: 0;
@@ -181,6 +181,156 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
     justify-content: center;
     align-items: center;
     z-index: 2000;
+    pointer-events: auto;
 }
 
-.modal-hidden { display: none; }
+.modal-hidden { 
+    display: none !important; 
+    pointer-events: none !important;
+}
+
+/* ==============================================================================
+   RESPONSIVIDAD Y OPTIMIZACIÓN TÁCTIL (PANTALLAS <= 900px)
+   ============================================================================== */
+@media (max-width: 900px) {
+    /* 1. Liberar el scroll vertical de la ventana */
+    body {
+        height: auto !important;
+        min-height: 100vh;
+        overflow-y: auto !important;
+    }
+
+    .navbar {
+        height: auto;
+        padding: 0.8rem 1rem;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+    }
+
+    .user-info {
+        text-align: left;
+        font-size: 0.75rem;
+    }
+
+    .container {
+        height: auto !important;
+        padding: 0.8rem;
+    }
+
+    /* 2. Transformar el layout de 2 columnas en una sola columna apilada */
+    .cde-split-layout {
+        flex-direction: column !important;
+        height: auto !important;
+        overflow: visible !important;
+        gap: 1rem;
+    }
+
+    .cde-main-column,
+    .cde-sidebar-column {
+        flex: none !important;
+        width: 100% !important;
+        height: auto !important;
+    }
+
+    /* 3. Controles superiores y botones en móvil */
+    .controls-bar {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 0.8rem;
+    }
+
+    .control-group {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        width: 100%;
+    }
+
+    .control-group select {
+        width: 100%;
+        min-height: 42px; /* Ergonomía táctil */
+    }
+
+    .action-buttons-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        width: 100%;
+    }
+
+    .action-buttons-group button {
+        width: 100%;
+        min-height: 42px;
+    }
+
+    /* 4. Pestañas y subcarpetas con desplazamiento horizontal táctil */
+    .tabs {
+        display: flex !important;
+        overflow-x: auto !important;
+        white-space: nowrap !important;
+        padding-bottom: 6px !important;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-x;
+    }
+
+    .tab-btn {
+        flex-shrink: 0 !important;
+        min-height: 40px;
+        padding: 8px 12px !important;
+    }
+
+    #subcarpetas-bar {
+        display: flex !important;
+        overflow-x: auto !important;
+        white-space: nowrap !important;
+        padding: 8px !important;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-x;
+    }
+
+    #subcarpetas-bar button {
+        flex-shrink: 0 !important;
+        min-height: 36px;
+    }
+
+    /* 5. Tabla responsiva sin compresión de datos */
+    .table-card {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+        width: 100% !important;
+        max-height: 480px;
+    }
+
+    #filesTable {
+        min-width: 620px; /* Garantiza lectura limpia de las 5 columnas */
+    }
+
+    #filesTable th, #filesTable td {
+        padding: 10px 8px;
+    }
+
+    /* 6. Paneles de Monitoreo (Hilo y Bitácora) en móvil */
+    .monitoring-panel {
+        height: auto !important;
+        max-height: 360px;
+    }
+
+    .scrollable-panel {
+        max-height: 280px;
+    }
+
+    /* 7. Modales adaptados a la pantalla del móvil */
+    .modal-overlay {
+        padding: 1rem;
+        align-items: center;
+    }
+
+    .modal-content {
+        width: 100% !important;
+        max-width: 100% !important;
+        max-height: 90vh;
+        overflow-y: auto !important;
+        padding: 1rem !important;
+    }
+}
