@@ -24,24 +24,155 @@
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
-        body { background-color: var(--bg-dark); color: var(--text-main); min-height: 100vh; padding: 2rem 5%; }
-        header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 0; border-bottom: 1px solid var(--border-color); margin-bottom: 2rem; }
+        body { 
+            background-color: var(--bg-dark); 
+            color: var(--text-main); 
+            min-height: 100vh; 
+            padding: 2rem 5%; 
+        }
+        
+        header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            padding: 1rem 0; 
+            border-bottom: 1px solid var(--border-color); 
+            margin-bottom: 2rem; 
+        }
         .logo { font-size: 1.5rem; font-weight: 800; color: var(--text-main); display: flex; align-items: center; gap: 0.75rem; }
         .logo span { color: var(--accent-copper); }
-        .card { background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 14px; padding: 2rem; margin-bottom: 2rem; box-shadow: 0 15px 35px var(--shadow-color); }
-        .section-title { font-size: 1.15rem; font-weight: 700; color: var(--accent-copper); margin-bottom: 1.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; }
+        
+        .card { 
+            background-color: var(--bg-card); 
+            border: 1px solid var(--border-color); 
+            border-radius: 14px; 
+            padding: 2rem; 
+            margin-bottom: 2rem; 
+            box-shadow: 0 15px 35px var(--shadow-color); 
+        }
+        .section-title { 
+            font-size: 1.15rem; 
+            font-weight: 700; 
+            color: var(--accent-copper); 
+            margin-bottom: 1.5rem; 
+            border-bottom: 1px solid var(--border-color); 
+            padding-bottom: 0.75rem; 
+        }
         .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; }
         .form-group { display: flex; flex-direction: column; gap: 0.5rem; }
         .form-group.full { grid-column: span 2; }
         label { font-size: 0.85rem; font-weight: 600; color: var(--text-main); }
-        input[type="text"], input[type="email"], select { background-color: var(--bg-section-alt); border: 1px solid var(--border-color); color: var(--text-main); padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.92rem; outline: none; width: 100%; }
-        .badge-permiso { font-size: 0.8rem; font-weight: 700; padding: 0.4rem 0.8rem; border-radius: 6px; background-color: var(--border-color); color: var(--text-muted); }
+        input[type="text"], input[type="email"], select { 
+            background-color: var(--bg-section-alt); 
+            border: 1px solid var(--border-color); 
+            color: var(--text-main); 
+            padding: 0.75rem 1rem; 
+            border-radius: 8px; 
+            font-size: 0.92rem; 
+            outline: none; 
+            width: 100%; 
+        }
+        .badge-permiso { 
+            font-size: 0.8rem; 
+            font-weight: 700; 
+            padding: 0.4rem 0.8rem; 
+            border-radius: 6px; 
+            background-color: var(--border-color); 
+            color: var(--text-muted); 
+            display: inline-block;
+        }
         .badge-permiso.active { background-color: rgba(16, 185, 129, 0.2); color: var(--success-color); border: 1px solid var(--success-color); }
-        .btn-primary { background-color: var(--accent-copper); color: #fff; border: none; padding: 0.85rem 2rem; border-radius: 8px; font-weight: 700; font-size: 1rem; cursor: pointer; }
-        .btn-danger { background-color: var(--danger-color); color: #fff; border: none; padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.8rem; cursor: pointer; font-weight: 600; }
-        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-        th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid var(--border-color); font-size: 0.9rem; }
+        .btn-primary { 
+            background-color: var(--accent-copper); 
+            color: #fff; 
+            border: none; 
+            padding: 0.85rem 2rem; 
+            border-radius: 8px; 
+            font-weight: 700; 
+            font-size: 1rem; 
+            cursor: pointer; 
+            transition: opacity 0.2s;
+        }
+        .btn-primary:hover { opacity: 0.9; }
+        .btn-danger { 
+            background-color: var(--danger-color); 
+            color: #fff; 
+            border: none; 
+            padding: 0.4rem 0.8rem; 
+            border-radius: 6px; 
+            font-size: 0.8rem; 
+            cursor: pointer; 
+            font-weight: 600; 
+        }
+
+        /* CONTENEDOR CON SCROLL HORIZONTAL TÁCTIL PARA TABLAS */
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-x pan-y;
+            margin-top: 1rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        table { 
+            width: 100%; 
+            min-width: 680px; /* Asegura lectura clara de las 6 columnas en móvil */
+            border-collapse: collapse; 
+        }
+        th, td { 
+            padding: 0.75rem 1rem; 
+            text-align: left; 
+            border-bottom: 1px solid var(--border-color); 
+            font-size: 0.9rem; 
+            white-space: nowrap;
+        }
         th { background-color: var(--bg-section-alt); color: var(--accent-copper); font-weight: 700; }
+
+        /* ========================================================================== */
+        /* RESPONSIVIDAD MÓVIL (PANTALLAS <= 768px)                                   */
+        /* ========================================================================== */
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem 0.8rem;
+            }
+
+            header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+                margin-bottom: 1.2rem;
+            }
+
+            .logo {
+                font-size: 1.25rem;
+            }
+
+            .card {
+                padding: 1.2rem 1rem;
+                border-radius: 10px;
+                margin-bottom: 1.2rem;
+            }
+
+            .form-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+
+            .form-group.full {
+                grid-column: span 1;
+            }
+
+            input[type="text"], input[type="email"], select {
+                min-height: 44px; /* Ergonomía táctil */
+            }
+
+            .btn-primary {
+                width: 100%;
+                min-height: 46px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -78,7 +209,7 @@
                 </div>
                 <div class="form-group full">
                     <label>Rol ISO 19650</label>
-                    <select id="u_rol" onchange="actualizarPrevisualizacionPermisos()" required>
+                    <select id="u_rol" required>
                         <option value="" disabled selected>-- Seleccionar Rol --</option>
                         <option value="MODELADOR">MODELADOR (Especialista de Diseño)</option>
                         <option value="REVISOR_EXTERNO">REVISOR EXTERNO (Consultor / Auditor)</option>
@@ -88,7 +219,7 @@
                 </div>
             </div>
 
-            <div style="margin-top: 2rem; text-align: right;">
+            <div style="margin-top: 1.5rem; text-align: right;">
                 <button type="submit" class="btn-primary" id="btnGuardar">Guardar Usuario y Permisos</button>
             </div>
         </form>
@@ -96,21 +227,25 @@
 
     <div class="card">
         <div class="section-title">📋 Usuarios Registrados y Permisos por Proyecto</div>
-        <table>
-            <thead>
-                <tr>
-                    <th>Nombre</th>
-                    <th>Email</th>
-                    <th>Empresa</th>
-                    <th>Proyecto</th>
-                    <th>Rol</th>
-                    <th>Acciones</th>
-                </tr>
-            </thead>
-            <tbody id="tablaUsuarios">
-                <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Cargando usuarios...</td></tr>
-            </tbody>
-        </table>
+        
+        <!-- ENVOLTORIO CON DESPLAZAMIENTO TÁCTIL INDEPENDIENTE -->
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Email</th>
+                        <th>Empresa</th>
+                        <th>Proyecto</th>
+                        <th>Rol</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="tablaUsuarios">
+                    <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Cargando usuarios...</td></tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 
 <script>
