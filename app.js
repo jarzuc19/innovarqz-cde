@@ -148,7 +148,6 @@ function actualizarPistaSubcarpetaModal() {
         else if (isoName.includes("_PL_") || isoName.includes("_DR_") || isoName.endsWith(".DWG")) subDetectada = "02_SHARED / 02_Planos_Coordinados";
         else subDetectada = "02_SHARED / 03_Informes_Interferencias";
     } else if (targetTab === "03_PUBLISHED") {
-        // DETECCIÓN REQUERIDA: DOCUMENTOS ADMINISTRATIVOS DIRECTO A ACTAS Y MEMORIAS
         if (isoName.includes("_ACT_") || isoName.includes("ACTA") || isoName.includes("_MEM_") || isoName.includes("_INF_") || isoName.includes("_CON_") || isoName.includes("_POL_")) {
             subDetectada = "03_PUBLISHED / 03_Actas_y_Memorias";
         } else if (isoName.includes("_M3_") || isoName.endsWith(".IFC")) {
@@ -550,7 +549,6 @@ function openUploadModal() {
         currentUser.cargo.includes("Director General")
     );
 
-    // CONTROL DINÁMICO DE VISIBILIDAD DE 03_PUBLISHED
     if (optPublished) {
         optPublished.style.display = esSuperAdminOBimManager ? "block" : "none";
     }
@@ -634,7 +632,6 @@ async function handleFileUpload(e) {
 
     const estadoArchivo = extraerEstadoDeNombre(isoNameInput);
 
-    // VALIDACIONES ESPECÍFICAS SEGÚN PESTAÑA DESTINO
     if (targetTab === "01_WIP" && estadoArchivo !== "S0" && !estadoArchivo.startsWith("P0")) {
         alert(`⛔ VIOLACIÓN DE NORMA ISO 19650:\n\nEl archivo tiene el estado "${estadoArchivo}". En la carpeta 01_WIP solo se permiten entregables nativos en estado "S0" (o borradores P0).\n\nRenombre el archivo a S0 o seleccione la carpeta correspondiente.`);
         return;
@@ -645,7 +642,6 @@ async function handleFileUpload(e) {
         return;
     }
 
-    // REGLA FLEXIBLE PARA 03_PUBLISHED: A1, A2..., o Códigos Especiales (CR, ACT, AP, CON)
     const estadosValidosPublished = ["CR", "ACT", "AP", "CON"];
     const esValidoEnPublished = estadoArchivo.startsWith("A") || estadosValidosPublished.includes(estadoArchivo);
 
@@ -838,7 +834,7 @@ async function procesarAprobacionCliente(estadoAprobacion) {
 }
 
 // ==============================================================================
-// GENERACIÓN DE ACTA PDF FORMAL
+// GENERACIÓN DE ACTA PDF FORMAL CON MEMBRETE OFICIAL INNOVARQZ
 // ==============================================================================
 async function generarPDFActaRecibo() {
     if (!window.PDFLib) {
@@ -850,28 +846,132 @@ async function generarPDFActaRecibo() {
         });
     }
 
-    const { PDFDocument, rgb, StandardFonts } = window.PDFLib;
+    const { PDFDocument, rgb, degrees, StandardFonts } = window.PDFLib;
     const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([600, 800]);
+    
+    // Formato Carta Exacto (Letter): 612 x 792 pt
+    const pageWidth = 612;
+    const pageHeight = 792;
+    const page = pdfDoc.addPage([pageWidth, pageHeight]);
+
+    // Fuentes estándar
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const fontOblique = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
 
-    page.drawText("INNOVARQZ SOLUCIONES INTEGRALES S.A.S.", { x: 50, y: 740, size: 15, font: fontBold, color: rgb(0.85, 0.47, 0.02) });
-    page.drawText("NIT: 901.654.321-0 | CDE ISO 19650 PLATFORM", { x: 50, y: 725, size: 9, font: fontRegular, color: rgb(0.4, 0.4, 0.4) });
-    page.drawText("ACTA DE RECIBO A SATISFACCIÓN Y CIERRE DE HITO", { x: 50, y: 700, size: 12, font: fontBold });
+    // Paleta de Color Corporativa
+    const colorDark = rgb(15 / 255, 23 / 255, 42 / 255);       // #0F172A (Azul Pizarra Oscuro)
+    const colorCopper = rgb(217 / 255, 119 / 255, 6 / 255);    // #D97706 (Cobre de Marca)
+    const colorSlate = rgb(100 / 255, 116 / 255, 139 / 255);   // #64748B (Gris Técnico)
+    const colorBorder = rgb(203 / 255, 213 / 255, 225 / 255);  // #CBD5E1 (Borde Claro)
+
+    // Margen Lateral: 50pt (~18mm)
+    const leftMargin = 50;
+    const rightMargin = pageWidth - 50; // 562pt
+    const printableWidth = rightMargin - leftMargin; // 512pt
+
+    // --------------------------------------------------------------------------
+    // 0. MARCA DE AGUA SUTIL DIAGONAL
+    // --------------------------------------------------------------------------
+    page.drawText("InnovArqZ", {
+        x: 140,
+        y: 290,
+        size: 72,
+        font: fontBold,
+        color: rgb(15 / 255, 23 / 255, 42 / 255),
+        opacity: 0.035,
+        rotate: degrees(32)
+    });
+
+    // --------------------------------------------------------------------------
+    // 1. ENCABEZADO TÉCNICO OFICIAL
+    // --------------------------------------------------------------------------
+    // Lado Izquierdo: Marca
+    page.drawText("Innov", { x: leftMargin, y: 738, size: 24, font: fontBold, color: colorDark });
+    page.drawText("ArqZ", { x: leftMargin + 65, y: 738, size: 24, font: fontBold, color: colorCopper });
+
+    page.drawText("SOLUCIONES INTEGRALES", { 
+        x: leftMargin, y: 724, size: 8, font: fontBold, color: colorSlate 
+    });
+    page.drawText("Consultoría BIM/CIM • Arquitectura • Ingeniería", { 
+        x: leftMargin, y: 711, size: 7.5, font: fontBold, color: colorCopper 
+    });
+
+    // Lado Derecho: Credenciales Profesionales (Alineadas a la derecha)
+    const credDirector = "DIRECTOR: Arq. James R. Zuñiga C.";
+    const credMatricula = "M.P CPNAA No: A137812026-1122783013";
+    const credWeb = "PORTAFOLIO: www.innovarqzsas.com/portafolio";
+
+    const wDir = fontRegular.widthOfTextAtSize(credDirector, 7.5);
+    const wMat = fontRegular.widthOfTextAtSize(credMatricula, 7.5);
+    const wWeb = fontRegular.widthOfTextAtSize(credWeb, 7.5);
+
+    page.drawText(credDirector, { x: rightMargin - wDir, y: 738, size: 7.5, font: fontRegular, color: colorDark });
+    page.drawText(credMatricula, { x: rightMargin - wMat, y: 724, size: 7.5, font: fontRegular, color: colorDark });
+    page.drawText(credWeb, { x: rightMargin - wWeb, y: 711, size: 7.5, font: fontRegular, color: colorDark });
+
+    // Línea de Corte Arquitectónico (32% Cobre, 68% Oscuro)
+    const yLine = 698;
+    const copperWidth = printableWidth * 0.32;
+    page.drawLine({
+        start: { x: leftMargin, y: yLine },
+        end: { x: leftMargin + copperWidth, y: yLine },
+        thickness: 2.5,
+        color: colorCopper
+    });
+    page.drawLine({
+        start: { x: leftMargin + copperWidth, y: yLine },
+        end: { x: rightMargin, y: yLine },
+        thickness: 2.5,
+        color: colorDark
+    });
+
+    // --------------------------------------------------------------------------
+    // 2. CONTENIDO FORMAL DEL ACTA
+    // --------------------------------------------------------------------------
+    page.drawText("ACTA DE RECIBO A SATISFACCIÓN Y CIERRE DE HITO", {
+        x: leftMargin,
+        y: 668,
+        size: 11.5,
+        font: fontBold,
+        color: colorDark
+    });
 
     const fechaStr = new Date().toLocaleString();
-    page.drawText(`Proyecto: ${activeProjectCode}`, { x: 50, y: 665, size: 10, font: fontBold });
-    page.drawText(`Cliente / Razón Social: ${currentUser.nombre_completo}`, { x: 50, y: 650, size: 10, font: fontRegular });
-    page.drawText(`Identificación / Correo: ${currentUser.email}`, { x: 50, y: 635, size: 10, font: fontRegular });
-    page.drawText(`Fecha y Hora de Firma Digital: ${fechaStr}`, { x: 50, y: 620, size: 10, font: fontRegular });
+    let yMeta = 642;
+    page.drawText(`Proyecto: ${activeProjectCode || 'PRY-GENERAL'}`, { x: leftMargin, y: yMeta, size: 9, font: fontBold, color: colorDark });
+    yMeta -= 14;
+    page.drawText(`Cliente / Razón Social: ${currentUser.nombre_completo || 'Cliente'}`, { x: leftMargin, y: yMeta, size: 9, font: fontRegular, color: colorDark });
+    yMeta -= 14;
+    page.drawText(`Identificación / Correo: ${currentUser.email || ''}`, { x: leftMargin, y: yMeta, size: 9, font: fontRegular, color: colorDark });
+    yMeta -= 14;
+    page.drawText(`Fecha y Hora de Firma Digital: ${fechaStr}`, { x: leftMargin, y: yMeta, size: 8.5, font: fontRegular, color: colorSlate });
 
-    page.drawText("DECLARACIÓN DE CONFORMIDAD", { x: 50, y: 585, size: 11, font: fontBold });
-    const textoClausula = "Por medio del presente documento, el cliente hace constar que INNOVARQZ SOLUCIONES INTEGRALES S.A.S. cumplió a cabalidad con los entregables técnicos de información y modelos acordados. Se confirma la recepción a satisfacción de la documentación aprobada y se autoriza el cierre del hito correspondiente.";
+    // Declaración de Conformidad
+    let yDecl = yMeta - 22;
+    page.drawText("DECLARACIÓN DE CONFORMIDAD", { x: leftMargin, y: yDecl, size: 10, font: fontBold, color: colorCopper });
     
-    page.drawText(textoClausula, { x: 50, y: 565, size: 9, font: fontRegular, maxWidth: 500, lineHeight: 12 });
+    yDecl -= 15;
+    const textoClausula = "Por medio del presente documento, el cliente hace constar que INNOVARQZ SOLUCIONES INTEGRALES S.A.S. cumplió a cabalidad con los entregables técnicos de información, planos y modelos acordados. Se confirma la recepción a satisfacción de la documentación aprobada y se autoriza formalmente el cierre del hito correspondiente.";
+    page.drawText(textoClausula, {
+        x: leftMargin,
+        y: yDecl,
+        size: 8.5,
+        font: fontRegular,
+        color: colorDark,
+        maxWidth: printableWidth,
+        lineHeight: 12
+    });
 
-    page.drawText("LISTA DE ENTREGABLES APROBADOS (03_PUBLISHED):", { x: 50, y: 505, size: 10, font: fontBold });
+    // Checklist de Entregables Publicados
+    let yList = yDecl - 40;
+    page.drawText("LISTA DE ENTREGABLES APROBADOS (03_PUBLISHED):", {
+        x: leftMargin,
+        y: yList,
+        size: 9.5,
+        font: fontBold,
+        color: colorDark
+    });
 
     const { data: files } = await supabaseClient
         .from("audit_logs")
@@ -880,7 +980,7 @@ async function generarPDFActaRecibo() {
         .eq("estado_destino", "03_PUBLISHED")
         .eq("activo", true);
 
-    let yPos = 485;
+    let yPos = yList - 16;
     if (files && files.length > 0) {
         const unicosPublished = new Map();
         files.forEach(f => {
@@ -890,25 +990,75 @@ async function generarPDFActaRecibo() {
         });
 
         unicosPublished.forEach(f => {
-            if (yPos > 180) {
-                page.drawText(`• ${f.archivo_nombre} (${f.version || 'V1.0'})`, { x: 60, y: yPos, size: 8, font: fontRegular });
-                yPos -= 16;
+            if (yPos > 175) {
+                page.drawText(`• ${f.archivo_nombre} (${f.version || 'V1.0'})`, {
+                    x: leftMargin + 10,
+                    y: yPos,
+                    size: 8,
+                    font: fontRegular,
+                    color: colorDark
+                });
+                yPos -= 14;
             }
         });
     } else {
-        page.drawText("• Sin entregables registrados en 03_PUBLISHED", { x: 60, y: yPos, size: 8, font: fontRegular });
+        page.drawText("• Sin entregables técnicos registrados en 03_PUBLISHED a la fecha.", {
+            x: leftMargin + 10,
+            y: yPos,
+            size: 8,
+            font: fontRegular,
+            color: colorSlate
+        });
+        yPos -= 14;
     }
 
-    page.drawLine({ start: { x: 50, y: 130 }, end: { x: 250, y: 130 }, thickness: 1, color: rgb(0.3, 0.3, 0.3) });
-    page.drawText("ARQ. JAMES RAMIRO ZUÑIGA CAIPE", { x: 50, y: 115, size: 9, font: fontBold });
-    page.drawText("Representante Legal", { x: 50, y: 102, size: 8, font: fontRegular });
-    page.drawText("INNOVARQZ SOLUCIONES INTEGRALES S.A.S.", { x: 50, y: 90, size: 8, font: fontRegular });
+    // --------------------------------------------------------------------------
+    // 3. FIRMAS FORMALES BILATERALES
+    // --------------------------------------------------------------------------
+    const yFirmaLine = 135;
+    
+    // Firma Izquierda: Representante Legal InnovArqZ
+    page.drawLine({ start: { x: leftMargin, y: yFirmaLine }, end: { x: leftMargin + 200, y: yFirmaLine }, thickness: 1, color: colorSlate });
+    page.drawText("ARQ. JAMES RAMIRO ZUÑIGA CAIPE", { x: leftMargin, y: yFirmaLine - 14, size: 8.5, font: fontBold, color: colorDark });
+    page.drawText("Representante Legal", { x: leftMargin, y: yFirmaLine - 25, size: 8, font: fontRegular, color: colorSlate });
+    page.drawText("INNOVARQZ SOLUCIONES INTEGRALES S.A.S.", { x: leftMargin, y: yFirmaLine - 36, size: 7.5, font: fontBold, color: colorDark });
 
-    page.drawLine({ start: { x: 330, y: 130 }, end: { x: 530, y: 130 }, thickness: 1, color: rgb(0.3, 0.3, 0.3) });
-    page.drawText(`${currentUser.nombre_completo.toUpperCase()}`, { x: 330, y: 115, size: 9, font: fontBold });
-    page.drawText("Firma Digital y Sello CDE", { x: 330, y: 102, size: 8, font: fontRegular });
-    page.drawText(`Verificación: ${currentUser.email}`, { x: 330, y: 90, size: 8, font: fontRegular });
+    // Firma Derecha: Cliente / Firma Digital CDE
+    const colRightX = rightMargin - 200;
+    page.drawLine({ start: { x: colRightX, y: yFirmaLine }, end: { x: rightMargin, y: yFirmaLine }, thickness: 1, color: colorSlate });
+    page.drawText(currentUser.nombre_completo ? currentUser.nombre_completo.toUpperCase() : "CLIENTE FINAL", { 
+        x: colRightX, y: yFirmaLine - 14, size: 8.5, font: fontBold, color: colorDark 
+    });
+    page.drawText("Firma Digital y Sello CDE", { x: colRightX, y: yFirmaLine - 25, size: 8, font: fontRegular, color: colorSlate });
+    page.drawText(`Verificación: ${currentUser.email || ''}`, { x: colRightX, y: yFirmaLine - 36, size: 7.5, font: fontRegular, color: colorDark });
 
+    // --------------------------------------------------------------------------
+    // 4. PIE DE PÁGINA REORGANIZADO (2 COLUMNAS + LEMA OFICIAL)
+    // --------------------------------------------------------------------------
+    const yFooterLine = 68;
+    page.drawLine({ start: { x: leftMargin, y: yFooterLine }, end: { x: rightMargin, y: yFooterLine }, thickness: 1, color: colorBorder });
+
+    // Columna Izquierda: Empresa y Lema Oficial Protagonista
+    page.drawText("InnovArqZ Soluciones Integrales", { x: leftMargin, y: 53, size: 8, font: fontBold, color: colorDark });
+    page.drawText('"Construimos juntos el valor de tus espacios', { x: leftMargin, y: 41, size: 7.5, font: fontOblique, color: colorDark });
+    page.drawText('DE PRINCIPIO A FIN"', { x: leftMargin, y: 28, size: 10, font: fontBold, color: colorCopper });
+
+    // Columna Derecha: Canales de Contacto (Alineados a la derecha)
+    const lineWeb = "Web Oficial: www.innovarqzsas.com";
+    const lineEmail = "Email: gerenciabim@innovarqzsas.com";
+    const lineTel = "TEL / WA: +57 315 850 5885";
+
+    const wFWeb = fontRegular.widthOfTextAtSize(lineWeb, 7.5);
+    const wFEmail = fontRegular.widthOfTextAtSize(lineEmail, 7.5);
+    const wFTel = fontRegular.widthOfTextAtSize(lineTel, 7.5);
+
+    page.drawText(lineWeb, { x: rightMargin - wFWeb, y: 53, size: 7.5, font: fontRegular, color: colorDark });
+    page.drawText(lineEmail, { x: rightMargin - wFEmail, y: 41, size: 7.5, font: fontRegular, color: colorDark });
+    page.drawText(lineTel, { x: rightMargin - wFTel, y: 28, size: 7.5, font: fontBold, color: colorDark });
+
+    // --------------------------------------------------------------------------
+    // 5. RETORNO EN BASE64 PARA TRANSMISIÓN AUTOMÁTICA
+    // --------------------------------------------------------------------------
     const pdfBytes = await pdfDoc.saveAsBase64({ dataUri: false });
     return pdfBytes;
 }
@@ -984,7 +1134,6 @@ async function loadFiles() {
                 return;
             }
 
-            // EXCLUSIÓN ESTRICTA DE ENTREGABLES ARCHIVADOS (_OLD_)
             if (f.archivo_nombre.includes("_OLD_")) {
                 return;
             }
