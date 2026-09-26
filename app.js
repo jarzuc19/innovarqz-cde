@@ -22,6 +22,14 @@ const SUBCARPETAS_MAP = {
     "04_ARCHIVED": []
 };
 
+// INSTANCIA Y ESTADO DEL MOTOR 3D IFC
+let ifcScene = null;
+let ifcRenderer = null;
+let ifcCamera = null;
+let ifcControls = null;
+let ifcAnimationId = null;
+let ifcApi = null;
+
 // ==============================================================================
 // INICIALIZACIÓN Y NAVEGACIÓN
 // ==============================================================================
@@ -627,7 +635,7 @@ function validarCoherenciaTipoYExtension(tipo, extension) {
     if (REGLAS_EXTENSIONES[tipo]) {
         return REGLAS_EXTENSIONES[tipo].includes(ext);
     }
-    return true; // Si es un tipo personalizado no listado, permite continuar
+    return true;
 }
 
 function recalcularEstadoEnNombre(nombreOriginal, nuevoEstadoISO) {
@@ -665,13 +673,11 @@ async function handleFileUpload(e) {
     const tipoArchivo = extraerTipoDeNombre(isoNameInput);
     const extEscrita = isoNameInput.split('.').pop().toLowerCase();
 
-    // 1. VALIDACIÓN DE COHERENCIA ENTRE TIPO DOCUMENTAL Y EXTENSIÓN
     if (!validarCoherenciaTipoYExtension(tipoArchivo, extEscrita)) {
         alert(`❌ CONFLICTO TÉCNICO TIPO vs. EXTENSIÓN:\n\nEl tipo declarado es [${tipoArchivo}], pero la extensión ingresada es [.${extEscrita}].\n\n• Si es un video, use tipo [VI] y extensión [.mp4 / .mov].\n• Si es una imagen o render, use tipo [IM] y extensión [.png / .jpg].\n• Si es un plano, use tipo [PL] y extensión [.pdf / .dwg].\n• Si es un modelo 3D, use tipo [M3] y extensión [.ifc / .rvt].`);
         return;
     }
 
-    // 2. VALIDACIÓN DE ESTADOS NORMATIVOS POR CARPETA
     if (targetTab === "01_WIP" && estadoArchivo !== "S0" && !estadoArchivo.startsWith("P0")) {
         alert(`⛔ VIOLACIÓN DE NORMA ISO 19650:\n\nEl archivo tiene el estado "${estadoArchivo}". En la carpeta 01_WIP solo se permiten entregables nativos en estado "S0" (o borradores P0).\n\nRenombre el archivo a S0 o seleccione la carpeta correspondiente.`);
         return;
@@ -887,30 +893,23 @@ async function generarPDFActaRecibo() {
     const { PDFDocument, rgb, degrees, StandardFonts } = window.PDFLib;
     const pdfDoc = await PDFDocument.create();
     
-    // Formato Carta Exacto (Letter): 612 x 792 pt
     const pageWidth = 612;
     const pageHeight = 792;
     const page = pdfDoc.addPage([pageWidth, pageHeight]);
 
-    // Fuentes estándar
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const fontOblique = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
 
-    // Paleta de Color Corporativa
-    const colorDark = rgb(15 / 255, 23 / 255, 42 / 255);       // #0F172A (Azul Pizarra Oscuro)
-    const colorCopper = rgb(217 / 255, 119 / 255, 6 / 255);    // #D97706 (Cobre de Marca)
-    const colorSlate = rgb(100 / 255, 116 / 255, 139 / 255);   // #64748B (Gris Técnico)
-    const colorBorder = rgb(203 / 255, 213 / 255, 225 / 255);  // #CBD5E1 (Borde Claro)
+    const colorDark = rgb(15 / 255, 23 / 255, 42 / 255);
+    const colorCopper = rgb(217 / 255, 119 / 255, 6 / 255);
+    const colorSlate = rgb(100 / 255, 116 / 255, 139 / 255);
+    const colorBorder = rgb(203 / 255, 213 / 255, 225 / 255);
 
-    // Margen Lateral: 50pt (~18mm)
     const leftMargin = 50;
-    const rightMargin = pageWidth - 50; // 562pt
-    const printableWidth = rightMargin - leftMargin; // 512pt
+    const rightMargin = pageWidth - 50;
+    const printableWidth = rightMargin - leftMargin;
 
-    // --------------------------------------------------------------------------
-    // 0. MARCA DE AGUA SUTIL DIAGONAL
-    // --------------------------------------------------------------------------
     page.drawText("InnovArqZ", {
         x: 140,
         y: 290,
@@ -921,9 +920,6 @@ async function generarPDFActaRecibo() {
         rotate: degrees(32)
     });
 
-    // --------------------------------------------------------------------------
-    // 1. ENCABEZADO TÉCNICO OFICIAL
-    // --------------------------------------------------------------------------
     page.drawText("Innov", { x: leftMargin, y: 738, size: 24, font: fontBold, color: colorDark });
     page.drawText("ArqZ", { x: leftMargin + 65, y: 738, size: 24, font: fontBold, color: colorCopper });
 
@@ -961,9 +957,6 @@ async function generarPDFActaRecibo() {
         color: colorDark
     });
 
-    // --------------------------------------------------------------------------
-    // 2. CONTENIDO FORMAL DEL ACTA
-    // --------------------------------------------------------------------------
     page.drawText("ACTA DE RECIBO A SATISFACCIÓN Y CIERRE DE HITO", {
         x: leftMargin,
         y: 668,
@@ -1045,9 +1038,6 @@ async function generarPDFActaRecibo() {
         yPos -= 14;
     }
 
-    // --------------------------------------------------------------------------
-    // 3. FIRMAS FORMALES BILATERALES
-    // --------------------------------------------------------------------------
     const yFirmaLine = 135;
     
     page.drawLine({ start: { x: leftMargin, y: yFirmaLine }, end: { x: leftMargin + 200, y: yFirmaLine }, thickness: 1, color: colorSlate });
@@ -1063,9 +1053,6 @@ async function generarPDFActaRecibo() {
     page.drawText("Firma Digital y Sello CDE", { x: colRightX, y: yFirmaLine - 25, size: 8, font: fontRegular, color: colorSlate });
     page.drawText(`Verificación: ${currentUser.email || ''}`, { x: colRightX, y: yFirmaLine - 36, size: 7.5, font: fontRegular, color: colorDark });
 
-    // --------------------------------------------------------------------------
-    // 4. PIE DE PÁGINA REORGANIZADO
-    // --------------------------------------------------------------------------
     const yFooterLine = 68;
     page.drawLine({ start: { x: leftMargin, y: yFooterLine }, end: { x: rightMargin, y: yFooterLine }, thickness: 1, color: colorBorder });
 
@@ -1085,39 +1072,238 @@ async function generarPDFActaRecibo() {
     page.drawText(lineEmail, { x: rightMargin - wFEmail, y: 41, size: 7.5, font: fontRegular, color: colorDark });
     page.drawText(lineTel, { x: rightMargin - wFTel, y: 28, size: 7.5, font: fontBold, color: colorDark });
 
-    // --------------------------------------------------------------------------
-    // 5. RETORNO EN BASE64 PARA TRANSMISIÓN AUTOMÁTICA
-    // --------------------------------------------------------------------------
     const pdfBytes = await pdfDoc.saveAsBase64({ dataUri: false });
     return pdfBytes;
 }
 
 // ==============================================================================
-// GESTIÓN DEL VISOR EN MODAL
+// GESTIÓN DEL VISOR MULTIMODAL (IFRAME, VIDEO NATIVO E IFC 3D)
 // ==============================================================================
-function openViewerModal(driveUrl, nombreArchivo) {
+async function openViewerModal(driveUrl, nombreArchivo) {
     const modal = document.getElementById("viewerModal");
     const frame = document.getElementById("modalViewerFrame");
+    const video = document.getElementById("modalVideoPlayer");
+    const ifcCont = document.getElementById("modalIfcContainer");
+    const loading = document.getElementById("viewerLoadingIndicator");
     const title = document.getElementById("viewerTitle");
 
-    if (!modal || !frame) return;
+    if (!modal) return;
 
     title.innerText = `Previsualizando: ${nombreArchivo}`;
 
+    // Ocultar todos los visores inicialmente
+    if (frame) { frame.style.display = "none"; frame.src = ""; }
+    if (video) { video.style.display = "none"; video.pause(); video.src = ""; }
+    if (ifcCont) { ifcCont.style.display = "none"; ifcCont.innerHTML = ""; }
+    if (loading) { loading.style.display = "none"; }
+
+    const ext = nombreArchivo.split('.').pop().toLowerCase();
+    modal.className = "modal-overlay";
+
+    // 1. CASO VIDEOS (.MP4, .WEBM, .MOV)
+    if (["mp4", "webm", "mov"].includes(ext)) {
+        if (driveUrl.includes("drive.google.com")) {
+            // Streaming progresivo optimizado con el reproductor de Drive
+            let previewUrl = driveUrl.replace("/view?usp=drivesdk", "/preview").replace("/view", "/preview");
+            frame.src = previewUrl;
+            frame.style.display = "block";
+        } else {
+            // Reproductor nativo HTML5 para URLs directas
+            video.src = driveUrl;
+            video.style.display = "block";
+            video.play().catch(e => console.log("Autoplay bloqueado:", e));
+        }
+        return;
+    }
+
+    // 2. CASO MODELOS BIM IFC 3D (.IFC)
+    if (ext === "ifc") {
+        ifcCont.style.display = "block";
+        if (loading) loading.style.display = "block";
+
+        try {
+            await inicializarVisorIFC(driveUrl, ifcCont);
+        } catch (err) {
+            console.error("Error al cargar IFC 3D:", err);
+            alert("⚠️ No se pudo inicializar la geometría del modelo IFC: " + err.message);
+        } finally {
+            if (loading) loading.style.display = "none";
+        }
+        return;
+    }
+
+    // 3. CASO GENERAL: DOCUMENTOS, PLANOS E IMÁGENES (.PDF, .PNG, .JPG, .HTML)
     let previewUrl = driveUrl;
     if (driveUrl.includes("drive.google.com/file/d/")) {
         previewUrl = driveUrl.replace("/view?usp=drivesdk", "/preview").replace("/view", "/preview");
     }
-
     frame.src = previewUrl;
-    modal.className = "modal-overlay";
+    frame.style.display = "block";
 }
 
 function closeViewerModal() {
     const modal = document.getElementById("viewerModal");
     const frame = document.getElementById("modalViewerFrame");
-    if (frame) frame.src = "";
+    const video = document.getElementById("modalVideoPlayer");
+    const ifcCont = document.getElementById("modalIfcContainer");
+    const loading = document.getElementById("viewerLoadingIndicator");
+
+    if (frame) { frame.src = ""; frame.style.display = "none"; }
+    if (video) { video.pause(); video.src = ""; video.style.display = "none"; }
+    if (loading) { loading.style.display = "none"; }
+
+    // Limpieza de memoria y recursos WebGL para el motor IFC
+    if (ifcAnimationId) {
+        cancelAnimationFrame(ifcAnimationId);
+        ifcAnimationId = null;
+    }
+    if (ifcRenderer) {
+        ifcRenderer.dispose();
+        ifcRenderer = null;
+    }
+    if (ifcCont) {
+        ifcCont.innerHTML = "";
+        ifcCont.style.display = "none";
+    }
+
     if (modal) modal.className = "modal-hidden";
+}
+
+// ==============================================================================
+// MOTOR OPEN SOURCE 3D PARA IFC (WEB-IFC + THREE.JS)
+// ==============================================================================
+async function inicializarVisorIFC(fileUrl, container) {
+    container.innerHTML = "";
+
+    const width = container.clientWidth || 800;
+    const height = container.clientHeight || 550;
+
+    // Escena, Cámara y Renderer WebGL
+    ifcScene = new THREE.Scene();
+    ifcScene.background = new THREE.Color(0x0f172a); // Fondo corporativo
+
+    ifcCamera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+    ifcCamera.position.set(20, 20, 20);
+
+    ifcRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    ifcRenderer.setSize(width, height);
+    ifcRenderer.setPixelRatio(window.devicePixelRatio);
+    container.appendChild(ifcRenderer.domElement);
+
+    // Controles de Órbita 3D
+    ifcControls = new THREE.OrbitControls(ifcCamera, ifcRenderer.domElement);
+    ifcControls.enableDamping = true;
+    ifcControls.dampingFactor = 0.05;
+
+    // Iluminación ambiental y direccional suave
+    const lightAmbient = new THREE.AmbientLight(0xffffff, 0.7);
+    ifcScene.add(lightAmbient);
+
+    const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.6);
+    dirLight1.position.set(25, 40, 20);
+    ifcScene.add(dirLight1);
+
+    const dirLight2 = new THREE.DirectionalLight(0xd97706, 0.25); // Toque cálido institucional
+    dirLight2.position.set(-25, -20, -20);
+    ifcScene.add(dirLight2);
+
+    // Rejilla base de referencia espacial
+    const grid = new THREE.GridHelper(50, 50, 0xd97706, 0x334155);
+    ifcScene.add(grid);
+
+    // Bucle de Renderizado
+    function animate() {
+        ifcAnimationId = requestAnimationFrame(animate);
+        if (ifcControls) ifcControls.update();
+        if (ifcRenderer && ifcScene && ifcCamera) ifcRenderer.render(ifcScene, ifcCamera);
+    }
+    animate();
+
+    // Inicializar Web-IFC API y descargar modelo
+    if (!ifcApi) {
+        ifcApi = new WebIFC.IfcAPI();
+        ifcApi.SetWasmPath("https://unpkg.com/web-ifc@0.0.44/");
+        await ifcApi.Init();
+    }
+
+    // Convertir enlace de Google Drive en descarga directa para el fetch
+    let downloadUrl = fileUrl;
+    if (fileUrl.includes("drive.google.com")) {
+        const match = fileUrl.match(/[-\w]{25,}/);
+        if (match) {
+            downloadUrl = `https://drive.google.com/uc?export=download&id=${match[0]}`;
+        }
+    }
+
+    const response = await fetch(downloadUrl);
+    if (!response.ok) throw new Error("No se pudo obtener el archivo binario del modelo.");
+
+    const buffer = await response.arrayBuffer();
+    const data = new Uint8Array(buffer);
+
+    const modelID = ifcApi.OpenModel(data);
+    const ifcGroup = new THREE.Group();
+
+    // Cargar geometría de mallas usando la API de Web-IFC
+    ifcApi.StreamAllMeshes(modelID, (flatMesh) => {
+        const placedGeometries = flatMesh.geometries;
+        for (let i = 0; i < placedGeometries.size(); i++) {
+            const placedGeometry = placedGeometries.get(i);
+            const meshGeometry = ifcApi.GetGeometry(modelID, placedGeometry.geometryExpressID);
+
+            const verts = ifcApi.GetVertexArray(meshGeometry.GetVertexData(), meshGeometry.GetVertexDataSize());
+            const indices = ifcApi.GetIndexArray(meshGeometry.GetIndexData(), meshGeometry.GetIndexDataSize());
+
+            if (verts.length === 0 || indices.length === 0) continue;
+
+            const bufferGeometry = new THREE.BufferGeometry();
+            const posFloats = new Float32Array(verts.length / 2);
+            for (let j = 0; j < verts.length; j += 6) {
+                posFloats[j / 2] = verts[j];
+                posFloats[j / 2 + 1] = verts[j + 1];
+                posFloats[j / 2 + 2] = verts[j + 2];
+            }
+
+            bufferGeometry.setAttribute('position', new THREE.BufferAttribute(posFloats, 3));
+            bufferGeometry.setIndex(new THREE.BufferAttribute(indices, 1));
+            bufferGeometry.computeVertexNormals();
+
+            const col = placedGeometry.color;
+            const material = new THREE.MeshStandardMaterial({
+                color: new THREE.Color(col.x, col.y, col.z),
+                opacity: col.w,
+                transparent: col.w < 1.0,
+                roughness: 0.4,
+                metalness: 0.1,
+                side: THREE.DoubleSide
+            });
+
+            const mesh = new THREE.Mesh(bufferGeometry, material);
+            const matrix = new THREE.Matrix4().fromArray(placedGeometry.flatTransformation);
+            mesh.applyMatrix4(matrix);
+
+            ifcGroup.add(mesh);
+        }
+    });
+
+    ifcApi.CloseModel(modelID);
+
+    // Ajustar escala y centrar el modelo en el origen
+    const box = new THREE.Box3().setFromObject(ifcGroup);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+
+    ifcGroup.position.x -= center.x;
+    ifcGroup.position.y -= center.y - (size.y / 2);
+    ifcGroup.position.z -= center.z;
+
+    ifcScene.add(ifcGroup);
+
+    // Ubicar la cámara para enfocar todo el modelo
+    const maxDim = Math.max(size.x, size.y, size.z);
+    ifcCamera.position.set(maxDim * 1.5, maxDim * 1.2, maxDim * 1.5);
+    ifcControls.target.set(0, size.y / 2, 0);
+    ifcControls.update();
 }
 
 // ==============================================================================
@@ -1229,7 +1415,9 @@ async function loadFiles() {
         const estadoISO = esValidoISO ? parts[5].split(".")[0] : activeTab;
 
         const ext = nombreCompleto.split('.').pop().toLowerCase();
-        const esVisualizable = ["pdf", "png", "jpg", "jpeg", "webp", "html", "htm"].includes(ext);
+        
+        // HABILITACIÓN DE PREVISUALIZACIÓN MULTIMODAL COMPLETA
+        const esVisualizable = ["pdf", "png", "jpg", "jpeg", "webp", "html", "htm", "mp4", "webm", "mov", "ifc"].includes(ext);
         const fechaUltimaModificacion = f.version || "N/A";
 
         if (activeTab === "04_ARCHIVED") {
