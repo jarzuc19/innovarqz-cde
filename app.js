@@ -137,22 +137,23 @@ function actualizarPistaSubcarpetaModal() {
     }
 
     let subDetectada = "Principal";
+    const esInstalacion = ["_MEP_", "_HID_", "_SAN_", "_ELE_", "_MEC_", "_PCI_", "_GAS_", "_VAC_"].some(tag => isoName.includes(tag));
 
     if (targetTab === "01_WIP") {
         if (isoName.includes("_ARQ_")) subDetectada = "01_WIP / ARQ_Arquitectura";
         else if (isoName.includes("_EST_")) subDetectada = "01_WIP / EST_Estructura";
-        else if (isoName.includes("_MEP_")) subDetectada = "01_WIP / MEP_Instalaciones";
+        else if (esInstalacion) subDetectada = "01_WIP / MEP_Instalaciones";
         else subDetectada = "01_WIP / ARQ_Arquitectura (Default)";
     } else if (targetTab === "02_SHARED") {
         if (isoName.includes("_M3_") || isoName.endsWith(".IFC") || isoName.endsWith(".RVT")) subDetectada = "02_SHARED / 01_Modelos_3D";
-        else if (isoName.includes("_PL_") || isoName.includes("_DR_") || isoName.endsWith(".DWG")) subDetectada = "02_SHARED / 02_Planos_Coordinados";
+        else if (isoName.includes("_PL_") || isoName.includes("_DR_") || isoName.includes("_IM_") || isoName.includes("_VI_") || isoName.endsWith(".DWG")) subDetectada = "02_SHARED / 02_Planos_Coordinados";
         else subDetectada = "02_SHARED / 03_Informes_Interferencias";
     } else if (targetTab === "03_PUBLISHED") {
         if (isoName.includes("_ACT_") || isoName.includes("ACTA") || isoName.includes("_MEM_") || isoName.includes("_INF_") || isoName.includes("_CON_") || isoName.includes("_POL_")) {
             subDetectada = "03_PUBLISHED / 03_Actas_y_Memorias";
         } else if (isoName.includes("_M3_") || isoName.endsWith(".IFC")) {
             subDetectada = "03_PUBLISHED / 01_Modelos_Aprobados";
-        } else if (isoName.includes("_PL_") || isoName.includes("_DR_") || isoName.endsWith(".DWG")) {
+        } else if (isoName.includes("_PL_") || isoName.includes("_DR_") || isoName.includes("_IM_") || isoName.includes("_VI_") || isoName.endsWith(".DWG")) {
             subDetectada = "03_PUBLISHED / 02_Planos_Contractuales";
         } else {
             subDetectada = "03_PUBLISHED / 03_Actas_y_Memorias (Default Admin)";
@@ -536,7 +537,7 @@ async function cargarTimelineActividad() {
 }
 
 // ==============================================================================
-// GESTIÓN DE SUBIDAS Y VALIDACIÓN FLEXIBLE ISO 19650
+// GESTIÓN DE SUBIDAS Y VALIDACIÓN RIGUROSA ISO 19650
 // ==============================================================================
 function openUploadModal() {
     const optWip = document.getElementById("optUploadWip");
@@ -599,6 +600,36 @@ function extraerEstadoDeNombre(nombreArchivo) {
     return "";
 }
 
+function extraerTipoDeNombre(nombreArchivo) {
+    const nombreSinExt = nombreArchivo.split('.').slice(0, -1).join('.');
+    const partes = nombreSinExt.split('_');
+    if (partes.length >= 6) {
+        return partes[3].toUpperCase();
+    }
+    return "";
+}
+
+function validarCoherenciaTipoYExtension(tipo, extension) {
+    const ext = extension.toLowerCase();
+    
+    const REGLAS_EXTENSIONES = {
+        "M3": ["ifc", "rvt", "pln", "nwc", "nwd"],
+        "PL": ["dwg", "pdf", "dxf", "plt"],
+        "DR": ["dwg", "pdf", "dxf"],
+        "VI": ["mp4", "mov", "webm", "mkv", "avi"],
+        "IM": ["png", "jpg", "jpeg", "webp", "tiff", "tif"],
+        "INF": ["pdf", "xlsx", "xls", "docx", "doc", "html"],
+        "MEM": ["pdf", "docx", "doc", "xlsx"],
+        "ACT": ["pdf"],
+        "CON": ["pdf"]
+    };
+
+    if (REGLAS_EXTENSIONES[tipo]) {
+        return REGLAS_EXTENSIONES[tipo].includes(ext);
+    }
+    return true; // Si es un tipo personalizado no listado, permite continuar
+}
+
 function recalcularEstadoEnNombre(nombreOriginal, nuevoEstadoISO) {
     const partesExt = nombreOriginal.split('.');
     const ext = partesExt.pop();
@@ -631,7 +662,16 @@ async function handleFileUpload(e) {
     }
 
     const estadoArchivo = extraerEstadoDeNombre(isoNameInput);
+    const tipoArchivo = extraerTipoDeNombre(isoNameInput);
+    const extEscrita = isoNameInput.split('.').pop().toLowerCase();
 
+    // 1. VALIDACIÓN DE COHERENCIA ENTRE TIPO DOCUMENTAL Y EXTENSIÓN
+    if (!validarCoherenciaTipoYExtension(tipoArchivo, extEscrita)) {
+        alert(`❌ CONFLICTO TÉCNICO TIPO vs. EXTENSIÓN:\n\nEl tipo declarado es [${tipoArchivo}], pero la extensión ingresada es [.${extEscrita}].\n\n• Si es un video, use tipo [VI] y extensión [.mp4 / .mov].\n• Si es una imagen o render, use tipo [IM] y extensión [.png / .jpg].\n• Si es un plano, use tipo [PL] y extensión [.pdf / .dwg].\n• Si es un modelo 3D, use tipo [M3] y extensión [.ifc / .rvt].`);
+        return;
+    }
+
+    // 2. VALIDACIÓN DE ESTADOS NORMATIVOS POR CARPETA
     if (targetTab === "01_WIP" && estadoArchivo !== "S0" && !estadoArchivo.startsWith("P0")) {
         alert(`⛔ VIOLACIÓN DE NORMA ISO 19650:\n\nEl archivo tiene el estado "${estadoArchivo}". En la carpeta 01_WIP solo se permiten entregables nativos en estado "S0" (o borradores P0).\n\nRenombre el archivo a S0 o seleccione la carpeta correspondiente.`);
         return;
@@ -649,8 +689,6 @@ async function handleFileUpload(e) {
         alert(`⛔ VIOLACIÓN DE NORMA ISO 19650:\n\nEl archivo tiene el estado "${estadoArchivo}". En 03_PUBLISHED solo se permiten entregables aprobados/contractuales en estado A1, A2... o códigos especiales (${estadosValidosPublished.join(', ')}).\n\nVerifique el nombre antes de proceder.`);
         return;
     }
-
-    const extEscrita = isoNameInput.split('.').pop().toLowerCase();
 
     btnSubmit.disabled = true;
     btnSubmit.innerText = "Procesando e integrando al CDE...";
@@ -687,7 +725,7 @@ async function handleFileUpload(e) {
             const extReal = file.name.split('.').pop().toLowerCase();
 
             if (extReal !== extEscrita) {
-                alert(`❌ CONFLICTO DE EXTENSIÓN:\n\nEl archivo seleccionado es (.${extReal}) pero en el CDE escribió (.${extEscrita}). Corrija el nombre para que coincida exactamente.`);
+                alert(`❌ CONFLICTO DE EXTENSIÓN:\n\nEl archivo físico seleccionado es (.${extReal}) pero en el CDE escribió (.${extEscrita}). Corrija el nombre para que coincida exactamente.`);
                 btnSubmit.disabled = false;
                 btnSubmit.innerText = "Procesar Entregable";
                 return;
@@ -886,7 +924,6 @@ async function generarPDFActaRecibo() {
     // --------------------------------------------------------------------------
     // 1. ENCABEZADO TÉCNICO OFICIAL
     // --------------------------------------------------------------------------
-    // Lado Izquierdo: Marca
     page.drawText("Innov", { x: leftMargin, y: 738, size: 24, font: fontBold, color: colorDark });
     page.drawText("ArqZ", { x: leftMargin + 65, y: 738, size: 24, font: fontBold, color: colorCopper });
 
@@ -897,7 +934,6 @@ async function generarPDFActaRecibo() {
         x: leftMargin, y: 711, size: 7.5, font: fontBold, color: colorCopper 
     });
 
-    // Lado Derecho: Credenciales Profesionales (Alineadas a la derecha)
     const credDirector = "DIRECTOR: Arq. James R. Zuñiga C.";
     const credMatricula = "M.P CPNAA No: A137812026-1122783013";
     const credWeb = "PORTAFOLIO: www.innovarqzsas.com/portafolio";
@@ -910,7 +946,6 @@ async function generarPDFActaRecibo() {
     page.drawText(credMatricula, { x: rightMargin - wMat, y: 724, size: 7.5, font: fontRegular, color: colorDark });
     page.drawText(credWeb, { x: rightMargin - wWeb, y: 711, size: 7.5, font: fontRegular, color: colorDark });
 
-    // Línea de Corte Arquitectónico (32% Cobre, 68% Oscuro)
     const yLine = 698;
     const copperWidth = printableWidth * 0.32;
     page.drawLine({
@@ -947,7 +982,6 @@ async function generarPDFActaRecibo() {
     yMeta -= 14;
     page.drawText(`Fecha y Hora de Firma Digital: ${fechaStr}`, { x: leftMargin, y: yMeta, size: 8.5, font: fontRegular, color: colorSlate });
 
-    // Declaración de Conformidad
     let yDecl = yMeta - 22;
     page.drawText("DECLARACIÓN DE CONFORMIDAD", { x: leftMargin, y: yDecl, size: 10, font: fontBold, color: colorCopper });
     
@@ -963,7 +997,6 @@ async function generarPDFActaRecibo() {
         lineHeight: 12
     });
 
-    // Checklist de Entregables Publicados
     let yList = yDecl - 40;
     page.drawText("LISTA DE ENTREGABLES APROBADOS (03_PUBLISHED):", {
         x: leftMargin,
@@ -1017,13 +1050,11 @@ async function generarPDFActaRecibo() {
     // --------------------------------------------------------------------------
     const yFirmaLine = 135;
     
-    // Firma Izquierda: Representante Legal InnovArqZ
     page.drawLine({ start: { x: leftMargin, y: yFirmaLine }, end: { x: leftMargin + 200, y: yFirmaLine }, thickness: 1, color: colorSlate });
     page.drawText("ARQ. JAMES RAMIRO ZUÑIGA CAIPE", { x: leftMargin, y: yFirmaLine - 14, size: 8.5, font: fontBold, color: colorDark });
     page.drawText("Representante Legal", { x: leftMargin, y: yFirmaLine - 25, size: 8, font: fontRegular, color: colorSlate });
     page.drawText("INNOVARQZ SOLUCIONES INTEGRALES S.A.S.", { x: leftMargin, y: yFirmaLine - 36, size: 7.5, font: fontBold, color: colorDark });
 
-    // Firma Derecha: Cliente / Firma Digital CDE
     const colRightX = rightMargin - 200;
     page.drawLine({ start: { x: colRightX, y: yFirmaLine }, end: { x: rightMargin, y: yFirmaLine }, thickness: 1, color: colorSlate });
     page.drawText(currentUser.nombre_completo ? currentUser.nombre_completo.toUpperCase() : "CLIENTE FINAL", { 
@@ -1033,17 +1064,15 @@ async function generarPDFActaRecibo() {
     page.drawText(`Verificación: ${currentUser.email || ''}`, { x: colRightX, y: yFirmaLine - 36, size: 7.5, font: fontRegular, color: colorDark });
 
     // --------------------------------------------------------------------------
-    // 4. PIE DE PÁGINA REORGANIZADO (2 COLUMNAS + LEMA OFICIAL)
+    // 4. PIE DE PÁGINA REORGANIZADO
     // --------------------------------------------------------------------------
     const yFooterLine = 68;
     page.drawLine({ start: { x: leftMargin, y: yFooterLine }, end: { x: rightMargin, y: yFooterLine }, thickness: 1, color: colorBorder });
 
-    // Columna Izquierda: Empresa y Lema Oficial Protagonista
     page.drawText("InnovArqZ Soluciones Integrales", { x: leftMargin, y: 53, size: 8, font: fontBold, color: colorDark });
     page.drawText('"Construimos juntos el valor de tus espacios', { x: leftMargin, y: 41, size: 7.5, font: fontOblique, color: colorDark });
     page.drawText('DE PRINCIPIO A FIN"', { x: leftMargin, y: 28, size: 10, font: fontBold, color: colorCopper });
 
-    // Columna Derecha: Canales de Contacto (Alineados a la derecha)
     const lineWeb = "Web Oficial: www.innovarqzsas.com";
     const lineEmail = "Email: gerenciabim@innovarqzsas.com";
     const lineTel = "TEL / WA: +57 315 850 5885";
@@ -1149,7 +1178,7 @@ async function loadFiles() {
                 const estadosValidosPublished = ["CR", "ACT", "AP", "CON"];
                 
                 if (activeTab === "01_WIP" && (codigoEstado === "S0" || eOrigen === "01_WIP")) perteneceAPestana = true;
-                if (activeTab === "02_SHARED" && (codigoEstado === "S1" || eOrigen === "02_SHARED")) perteneceAPestana = true;
+                if (activeTab === "02_SHARED" && (codigoEstado.startsWith("S") || eOrigen === "02_SHARED")) perteneceAPestana = true;
                 if (activeTab === "03_PUBLISHED" && (codigoEstado.startsWith("A") || estadosValidosPublished.includes(codigoEstado) || eOrigen === "03_PUBLISHED")) perteneceAPestana = true;
             }
 
@@ -1163,23 +1192,24 @@ async function loadFiles() {
         listaAProcesar = Array.from(mapaUnicos.values());
     }
 
-    // FILTRADO ADICIONAL POR SUBCARPETA SELECCIONADA
+    // FILTRADO ADICIONAL POR SUBCARPETAS (SOPORTE EXTENDIDO MEP)
     if (activeSubfolder !== "TODAS" && activeTab !== "04_ARCHIVED") {
         listaAProcesar = listaAProcesar.filter(f => {
             const nameUpper = f.archivo_nombre.toUpperCase();
+            const esInstalacion = ["_MEP_", "_HID_", "_SAN_", "_ELE_", "_MEC_", "_PCI_", "_GAS_", "_VAC_"].some(tag => nameUpper.includes(tag));
             
             if (activeTab === "01_WIP") {
                 if (activeSubfolder === "ARQ_Arquitectura") return nameUpper.includes("_ARQ_");
                 if (activeSubfolder === "EST_Estructura") return nameUpper.includes("_EST_");
-                if (activeSubfolder === "MEP_Instalaciones") return nameUpper.includes("_MEP_");
+                if (activeSubfolder === "MEP_Instalaciones") return esInstalacion;
             } else if (activeTab === "02_SHARED") {
                 if (activeSubfolder === "01_Modelos_3D") return nameUpper.includes("_M3_") || nameUpper.endsWith(".IFC") || nameUpper.endsWith(".RVT");
-                if (activeSubfolder === "02_Planos_Coordinados") return nameUpper.includes("_PL_") || nameUpper.includes("_DR_") || nameUpper.endsWith(".DWG");
-                if (activeSubfolder === "03_Informes_Interferencias") return !nameUpper.includes("_M3_") && !nameUpper.includes("_PL_") && !nameUpper.endsWith(".DWG");
+                if (activeSubfolder === "02_Planos_Coordinados") return nameUpper.includes("_PL_") || nameUpper.includes("_DR_") || nameUpper.includes("_IM_") || nameUpper.includes("_VI_") || nameUpper.endsWith(".DWG");
+                if (activeSubfolder === "03_Informes_Interferencias") return !nameUpper.includes("_M3_") && !nameUpper.includes("_PL_") && !nameUpper.includes("_IM_") && !nameUpper.includes("_VI_") && !nameUpper.endsWith(".DWG");
             } else if (activeTab === "03_PUBLISHED") {
                 if (activeSubfolder === "01_Modelos_Aprobados") return nameUpper.includes("_M3_") || nameUpper.endsWith(".IFC");
-                if (activeSubfolder === "02_Planos_Contractuales") return nameUpper.includes("_PL_") || nameUpper.includes("_DR_");
-                if (activeSubfolder === "03_Actas_y_Memorias") return nameUpper.includes("_ACT_") || nameUpper.includes("ACTA") || nameUpper.includes("_MEM_") || nameUpper.includes("_INF_") || (!nameUpper.includes("_M3_") && !nameUpper.includes("_PL_"));
+                if (activeSubfolder === "02_Planos_Contractuales") return nameUpper.includes("_PL_") || nameUpper.includes("_DR_") || nameUpper.includes("_IM_") || nameUpper.includes("_VI_");
+                if (activeSubfolder === "03_Actas_y_Memorias") return nameUpper.includes("_ACT_") || nameUpper.includes("ACTA") || nameUpper.includes("_MEM_") || nameUpper.includes("_INF_") || (!nameUpper.includes("_M3_") && !nameUpper.includes("_PL_") && !nameUpper.includes("_IM_") && !nameUpper.includes("_VI_"));
             }
             return true;
         });
@@ -1199,7 +1229,7 @@ async function loadFiles() {
         const estadoISO = esValidoISO ? parts[5].split(".")[0] : activeTab;
 
         const ext = nombreCompleto.split('.').pop().toLowerCase();
-        const esVisualizable = ["pdf", "png", "jpg", "jpeg", "html", "htm"].includes(ext);
+        const esVisualizable = ["pdf", "png", "jpg", "jpeg", "webp", "html", "htm"].includes(ext);
         const fechaUltimaModificacion = f.version || "N/A";
 
         if (activeTab === "04_ARCHIVED") {
