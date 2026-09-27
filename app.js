@@ -30,6 +30,9 @@ let ifcCamera = null;
 let ifcControls = null;
 let ifcAnimationId = null;
 let ifcApiInstance = null;
+let ifcGridHelper = null;
+let ifcCurrentGroup = null;
+let ifcModelBounds = { center: new THREE.Vector3(), maxDim: 30 };
 
 // ESTADO DE ZOOM Y PANEO UNIVERSAL (IMÁGENES Y PDF)
 let activeZoomScale = 1;
@@ -1102,7 +1105,12 @@ async function generarPDFActaRecibo() {
     if (files && files.length > 0) {
         const unicosPublished = new Map();
         files.forEach(f => {
-            if (!f.archivo_nombre.includes("ACTA_") && !f.archivo_nombre.includes("NOTA_TECNICA") && !f.archivo_nombre.includes("CARGA DE ENTREGABLE") && !f.archivo_nombre.includes("PROMOCIÓN_")) {
+            if (
+                !f.archivo_nombre.includes("ACTA_") && 
+                !f.archivo_nombre.includes("NOTA_TECNICA") && 
+                !f.archivo_nombre.includes("CARGA DE ENTREGABLE") && 
+                !f.archivo_nombre.includes("PROMOCIÓN_")
+            ) {
                 if (!unicosPublished.has(f.archivo_nombre)) unicosPublished.set(f.archivo_nombre, f);
             }
         });
@@ -1232,7 +1240,7 @@ function desplegarModalIframe(url, titulo, mostrarZoomControls) {
     title.innerText = `Previsualizando: ${titulo}`;
 
     if (imgWrapper) imgWrapper.style.display = "none";
-    if (ifcCont) { ifcCont.style.display = "none"; ifcCont.innerHTML = ""; }
+    if (ifcCont) { ifcCont.style.display = "none"; }
     if (loading) loading.style.display = "none";
 
     resetActiveZoom();
@@ -1270,7 +1278,7 @@ function desplegarModalImagen(driveUrl, titulo) {
 
     if (scalerWrapper) scalerWrapper.style.display = "none";
     if (frame) frame.src = "about:blank";
-    if (ifcCont) { ifcCont.style.display = "none"; ifcCont.innerHTML = ""; }
+    if (ifcCont) { ifcCont.style.display = "none"; }
     if (loading) loading.style.display = "none";
 
     resetActiveZoom();
@@ -1317,7 +1325,7 @@ async function desplegarModalIFC(driveUrl, titulo) {
     ifcCont.style.display = "block";
     if (loading) {
         loading.style.display = "block";
-        loading.innerHTML = `<div style="margin-bottom:6px;">⏳ Descargando modelo desde Google Drive...</div><small style="color:#94a3b8;">(Procesando geometría 3D sin límites)</small>`;
+        loading.innerHTML = `<div style="margin-bottom:6px;">⏳ Descargando modelo desde Google Drive...</div><small style="color:#94a3b8;">(Optimizando geometría 3D y aristas técnicas)</small>`;
     }
 
     modal.style.display = "flex";
@@ -1358,11 +1366,13 @@ function closeViewerModal(triggerHistory = true) {
         ifcAnimationId = null;
     }
     if (ifcRenderer) {
+        if (ifcRenderer.domElement && ifcRenderer.domElement.parentNode) {
+            ifcRenderer.domElement.parentNode.removeChild(ifcRenderer.domElement);
+        }
         ifcRenderer.dispose();
         ifcRenderer = null;
     }
     if (ifcCont) {
-        ifcCont.innerHTML = "";
         ifcCont.style.display = "none";
     }
 
@@ -1487,7 +1497,7 @@ function applyActiveTransform() {
 }
 
 // ==============================================================================
-// MOTOR BIM OPEN SOURCE 3D PARA IFC (DESCARGA DIRECTA GOOGLE DRIVE API KEY)
+// MOTOR BIM OPEN SOURCE 3D PARA IFC (SHADED CON LÍNEAS, TERRENO Y VISTAS)
 // ==============================================================================
 async function obtenerConstructorIfcAPI() {
     if (window.WebIFC && window.WebIFC.IfcAPI) {
@@ -1510,39 +1520,51 @@ async function obtenerConstructorIfcAPI() {
 }
 
 async function inicializarVisorIFC(fileUrl, container) {
-    container.innerHTML = "";
+    // 1. Conservar la botonera de navegación si ya existe en el DOM
+    const navToolbar = document.getElementById("ifcNavToolbar");
+    if (ifcRenderer && ifcRenderer.domElement && ifcRenderer.domElement.parentNode === container) {
+        container.removeChild(ifcRenderer.domElement);
+    }
 
     const width = container.clientWidth || 800;
     const height = container.clientHeight || 550;
 
+    // 2. Escena con fondo neutro de software técnico (Gris azulado claro)
     ifcScene = new THREE.Scene();
-    ifcScene.background = new THREE.Color(0x0f172a);
+    ifcScene.background = new THREE.Color(0xf1f5f9);
 
-    ifcCamera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-    ifcCamera.position.set(20, 20, 20);
+    // 3. Cámara en perspectiva y renderizador sRGB
+    ifcCamera = new THREE.PerspectiveCamera(45, width / height, 0.1, 2500);
+    ifcCamera.position.set(30, 25, 30);
 
-    ifcRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    ifcRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     ifcRenderer.setSize(width, height);
     ifcRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    container.appendChild(ifcRenderer.domElement);
+    ifcRenderer.outputEncoding = THREE.sRGBEncoding;
+    container.insertBefore(ifcRenderer.domElement, container.firstChild);
 
     ifcControls = new THREE.OrbitControls(ifcCamera, ifcRenderer.domElement);
     ifcControls.enableDamping = true;
-    ifcControls.dampingFactor = 0.05;
+    ifcControls.dampingFactor = 0.08;
+    ifcControls.maxPolarAngle = Math.PI / 2 + 0.05;
 
-    const lightAmbient = new THREE.AmbientLight(0xffffff, 0.7);
-    ifcScene.add(lightAmbient);
+    // 4. Esquema de iluminación técnico: Hemisferio + Sol principal + Relleno suave
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xcfd8dc, 0.85);
+    hemiLight.position.set(0, 60, 0);
+    ifcScene.add(hemiLight);
 
-    const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.65);
-    dirLight1.position.set(25, 40, 20);
-    ifcScene.add(dirLight1);
+    const sunLight = new THREE.DirectionalLight(0xfffdfa, 0.75);
+    sunLight.position.set(45, 65, 35);
+    ifcScene.add(sunLight);
 
-    const dirLight2 = new THREE.DirectionalLight(0xd97706, 0.3);
-    dirLight2.position.set(-25, -20, -20);
-    ifcScene.add(dirLight2);
+    const fillLight = new THREE.DirectionalLight(0xe2e8f0, 0.4);
+    fillLight.position.set(-45, 20, -35);
+    ifcScene.add(fillLight);
 
-    const grid = new THREE.GridHelper(50, 50, 0xd97706, 0x334155);
-    ifcScene.add(grid);
+    // 5. Cuadrícula sutil de referencia
+    ifcGridHelper = new THREE.GridHelper(60, 60, 0x94a3b8, 0xe2e8f0);
+    ifcGridHelper.position.y = -0.01;
+    ifcScene.add(ifcGridHelper);
 
     function animate() {
         ifcAnimationId = requestAnimationFrame(animate);
@@ -1551,7 +1573,7 @@ async function inicializarVisorIFC(fileUrl, container) {
     }
     animate();
 
-    // 1. Inicializar motor WebAssembly WebIFC
+    // 6. Motor WebIFC WebAssembly
     const IfcAPIClass = await obtenerConstructorIfcAPI();
     if (!ifcApiInstance) {
         ifcApiInstance = new IfcAPIClass();
@@ -1559,18 +1581,13 @@ async function inicializarVisorIFC(fileUrl, container) {
         await ifcApiInstance.Init();
     }
 
-    // 2. Extraer ID del archivo en Google Drive
+    // 7. Descarga directa binaria desde Google Drive API
     let fileId = "";
     const match = fileUrl.match(/[-\w]{25,}/);
     if (match) fileId = match[0];
+    if (!fileId) throw new Error("No se pudo detectar el ID del archivo en Google Drive.");
 
-    if (!fileId) {
-        throw new Error("No se pudo detectar el ID del archivo en Google Drive.");
-    }
-
-    // 3. Descarga directa binaria mediante Google Drive API v3 (Sin límite de tamaño ni cuellos de botella)
     const directApiUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${GOOGLE_DRIVE_API_KEY}`;
-    
     const response = await fetch(directApiUrl);
     if (!response.ok) {
         const errorText = await response.text();
@@ -1580,9 +1597,15 @@ async function inicializarVisorIFC(fileUrl, container) {
     const buffer = await response.arrayBuffer();
     const bytesArray = new Uint8Array(buffer);
 
-    // 4. Decodificar geometría con WebIFC y generar mallas en Three.js
+    // 8. Decodificación y generación de mallas con aristas geométricas (Shaded with Edges)
     const modelID = ifcApiInstance.OpenModel(bytesArray);
-    const ifcGroup = new THREE.Group();
+    ifcCurrentGroup = new THREE.Group();
+
+    const edgeLineMaterial = new THREE.LineBasicMaterial({
+        color: 0x334155,
+        transparent: true,
+        opacity: 0.35
+    });
 
     ifcApiInstance.StreamAllMeshes(modelID, (flatMesh) => {
         const placedGeometries = flatMesh.geometries;
@@ -1608,12 +1631,14 @@ async function inicializarVisorIFC(fileUrl, container) {
             bufferGeometry.computeVertexNormals();
 
             const col = placedGeometry.color;
+            const esTransparente = col.w < 0.95;
+
             const material = new THREE.MeshStandardMaterial({
                 color: new THREE.Color(col.x, col.y, col.z),
                 opacity: col.w,
-                transparent: col.w < 1.0,
-                roughness: 0.4,
-                metalness: 0.1,
+                transparent: esTransparente,
+                roughness: 0.45,
+                metalness: 0.05,
                 side: THREE.DoubleSide
             });
 
@@ -1621,27 +1646,70 @@ async function inicializarVisorIFC(fileUrl, container) {
             const matrix = new THREE.Matrix4().fromArray(placedGeometry.flatTransformation);
             mesh.applyMatrix4(matrix);
 
-            ifcGroup.add(mesh);
+            // Generar aristas de bordes técnicos en elementos volumétricos
+            if (!esTransparente && posFloats.length < 6000) {
+                const edges = new THREE.EdgesGeometry(bufferGeometry, 24);
+                const lineSegments = new THREE.LineSegments(edges, edgeLineMaterial);
+                mesh.add(lineSegments);
+            }
+
+            ifcCurrentGroup.add(mesh);
         }
     });
 
     ifcApiInstance.CloseModel(modelID);
 
-    // 5. Centrar modelo y ajustar encuadre automático de cámara
-    const box = new THREE.Box3().setFromObject(ifcGroup);
+    // 9. Centrar geométricamente y calcular caja de encuadre
+    const box = new THREE.Box3().setFromObject(ifcCurrentGroup);
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
 
-    ifcGroup.position.x -= center.x;
-    ifcGroup.position.y -= center.y - (size.y / 2);
-    ifcGroup.position.z -= center.z;
+    ifcCurrentGroup.position.x -= center.x;
+    ifcCurrentGroup.position.y -= center.y - (size.y / 2); // Apoyar base en el suelo Y=0
+    ifcCurrentGroup.position.z -= center.z;
 
-    ifcScene.add(ifcGroup);
+    ifcScene.add(ifcCurrentGroup);
 
-    const maxDim = Math.max(size.x, size.y, size.z);
-    ifcCamera.position.set(maxDim * 1.5, maxDim * 1.2, maxDim * 1.5);
-    ifcControls.target.set(0, size.y / 2, 0);
+    ifcModelBounds.center.set(0, size.y / 2, 0);
+    ifcModelBounds.maxDim = Math.max(size.x, size.y, size.z);
+
+    ajustarVistaModeloIFC();
+}
+
+// ==============================================================================
+// CONTROLADORES DE LA BOTONERA DE NAVEGACIÓN BIM
+// ==============================================================================
+function ajustarVistaModeloIFC() {
+    if (!ifcCamera || !ifcControls) return;
+    const d = ifcModelBounds.maxDim || 25;
+    ifcCamera.position.set(d * 1.3, d * 1.0, d * 1.3);
+    ifcControls.target.copy(ifcModelBounds.center);
     ifcControls.update();
+}
+
+function cambiarVistaIFC(tipo) {
+    if (!ifcCamera || !ifcControls) return;
+    const d = ifcModelBounds.maxDim || 25;
+    const cy = ifcModelBounds.center.y;
+
+    if (tipo === 'ISO') {
+        ifcCamera.position.set(d * 1.3, d * 1.0, d * 1.3);
+    } else if (tipo === 'FRONTAL') {
+        ifcCamera.position.set(0, cy, d * 1.8);
+    } else if (tipo === 'LATERAL') {
+        ifcCamera.position.set(d * 1.8, cy, 0);
+    } else if (tipo === 'PLANTA') {
+        ifcCamera.position.set(0, d * 2.2, 0.001); // Leve desvío en Z para asegurar el eje de OrbitControls
+    }
+
+    ifcControls.target.copy(ifcModelBounds.center);
+    ifcControls.update();
+}
+
+function alternarCuadriculaIFC() {
+    if (ifcGridHelper) {
+        ifcGridHelper.visible = !ifcGridHelper.visible;
+    }
 }
 
 // ==============================================================================
