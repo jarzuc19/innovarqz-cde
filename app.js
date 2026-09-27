@@ -39,9 +39,6 @@ let startPanX = 0;
 let startPanY = 0;
 let touchStartDist = 0;
 
-// ESTADO DEL REPRODUCTOR DE VIDEO PERSONALIZADO
-let videoControlsTimeout = null;
-
 // ==============================================================================
 // INICIALIZACIÓN, NAVEGACIÓN Y CONTROL DE ESCAPE / ATRÁS NATIVO
 // ==============================================================================
@@ -72,7 +69,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     setupDropdownWithOther("ubicacionSelect", "ubicacionOtherInput");
     setupDropdownWithOther("tipoSelect", "tipoOtherInput");
-    setupVideoCustomControls();
     setupImageZoomAndPan();
 
     // INTERCEPTOR GLOBAL: TECLA ESCAPE EN PC
@@ -82,9 +78,10 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    // INTERCEPTOR GLOBAL: BOTÓN ATRÁS EN NAVEGADORES MÓVILES (ANDROID / IOS)
+    // INTERCEPTOR GLOBAL: BOTÓN ATRÁS EN MÓVILES (ANDROID / IOS)
     window.addEventListener("popstate", (e) => {
-        cerrarCualquierModalAbierto(false); // No disparar history.back extra
+        // Cierra los modales forzando el ocultamiento del DOM sin invocar de nuevo history.back()
+        cerrarCualquierModalAbierto(false);
     });
 
     document.querySelectorAll(".tab-btn").forEach(btn => {
@@ -113,26 +110,39 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 // GESTIÓN DE PILA DE MODALES (HISTORY API)
-function registrarAperturaModalEnHistorial() {
-    history.pushState({ modalOpen: true }, "");
+function registrarAperturaModalEnHistorial(modalId) {
+    history.pushState({ modalOpen: true, modalId: modalId }, "");
 }
 
 function cerrarCualquierModalAbierto(triggerHistoryBack = true) {
-    const modales = [
-        { id: "viewerModal", closeFn: closeViewerModal },
-        { id: "uploadModal", closeFn: closeUploadModal },
-        { id: "revisorInstructionModal", closeFn: closeRevisorInstructionModal },
-        { id: "projectModal", closeFn: closeProjectModal }
-    ];
-
     let cerrado = false;
-    for (let m of modales) {
-        const el = document.getElementById(m.id);
-        if (el && el.classList.contains("modal-overlay")) {
-            m.closeFn(false); // Cerrar visualmente sin history.back
-            cerrado = true;
-            break;
-        }
+
+    // 1. Viewer Modal
+    const vModal = document.getElementById("viewerModal");
+    if (vModal && (vModal.style.display === "flex" || vModal.classList.contains("modal-overlay"))) {
+        closeViewerModal(false);
+        cerrado = true;
+    }
+
+    // 2. Upload Modal
+    const uModal = document.getElementById("uploadModal");
+    if (uModal && (uModal.style.display === "flex" || uModal.classList.contains("modal-overlay"))) {
+        closeUploadModal(false);
+        cerrado = true;
+    }
+
+    // 3. Revisor Instruction Modal
+    const rModal = document.getElementById("revisorInstructionModal");
+    if (rModal && (rModal.style.display === "flex" || rModal.classList.contains("modal-overlay"))) {
+        closeRevisorInstructionModal(false);
+        cerrado = true;
+    }
+
+    // 4. Project Modal
+    const pModal = document.getElementById("projectModal");
+    if (pModal && (pModal.style.display === "flex" || pModal.classList.contains("modal-overlay"))) {
+        closeProjectModal(false);
+        cerrado = true;
     }
 
     if (cerrado && triggerHistoryBack && window.history.state && window.history.state.modalOpen) {
@@ -496,14 +506,22 @@ async function evaluarNotasTecnicasActivas() {
 }
 
 function openRevisorInstructionModal() {
-    registrarAperturaModalEnHistorial();
+    registrarAperturaModalEnHistorial("revisorInstructionModal");
     const modal = document.getElementById("revisorInstructionModal");
-    if (modal) modal.className = "modal-overlay";
+    if (modal) {
+        modal.style.display = "flex";
+        modal.classList.remove("modal-hidden");
+        modal.classList.add("modal-overlay");
+    }
 }
 
 function closeRevisorInstructionModal(triggerHistory = true) {
     const modal = document.getElementById("revisorInstructionModal");
-    if (modal) modal.className = "modal-hidden";
+    if (modal) {
+        modal.style.display = "none";
+        modal.classList.remove("modal-overlay");
+        modal.classList.add("modal-hidden");
+    }
     if (triggerHistory && window.history.state && window.history.state.modalOpen) {
         window.history.back();
     }
@@ -606,7 +624,7 @@ async function cargarTimelineActividad() {
 // GESTIÓN DE SUBIDAS Y VALIDACIÓN RIGUROSA ISO 19650
 // ==============================================================================
 function openUploadModal() {
-    registrarAperturaModalEnHistorial();
+    registrarAperturaModalEnHistorial("uploadModal");
     const optWip = document.getElementById("optUploadWip");
     const optShared = document.getElementById("optUploadShared");
     const optPublished = document.getElementById("optUploadPublished");
@@ -630,12 +648,20 @@ function openUploadModal() {
 
     actualizarPistaSubcarpetaModal();
     const modal = document.getElementById("uploadModal");
-    if (modal) modal.className = "modal-overlay";
+    if (modal) {
+        modal.style.display = "flex";
+        modal.classList.remove("modal-hidden");
+        modal.classList.add("modal-overlay");
+    }
 }
 
 function closeUploadModal(triggerHistory = true) {
     const modal = document.getElementById("uploadModal");
-    if (modal) modal.className = "modal-hidden";
+    if (modal) {
+        modal.style.display = "none";
+        modal.classList.remove("modal-overlay");
+        modal.classList.add("modal-hidden");
+    }
     if (triggerHistory && window.history.state && window.history.state.modalOpen) {
         window.history.back();
     }
@@ -1139,10 +1165,10 @@ async function generarPDFActaRecibo() {
 }
 
 // ==============================================================================
-// GESTIÓN DEL VISOR MULTIMODAL AVANZADO (IFRAME, ZOOM IMAGEN, VIDEO CUSTOM, IFC 3D)
+// GESTIÓN DEL VISOR MULTIMODAL AVANZADO
 // ==============================================================================
 async function openViewerModal(driveUrl, nombreArchivo) {
-    registrarAperturaModalEnHistorial();
+    registrarAperturaModalEnHistorial("viewerModal");
 
     const modal = document.getElementById("viewerModal");
     const frame = document.getElementById("modalViewerFrame");
@@ -1158,7 +1184,7 @@ async function openViewerModal(driveUrl, nombreArchivo) {
 
     title.innerText = `Previsualizando: ${nombreArchivo}`;
 
-    // Resetear visibilidad de todos los contenedores
+    // Resetear y ocultar todos los visores
     if (frame) { frame.style.display = "none"; frame.src = ""; }
     if (imgWrapper) { imgWrapper.style.display = "none"; resetImageZoom(); }
     if (videoWrapper) { videoWrapper.style.display = "none"; }
@@ -1167,29 +1193,30 @@ async function openViewerModal(driveUrl, nombreArchivo) {
     if (loading) { loading.style.display = "none"; }
 
     const ext = nombreArchivo.split('.').pop().toLowerCase();
-    modal.className = "modal-overlay";
+    
+    // Forzar visualización directa del modal contenedor
+    modal.style.display = "flex";
+    modal.classList.remove("modal-hidden");
+    modal.classList.add("modal-overlay");
 
-    // 1. CASO VIDEOS (.MP4, .WEBM, .MOV) - REPRODUCTOR MINIMALISTA NATIVO
+    // 1. CASO VIDEOS (.MP4, .WEBM, .MOV)
     if (["mp4", "webm", "mov"].includes(ext)) {
-        videoWrapper.style.display = "flex";
-        
-        let videoDirectUrl = driveUrl;
         if (driveUrl.includes("drive.google.com")) {
-            const match = driveUrl.match(/[-\w]{25,}/);
-            if (match) {
-                // Stream directo evitando el visor pesado de Drive
-                videoDirectUrl = `https://drive.google.com/uc?export=download&id=${match[0]}`;
-            }
+            // Streaming directo y garantizado de Google Drive mediante /preview
+            let previewUrl = driveUrl.replace("/view?usp=drivesdk", "/preview").replace("/view", "/preview");
+            frame.src = previewUrl;
+            frame.style.display = "block";
+        } else {
+            // Si es un archivo con URL binaria directa
+            videoWrapper.style.display = "flex";
+            videoElement.src = driveUrl;
+            videoElement.load();
+            videoElement.play().catch(e => console.log("Autoplay bloqueado:", e));
         }
-
-        videoElement.src = videoDirectUrl;
-        videoElement.load();
-        videoElement.play().catch(e => console.log("Autoplay bloqueado:", e));
-        resetVideoControlsTimer();
         return;
     }
 
-    // 2. CASO IMÁGENES / RENDERS (.PNG, .JPG, .JPEG, .WEBP) CON ZOOM & PAN
+    // 2. CASO IMÁGENES / RENDERS (.PNG, .JPG, .JPEG, .WEBP) CON ZOOM
     if (["png", "jpg", "jpeg", "webp"].includes(ext)) {
         imgWrapper.style.display = "flex";
         let imgDirectUrl = driveUrl;
@@ -1243,7 +1270,7 @@ function closeViewerModal(triggerHistory = true) {
     if (videoWrapper) { videoWrapper.style.display = "none"; }
     if (loading) { loading.style.display = "none"; }
 
-    // Limpieza de memoria y recursos WebGL para el motor IFC
+    // Limpieza de memoria y WebGL para IFC
     if (ifcAnimationId) {
         cancelAnimationFrame(ifcAnimationId);
         ifcAnimationId = null;
@@ -1257,102 +1284,16 @@ function closeViewerModal(triggerHistory = true) {
         ifcCont.style.display = "none";
     }
 
-    if (modal) modal.className = "modal-hidden";
+    // Ocultar modal del DOM de forma explícita
+    if (modal) {
+        modal.style.display = "none";
+        modal.classList.remove("modal-overlay");
+        modal.classList.add("modal-hidden");
+    }
 
     if (triggerHistory && window.history.state && window.history.state.modalOpen) {
         window.history.back();
     }
-}
-
-// ==============================================================================
-// REPRODUCTOR DE VIDEO PERSONALIZADO CON AUTO-OCULTADO INTELIGENTE
-// ==============================================================================
-function setupVideoCustomControls() {
-    const video = document.getElementById("modalVideoPlayer");
-    const container = document.getElementById("videoViewerWrapper");
-    const controls = document.getElementById("videoCustomControls");
-    const btnPlay = document.getElementById("btnVideoPlayPause");
-    const btnMute = document.getElementById("btnVideoMute");
-    const btnFs = document.getElementById("btnVideoFullscreen");
-    const progress = document.getElementById("videoProgressBar");
-    const curTime = document.getElementById("videoCurrentTime");
-    const durTime = document.getElementById("videoDuration");
-
-    if (!video || !controls) return;
-
-    btnPlay.addEventListener("click", () => {
-        if (video.paused) {
-            video.play();
-            btnPlay.innerText = "⏸";
-        } else {
-            video.pause();
-            btnPlay.innerText = "▶";
-        }
-        resetVideoControlsTimer();
-    });
-
-    video.addEventListener("play", () => btnPlay.innerText = "⏸");
-    video.addEventListener("pause", () => btnPlay.innerText = "▶");
-
-    video.addEventListener("timeupdate", () => {
-        if (video.duration) {
-            const pct = (video.currentTime / video.duration) * 100;
-            progress.value = pct;
-            curTime.innerText = formatTime(video.currentTime);
-            durTime.innerText = formatTime(video.duration);
-        }
-    });
-
-    progress.addEventListener("input", () => {
-        if (video.duration) {
-            video.currentTime = (progress.value / 100) * video.duration;
-        }
-        resetVideoControlsTimer();
-    });
-
-    btnMute.addEventListener("click", () => {
-        video.muted = !video.muted;
-        btnMute.innerText = video.muted ? "🔇" : "🔊";
-        resetVideoControlsTimer();
-    });
-
-    btnFs.addEventListener("click", () => {
-        if (!document.fullscreenElement) {
-            container.requestFullscreen().catch(err => console.log(err));
-        } else {
-            document.exitFullscreen().catch(err => console.log(err));
-        }
-        resetVideoControlsTimer();
-    });
-
-    // Auto-ocultamiento de controles e inactividad de cursor
-    container.addEventListener("mousemove", resetVideoControlsTimer);
-    container.addEventListener("touchstart", resetVideoControlsTimer, { passive: true });
-    container.addEventListener("click", resetVideoControlsTimer);
-}
-
-function resetVideoControlsTimer() {
-    const controls = document.getElementById("videoCustomControls");
-    const container = document.getElementById("videoViewerWrapper");
-    const video = document.getElementById("modalVideoPlayer");
-    if (!controls || !container) return;
-
-    controls.classList.remove("hidden-controls");
-    container.classList.remove("hide-cursor");
-
-    clearTimeout(videoControlsTimeout);
-    if (video && !video.paused) {
-        videoControlsTimeout = setTimeout(() => {
-            controls.classList.add("hidden-controls");
-            container.classList.add("hide-cursor");
-        }, 2500);
-    }
-}
-
-function formatTime(seconds) {
-    const mins = Math.floor(seconds / 60) || 0;
-    const secs = Math.floor(seconds % 60) || 0;
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 }
 
 // ==============================================================================
@@ -1363,14 +1304,12 @@ function setupImageZoomAndPan() {
     const img = document.getElementById("modalImageViewer");
     if (!wrapper || !img) return;
 
-    // Zoom con rueda de ratón (PC)
     wrapper.addEventListener("wheel", (e) => {
         e.preventDefault();
         const delta = e.deltaY > 0 ? -0.2 : 0.2;
         zoomImage(delta);
     }, { passive: false });
 
-    // Paneo con clic sostenido (PC)
     wrapper.addEventListener("mousedown", (e) => {
         if (imgScale <= 1) return;
         isPanning = true;
@@ -1387,7 +1326,6 @@ function setupImageZoomAndPan() {
 
     window.addEventListener("mouseup", () => { isPanning = false; });
 
-    // Gestos táctiles: Pinch-to-zoom y paneo (Móvil)
     wrapper.addEventListener("touchstart", (e) => {
         if (e.touches.length === 2) {
             touchStartDist = getTouchDistance(e.touches);
@@ -1456,7 +1394,6 @@ async function inicializarVisorIFC(fileUrl, container) {
     const width = container.clientWidth || 800;
     const height = container.clientHeight || 550;
 
-    // Escena, Cámara y Renderer WebGL
     ifcScene = new THREE.Scene();
     ifcScene.background = new THREE.Color(0x0f172a);
 
@@ -1468,12 +1405,10 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcRenderer.setPixelRatio(window.devicePixelRatio);
     container.appendChild(ifcRenderer.domElement);
 
-    // Controles de Órbita 3D
     ifcControls = new THREE.OrbitControls(ifcCamera, ifcRenderer.domElement);
     ifcControls.enableDamping = true;
     ifcControls.dampingFactor = 0.05;
 
-    // Iluminación ambiental y direccional suave
     const lightAmbient = new THREE.AmbientLight(0xffffff, 0.7);
     ifcScene.add(lightAmbient);
 
@@ -1485,11 +1420,9 @@ async function inicializarVisorIFC(fileUrl, container) {
     dirLight2.position.set(-25, -20, -20);
     ifcScene.add(dirLight2);
 
-    // Rejilla base de referencia espacial
     const grid = new THREE.GridHelper(50, 50, 0xd97706, 0x334155);
     ifcScene.add(grid);
 
-    // Bucle de Renderizado
     function animate() {
         ifcAnimationId = requestAnimationFrame(animate);
         if (ifcControls) ifcControls.update();
@@ -1497,7 +1430,6 @@ async function inicializarVisorIFC(fileUrl, container) {
     }
     animate();
 
-    // Inicializar Web-IFC API y descargar modelo
     if (!ifcApi) {
         ifcApi = new WebIFC.IfcAPI();
         ifcApi.SetWasmPath("https://unpkg.com/web-ifc@0.0.44/");
@@ -1743,7 +1675,7 @@ async function loadFiles() {
 
 // Helpers Modales
 async function prepareAndOpenProjectModal() {
-    registrarAperturaModalEnHistorial();
+    registrarAperturaModalEnHistorial("projectModal");
     const yearCurrent = new Date().getFullYear();
     const prefix = `PRY${yearCurrent}`;
 
@@ -1772,7 +1704,11 @@ async function prepareAndOpenProjectModal() {
     }
 
     const modal = document.getElementById("projectModal");
-    if (modal) modal.className = "modal-overlay";
+    if (modal) {
+        modal.style.display = "flex";
+        modal.classList.remove("modal-hidden");
+        modal.classList.add("modal-overlay");
+    }
 }
 
 function setupDropdownWithOther(selectId, otherInputId) {
@@ -1853,7 +1789,11 @@ async function handleCreateProject(e) {
 
 function closeProjectModal(triggerHistory = true) {
     const modal = document.getElementById("projectModal");
-    if (modal) modal.className = "modal-hidden";
+    if (modal) {
+        modal.style.display = "none";
+        modal.classList.remove("modal-overlay");
+        modal.classList.add("modal-hidden");
+    }
     if (triggerHistory && window.history.state && window.history.state.modalOpen) {
         window.history.back();
     }
