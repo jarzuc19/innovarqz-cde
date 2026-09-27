@@ -39,6 +39,7 @@ let startPanX = 0;
 let startPanY = 0;
 let touchStartDist = 0;
 let activeZoomTarget = null; // 'IMAGE' o 'PDF'
+let currentExternalUrl = "";  // Para botón oficial "Abrir Externo"
 
 // CONTROL DE PILA DE HISTORIAL
 let modalActivoId = null;
@@ -1173,22 +1174,23 @@ async function openViewerModal(driveUrl, nombreArchivo) {
     const ext = nombreArchivo.split('.').pop().toLowerCase();
     const esMovilPequeno = window.innerWidth < 600;
 
+    let targetDirectUrl = driveUrl;
+    if (driveUrl.includes("drive.google.com/file/d/")) {
+        targetDirectUrl = driveUrl.replace("/view?usp=drivesdk", "/preview").replace("/view", "/preview");
+    }
+    currentExternalUrl = targetDirectUrl;
+
     // 1. CASO VIDEOS (.MP4, .WEBM, .MOV)
     if (["mp4", "webm", "mov"].includes(ext)) {
-        let previewUrl = driveUrl;
-        if (driveUrl.includes("drive.google.com")) {
-            previewUrl = driveUrl.replace("/view?usp=drivesdk", "/preview").replace("/view", "/preview");
-        }
-
-        // En Móviles (< 600px): Abre en ventana externa para aprovechar controles nativos que se auto-ocultan
+        // En Móvil (< 600px): Abre en ventana externa limpia con auto-ocultamiento nativo
         if (esMovilPequeno) {
-            window.open(previewUrl, "_blank");
+            window.open(targetDirectUrl, "_blank");
             return;
         }
 
-        // En Tablets y PC (>= 600px): Abre en el modal tradicional 100% visible
+        // En Tablet y PC (>= 600px): Abre en modal al 100% natural sin botones gigantes
         registrarAperturaModalEnHistorial("viewerModal");
-        desplegarModalIframe(previewUrl, nombreArchivo, false);
+        desplegarModalIframe(targetDirectUrl, nombreArchivo, false);
         return;
     }
 
@@ -1208,12 +1210,14 @@ async function openViewerModal(driveUrl, nombreArchivo) {
 
     // 4. CASO DOCUMENTOS Y PLANOS PDF / HTML
     registrarAperturaModalEnHistorial("viewerModal");
-    let docUrl = driveUrl;
-    if (driveUrl.includes("drive.google.com/file/d/")) {
-        docUrl = driveUrl.replace("/view?usp=drivesdk", "/preview").replace("/view", "/preview");
+    // Si es móvil pequeño (< 600px), activa controles flotantes de zoom verticales; en Tablet/PC usa lupas de Drive
+    desplegarModalIframe(targetDirectUrl, nombreArchivo, esMovilPequeno);
+}
+
+function openCurrentInExternalTab() {
+    if (currentExternalUrl) {
+        window.open(currentExternalUrl, "_blank");
     }
-    // Si es móvil pequeño habilita la barra flotante de zoom vertical; en tablet/PC usa la lupa nativa de Drive
-    desplegarModalIframe(docUrl, nombreArchivo, esMovilPequeno);
 }
 
 function desplegarModalIframe(url, titulo, mostrarZoomControls) {
@@ -1337,11 +1341,13 @@ function closeViewerModal(triggerHistory = true) {
     const ifcCont = document.getElementById("modalIfcContainer");
     const loading = document.getElementById("viewerLoadingIndicator");
     const zoomControls = document.getElementById("viewerFloatingZoomControls");
+    const dragOverlay = document.getElementById("dragCaptureOverlay");
 
     if (frame) frame.src = "about:blank";
     if (scalerWrapper) scalerWrapper.style.display = "none";
     if (imgWrapper) imgWrapper.style.display = "none";
     if (zoomControls) zoomControls.style.display = "none";
+    if (dragOverlay) dragOverlay.style.display = "none";
     if (loading) loading.style.display = "none";
 
     resetActiveZoom();
@@ -1366,6 +1372,7 @@ function closeViewerModal(triggerHistory = true) {
     }
 
     modalActivoId = null;
+    currentExternalUrl = "";
 
     if (triggerHistory && window.history.state && window.history.state.modalOpen) {
         window.history.back();
@@ -1373,22 +1380,25 @@ function closeViewerModal(triggerHistory = true) {
 }
 
 // ==============================================================================
-// GESTIÓN UNIVERSAL DE ZOOM Y PANEO (PDF E IMÁGENES)
+// GESTIÓN UNIVERSAL DE ZOOM Y PANEO 360° (CON CAPA INTERCEPTORA DINÁMICA)
 // ==============================================================================
 function setupUniversalZoomInteractions() {
     const container = document.getElementById("viewerContainer");
-    if (!container) return;
+    const dragOverlay = document.getElementById("dragCaptureOverlay");
+    if (!container || !dragOverlay) return;
 
+    // Rueda del ratón en PC
     container.addEventListener("wheel", (e) => {
         if (activeZoomTarget === "IMAGE" || activeZoomTarget === "PDF") {
             e.preventDefault();
-            const delta = e.deltaY > 0 ? -0.2 : 0.2;
+            const delta = e.deltaY > 0 ? -0.25 : 0.25;
             zoomActiveElement(delta);
         }
     }, { passive: false });
 
-    container.addEventListener("mousedown", (e) => {
-        if (activeZoomScale <= 1 || (!activeZoomTarget)) return;
+    // Paneo con ratón en PC
+    dragOverlay.addEventListener("mousedown", (e) => {
+        if (activeZoomScale <= 1) return;
         isPanningActive = true;
         startPanX = e.clientX - activePanX;
         startPanY = e.clientY - activePanY;
@@ -1403,36 +1413,33 @@ function setupUniversalZoomInteractions() {
 
     window.addEventListener("mouseup", () => { isPanningActive = false; });
 
-    container.addEventListener("touchstart", (e) => {
-        if (!activeZoomTarget) return;
-
-        if (e.touches.length === 2) {
-            touchStartDist = getTouchDistance(e.touches);
-        } else if (e.touches.length === 1 && activeZoomScale > 1) {
+    // Paneo táctil 360° en Móvil sobre la capa activa
+    dragOverlay.addEventListener("touchstart", (e) => {
+        if (e.touches.length === 1 && activeZoomScale > 1) {
             isPanningActive = true;
             startPanX = e.touches[0].clientX - activePanX;
             startPanY = e.touches[0].clientY - activePanY;
+        } else if (e.touches.length === 2) {
+            touchStartDist = getTouchDistance(e.touches);
         }
     }, { passive: true });
 
-    container.addEventListener("touchmove", (e) => {
-        if (!activeZoomTarget) return;
-
-        if (e.touches.length === 2) {
-            const currentDist = getTouchDistance(e.touches);
-            const diff = currentDist - touchStartDist;
-            if (Math.abs(diff) > 4) {
-                zoomActiveElement(diff * 0.006);
-                touchStartDist = currentDist;
-            }
-        } else if (e.touches.length === 1 && isPanningActive) {
+    dragOverlay.addEventListener("touchmove", (e) => {
+        if (e.touches.length === 1 && isPanningActive) {
             activePanX = e.touches[0].clientX - startPanX;
             activePanY = e.touches[0].clientY - startPanY;
             applyActiveTransform();
+        } else if (e.touches.length === 2) {
+            const currentDist = getTouchDistance(e.touches);
+            const diff = currentDist - touchStartDist;
+            if (Math.abs(diff) > 5) {
+                zoomActiveElement(diff * 0.006);
+                touchStartDist = currentDist;
+            }
         }
     }, { passive: true });
 
-    container.addEventListener("touchend", () => {
+    dragOverlay.addEventListener("touchend", () => {
         isPanningActive = false;
     });
 }
@@ -1445,6 +1452,13 @@ function getTouchDistance(touches) {
 
 function zoomActiveElement(delta) {
     activeZoomScale = Math.min(Math.max(1, activeZoomScale + delta), 4.5);
+    
+    const dragOverlay = document.getElementById("dragCaptureOverlay");
+    // Activa la capa de paneo solo cuando hay zoom (> 1) para capturar el dedo libremente
+    if (dragOverlay) {
+        dragOverlay.style.display = (activeZoomScale > 1) ? "block" : "none";
+    }
+
     if (activeZoomScale === 1) {
         activePanX = 0;
         activePanY = 0;
@@ -1456,6 +1470,10 @@ function resetActiveZoom() {
     activeZoomScale = 1;
     activePanX = 0;
     activePanY = 0;
+
+    const dragOverlay = document.getElementById("dragCaptureOverlay");
+    if (dragOverlay) dragOverlay.style.display = "none";
+
     applyActiveTransform();
 }
 
