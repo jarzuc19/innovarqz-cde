@@ -1639,7 +1639,7 @@ function alternarAristasIFC() {
 }
 
 // ==============================================================================
-// HERRAMIENTA DE MEDICIÓN 3D PUNTO A PUNTO
+// HERRAMIENTA DE MEDICIÓN 3D PUNTO A PUNTO (OPTIMIZADA)
 // ==============================================================================
 function alternarModoMedicionIFC() {
     isMeasureToolActive = !isMeasureToolActive;
@@ -1651,6 +1651,7 @@ function alternarModoMedicionIFC() {
         if (btn) {
             btn.style.background = "#0284c7";
             btn.style.color = "#fff";
+            btn.innerText = "📏 Midiento...";
         }
         if (card) card.style.display = "block";
         if (container) container.style.cursor = "crosshair";
@@ -1670,6 +1671,7 @@ function desactivarModoMedicion() {
     if (btn) {
         btn.style.background = "#1e293b";
         btn.style.color = "#38bdf8";
+        btn.innerText = "📏 Medir";
     }
     if (card) card.style.display = "none";
     if (container) container.style.cursor = "grab";
@@ -1688,7 +1690,7 @@ function limpiarMedicionIFC() {
     const status = document.getElementById("ifcMeasureStatus");
     const dataDiv = document.getElementById("ifcMeasureData");
     if (status) {
-        status.innerText = "Haz clic en el Punto A...";
+        status.innerText = "Haz clic en el primer punto (Punto A)...";
         status.style.color = "#fbbf24";
     }
     if (dataDiv) dataDiv.style.display = "none";
@@ -1701,11 +1703,15 @@ function procesarClickMedicion(intersectPoint) {
 
     measurePoints.push(intersectPoint.clone());
 
-    // Crear marcador esférico en el punto seleccionado
-    const sphereGeo = new THREE.SphereGeometry(0.12, 16, 16);
-    const sphereMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, depthTest: false });
+    // Crear marcador esférico visible siempre en primer plano
+    const sphereGeo = new THREE.SphereGeometry(0.2, 16, 16);
+    const sphereMat = new THREE.MeshBasicMaterial({ 
+        color: (measurePoints.length === 1) ? 0x38bdf8 : 0x10b981, 
+        depthTest: false,
+        depthWrite: false 
+    });
     const sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
-    sphereMesh.renderOrder = 999;
+    sphereMesh.renderOrder = 9999;
     sphereMesh.position.copy(intersectPoint);
     ifcScene.add(sphereMesh);
     measureVisualObjects.push(sphereMesh);
@@ -1715,18 +1721,23 @@ function procesarClickMedicion(intersectPoint) {
 
     if (measurePoints.length === 1) {
         if (status) {
-            status.innerText = "Punto A fijado. Haz clic en el Punto B...";
+            status.innerText = "📍 Punto A fijado. Haz clic en el Punto B...";
             status.style.color = "#38bdf8";
         }
     } else if (measurePoints.length === 2) {
         const p1 = measurePoints[0];
         const p2 = measurePoints[1];
 
-        // Crear línea 3D conectora
+        // Crear línea 3D conectora en primer plano
         const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
-        const lineMat = new THREE.LineBasicMaterial({ color: 0x10b981, linewidth: 2, depthTest: false });
+        const lineMat = new THREE.LineBasicMaterial({ 
+            color: 0x10b981, 
+            linewidth: 3, 
+            depthTest: false,
+            depthWrite: false 
+        });
         const lineObj = new THREE.Line(lineGeo, lineMat);
-        lineObj.renderOrder = 998;
+        lineObj.renderOrder = 9998;
         ifcScene.add(lineObj);
         measureVisualObjects.push(lineObj);
 
@@ -1809,18 +1820,37 @@ function invertirPlanoCorte() {
 }
 
 // ==============================================================================
-// INSPECCIÓN DE PROPIEDADES BIM Y DISPATCHER DE CLICS
+// INSPECCIÓN DE PROPIEDADES BIM Y DISPATCHER DE CLICS (OPTIMIZADO)
 // ==============================================================================
 function onIfcModelClick(event) {
+    if (!ifcRenderer || !ifcCamera) return;
+
     const rect = ifcRenderer.domElement.getBoundingClientRect();
     mousePointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     mousePointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
     raycaster.setFromCamera(mousePointer, ifcCamera);
-    const intersects = raycaster.intersectObjects(ifcMeshesList);
+    
+    // Filtrar solo las mallas visibles y válidas del modelo
+    const mallasValidas = ifcMeshesList.filter(m => m.visible);
+    const intersects = raycaster.intersectObjects(mallasValidas, false);
 
     if (intersects.length > 0) {
-        const hit = intersects[0];
+        let hit = null;
+        for (let i = 0; i < intersects.length; i++) {
+            const p = intersects[i].point;
+            if (ifcClippingPlane && isSectionToolActive) {
+                if (ifcClippingPlane.distanceToPoint(p) >= 0) {
+                    hit = intersects[i];
+                    break;
+                }
+            } else {
+                hit = intersects[i];
+                break;
+            }
+        }
+
+        if (!hit) return;
 
         // MODO MEDICIÓN ACTIVO
         if (isMeasureToolActive) {
