@@ -252,7 +252,7 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
     display: flex;
     align-items: center;
     justify-content: center;
-    touch-action: none; /* Controlado dinámicamente */
+    touch-action: none;
 }
 
 .viewer-item {
@@ -261,7 +261,7 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
     border: none;
 }
 
-/* 1. Contenedor Iframe (Tablet y PC al 100% natural) */
+/* 1. Contenedor Iframe (Tablet y PC al 100% natural, sin parches ni deformaciones) */
 .iframe-scaler-wrapper {
     width: 100%;
     height: 100%;
@@ -279,11 +279,6 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
     border: none;
     transform-origin: center center;
     transition: transform 0.05s ease-out;
-}
-
-/* Bloqueador de esquina para ocultar botón interno de Drive solo en móvil */
-.drive-corner-blocker {
-    display: none;
 }
 
 /* 2. Capa transparente activa para capturar paneo en zoom sin interferencia del iframe */
@@ -524,19 +519,6 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
    AJUSTES EXCLUSIVOS PARA SMARTPHONES (< 600px / 6.9")
    ============================================================================== */
 @media (max-width: 600px) {
-    /* Ocultar el botón interno diminuto de Google Drive en móvil mediante máscara negra */
-    .drive-corner-blocker {
-        display: block !important;
-        position: absolute;
-        top: 0;
-        right: 0;
-        width: 52px;
-        height: 52px;
-        background: #000;
-        z-index: 10;
-        pointer-events: auto;
-    }
-
     /* Botones de Zoom en DISPOSICIÓN VERTICAL en el lateral derecho */
     .viewer-floating-zoom {
         flex-direction: column !important;
