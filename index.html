@@ -211,12 +211,12 @@
             
             <div id="viewerContainer" class="viewer-display-area">
                 
-                <!-- 1. Contenedor Dinámico para Documentos, Planos PDF y Videos -->
+                <!-- 1. Contenedor de Iframe para Documentos, Planos PDF y Videos en Tablet/PC -->
                 <div id="iframeScalerWrapper" class="iframe-scaler-wrapper" style="display: none;">
                     <iframe id="modalViewerFrame" src="about:blank" frameborder="0" allow="autoplay; fullscreen"></iframe>
                 </div>
 
-                <!-- 2. Visor de Imágenes Nativas con Zoom y Paneo -->
+                <!-- 2. Visor de Imágenes con Zoom y Paneo -->
                 <div id="imageViewerWrapper" class="viewer-item image-zoom-wrapper" style="display: none;">
                     <img id="modalImageViewer" src="" alt="Previsualización Render / Imagen" draggable="false">
                 </div>
@@ -224,7 +224,7 @@
                 <!-- 3. Visor BIM 3D (IFC) -->
                 <div id="modalIfcContainer" class="viewer-item" style="display: none; cursor: grab;"></div>
 
-                <!-- 4. Controles Flotantes Universales de Zoom (PDF e Imágenes) -->
+                <!-- 4. Controles Flotantes de Zoom (Vertical en Móvil para PDF/Imágenes) -->
                 <div id="viewerFloatingZoomControls" class="viewer-floating-zoom" style="display: none;">
                     <button type="button" onclick="zoomActiveElement(0.25)" title="Acercar">+</button>
                     <button type="button" onclick="zoomActiveElement(-0.25)" title="Alejar">−</button>
@@ -233,7 +233,7 @@
 
                 <!-- Indicador de Carga 3D / Multimedia -->
                 <div id="viewerLoadingIndicator" class="viewer-loading-banner" style="display: none;">
-                    <div style="margin-bottom: 6px;">⏳ Cargando y optimizando vista...</div>
+                    <div style="margin-bottom: 6px;">⏳ Cargando entregable...</div>
                     <small style="color: #94a3b8; font-weight: normal;">(Espere un momento)</small>
                 </div>
             </div>
