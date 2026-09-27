@@ -171,13 +171,15 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
 .scrollable-panel::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
 .scrollable-panel::-webkit-scrollbar-thumb:hover { background: var(--accent-copper); }
 
-/* MODALES BASE */
+/* ==============================================================================
+   MODALES BASE Y CONTROL ESTRICTO DE VISIBILIDAD
+   ============================================================================== */
 .modal-overlay {
     position: fixed;
     top: 0; left: 0;
     width: 100vw; height: 100vh;
     background: rgba(0, 0, 0, 0.85);
-    display: flex;
+    display: flex !important;
     justify-content: center;
     align-items: center;
     z-index: 2000;
@@ -187,10 +189,11 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
 .modal-hidden { 
     display: none !important; 
     pointer-events: none !important;
+    visibility: hidden !important;
 }
 
 /* ==============================================================================
-   VISOR MULTIMODAL AVANZADO (IFRAME, ZOOM IMAGEN, VIDEO CUSTOM, IFC 3D)
+   VISOR MULTIMODAL AVANZADO (IFRAME, ZOOM IMAGEN, VIDEO, IFC 3D)
    ============================================================================== */
 .viewer-modal-layout {
     max-width: 980px;
@@ -297,7 +300,7 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
     border-color: var(--accent-copper);
 }
 
-/* 2. Reproductor de Video Personalizado */
+/* 2. Reproductor de Video */
 .video-player-container {
     position: relative;
     display: flex;
