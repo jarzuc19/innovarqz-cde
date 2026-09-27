@@ -43,6 +43,10 @@ let ifcClipInverted = false;
 let ifcClipAxis = 'Y';
 let isSectionToolActive = false;
 
+// GESTIÓN Y ALTERNANCIA DE LÍNEAS DE ARISTA (EDGES)
+const ifcEdgesList = [];
+let ifcEdgesVisible = true;
+
 // INTERACCIÓN Y SELECCIÓN DE PROPIEDADES BIM
 let raycaster = null;
 let mousePointer = null;
@@ -1399,6 +1403,7 @@ async function inicializarVisorIFC(fileUrl, container) {
         container.removeChild(ifcRenderer.domElement);
     }
     ifcMeshesList.length = 0;
+    ifcEdgesList.length = 0; // Limpiar lista de aristas
 
     const width = container.clientWidth || 800;
     const height = container.clientHeight || 550;
@@ -1420,7 +1425,7 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcControls.enableDamping = true;
     ifcControls.dampingFactor = 0.08;
 
-    // Iluminación Técnica Bim
+    // Iluminación Técnica BIM
     const hemiLight = new THREE.HemisphereLight(0xffffff, 0xcfd8dc, 0.85);
     hemiLight.position.set(0, 60, 0);
     ifcScene.add(hemiLight);
@@ -1487,10 +1492,12 @@ async function inicializarVisorIFC(fileUrl, container) {
     // Inicializar plano de corte en Y
     ifcClippingPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 100);
 
+    // Material de aristas técnicas: vinculado al plano de corte para desaparecer en la sección
     const edgeLineMaterial = new THREE.LineBasicMaterial({
         color: 0x334155,
         transparent: true,
-        opacity: 0.35
+        opacity: 0.35,
+        clippingPlanes: [ifcClippingPlane]
     });
 
     // 5. Procesamiento de mallas con aristas y planos de corte activos
@@ -1545,7 +1552,9 @@ async function inicializarVisorIFC(fileUrl, container) {
             if (!esTransparente && posFloats.length < 6000) {
                 const edges = new THREE.EdgesGeometry(bufferGeometry, 24);
                 const lineSegments = new THREE.LineSegments(edges, edgeLineMaterial);
+                lineSegments.visible = ifcEdgesVisible;
                 mesh.add(lineSegments);
+                ifcEdgesList.push(lineSegments);
             }
 
             ifcCurrentGroup.add(mesh);
@@ -1610,6 +1619,18 @@ function cambiarVistaIFC(tipo) {
 
 function alternarCuadriculaIFC() {
     if (ifcGridHelper) ifcGridHelper.visible = !ifcGridHelper.visible;
+}
+
+function alternarAristasIFC() {
+    ifcEdgesVisible = !ifcEdgesVisible;
+    ifcEdgesList.forEach(line => {
+        if (line) line.visible = ifcEdgesVisible;
+    });
+    const btn = document.getElementById("btnToggleEdges");
+    if (btn) {
+        btn.style.color = ifcEdgesVisible ? "#cbd5e1" : "#ef4444";
+        btn.style.borderColor = ifcEdgesVisible ? "#475569" : "#ef4444";
+    }
 }
 
 // ==============================================================================
