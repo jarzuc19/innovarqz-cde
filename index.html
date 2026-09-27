@@ -11,10 +11,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
 
-    <!-- Motor 3D Open Source para IFC (Three.js + Web-IFC) -->
+    <!-- Motor 3D Open Source Three.js y OrbitControls -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://unpkg.com/web-ifc@0.0.44/web-ifc-api.js"></script>
 </head>
 <body>
     <header class="navbar">
@@ -216,7 +215,7 @@
             
             <div id="viewerContainer" class="viewer-display-area">
                 
-                <!-- 1. Contenedor de Iframe para Documentos/Planos PDF y Videos en Tablet/PC (Limpio, sin bloqueador) -->
+                <!-- 1. Contenedor de Iframe para Documentos/Planos PDF y Videos en Tablet/PC -->
                 <div id="iframeScalerWrapper" class="iframe-scaler-wrapper" style="display: none;">
                     <iframe id="modalViewerFrame" src="about:blank" frameborder="0" allow="autoplay; fullscreen"></iframe>
                 </div>
@@ -232,7 +231,7 @@
                 <!-- 4. Capa transparente activa para arrastrar con el dedo sin que el iframe bloquee el paneo -->
                 <div id="dragCaptureOverlay" class="drag-capture-overlay" style="display: none;"></div>
 
-                <!-- 5. Controles Flotantes de Zoom (En móvil pasa a columna vertical a la derecha) -->
+                <!-- 5. Controles Flotantes de Zoom (Verticales en Móvil) -->
                 <div id="viewerFloatingZoomControls" class="viewer-floating-zoom" style="display: none;">
                     <button type="button" onclick="zoomActiveElement(0.25)" title="Acercar">+</button>
                     <button type="button" onclick="zoomActiveElement(-0.25)" title="Alejar">−</button>
