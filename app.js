@@ -39,6 +39,9 @@ let startPanX = 0;
 let startPanY = 0;
 let touchStartDist = 0;
 
+// CONTROL DE PILA DE HISTORIAL
+let modalActivoId = null;
+
 // ==============================================================================
 // INICIALIZACIÓN, NAVEGACIÓN Y CONTROL DE ESCAPE / ATRÁS NATIVO
 // ==============================================================================
@@ -80,7 +83,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // INTERCEPTOR GLOBAL: BOTÓN ATRÁS EN MÓVILES (ANDROID / IOS)
     window.addEventListener("popstate", (e) => {
-        // Cierra los modales forzando el ocultamiento del DOM sin invocar de nuevo history.back()
         cerrarCualquierModalAbierto(false);
     });
 
@@ -109,43 +111,46 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 });
 
-// GESTIÓN DE PILA DE MODALES (HISTORY API)
+// GESTIÓN DE PILA DE MODALES (HISTORY API ROBUSTA)
 function registrarAperturaModalEnHistorial(modalId) {
+    modalActivoId = modalId;
     history.pushState({ modalOpen: true, modalId: modalId }, "");
 }
 
 function cerrarCualquierModalAbierto(triggerHistoryBack = true) {
-    let cerrado = false;
+    let seCerró = false;
 
     // 1. Viewer Modal
     const vModal = document.getElementById("viewerModal");
     if (vModal && (vModal.style.display === "flex" || vModal.classList.contains("modal-overlay"))) {
         closeViewerModal(false);
-        cerrado = true;
+        seCerró = true;
     }
 
     // 2. Upload Modal
     const uModal = document.getElementById("uploadModal");
     if (uModal && (uModal.style.display === "flex" || uModal.classList.contains("modal-overlay"))) {
         closeUploadModal(false);
-        cerrado = true;
+        seCerró = true;
     }
 
     // 3. Revisor Instruction Modal
     const rModal = document.getElementById("revisorInstructionModal");
     if (rModal && (rModal.style.display === "flex" || rModal.classList.contains("modal-overlay"))) {
         closeRevisorInstructionModal(false);
-        cerrado = true;
+        seCerró = true;
     }
 
     // 4. Project Modal
     const pModal = document.getElementById("projectModal");
     if (pModal && (pModal.style.display === "flex" || pModal.classList.contains("modal-overlay"))) {
         closeProjectModal(false);
-        cerrado = true;
+        seCerró = true;
     }
 
-    if (cerrado && triggerHistoryBack && window.history.state && window.history.state.modalOpen) {
+    modalActivoId = null;
+
+    if (seCerró && triggerHistoryBack && window.history.state && window.history.state.modalOpen) {
         window.history.back();
     }
 }
@@ -1165,17 +1170,16 @@ async function generarPDFActaRecibo() {
 }
 
 // ==============================================================================
-// GESTIÓN DEL VISOR MULTIMODAL AVANZADO
+// GESTIÓN DEL VISOR MULTIMODAL CON VIEWPORT ESCALADO
 // ==============================================================================
 async function openViewerModal(driveUrl, nombreArchivo) {
     registrarAperturaModalEnHistorial("viewerModal");
 
     const modal = document.getElementById("viewerModal");
+    const scalerWrapper = document.getElementById("iframeScalerWrapper");
     const frame = document.getElementById("modalViewerFrame");
     const imgWrapper = document.getElementById("imageViewerWrapper");
     const imgElement = document.getElementById("modalImageViewer");
-    const videoWrapper = document.getElementById("videoViewerWrapper");
-    const videoElement = document.getElementById("modalVideoPlayer");
     const ifcCont = document.getElementById("modalIfcContainer");
     const loading = document.getElementById("viewerLoadingIndicator");
     const title = document.getElementById("viewerTitle");
@@ -1184,11 +1188,10 @@ async function openViewerModal(driveUrl, nombreArchivo) {
 
     title.innerText = `Previsualizando: ${nombreArchivo}`;
 
-    // Resetear y ocultar todos los visores
-    if (frame) { frame.style.display = "none"; frame.src = ""; }
+    // Resetear visibilidad y limpiar contenidos
+    if (scalerWrapper) { scalerWrapper.style.display = "none"; scalerWrapper.classList.remove("video-mode"); }
+    if (frame) { frame.src = "about:blank"; }
     if (imgWrapper) { imgWrapper.style.display = "none"; resetImageZoom(); }
-    if (videoWrapper) { videoWrapper.style.display = "none"; }
-    if (videoElement) { videoElement.pause(); videoElement.src = ""; }
     if (ifcCont) { ifcCont.style.display = "none"; ifcCont.innerHTML = ""; }
     if (loading) { loading.style.display = "none"; }
 
@@ -1199,20 +1202,24 @@ async function openViewerModal(driveUrl, nombreArchivo) {
     modal.classList.remove("modal-hidden");
     modal.classList.add("modal-overlay");
 
-    // 1. CASO VIDEOS (.MP4, .WEBM, .MOV)
+    // 1. CASO VIDEOS (.MP4, .WEBM, .MOV) - VIEWPORT FORZADO DE TABLET/PC
     if (["mp4", "webm", "mov"].includes(ext)) {
+        scalerWrapper.style.display = "flex";
+        scalerWrapper.classList.add("video-mode"); // Activa emulación de pantalla ancha en móvil
+
+        let previewUrl = driveUrl;
         if (driveUrl.includes("drive.google.com")) {
-            // Streaming directo y garantizado de Google Drive mediante /preview
-            let previewUrl = driveUrl.replace("/view?usp=drivesdk", "/preview").replace("/view", "/preview");
-            frame.src = previewUrl;
-            frame.style.display = "block";
-        } else {
-            // Si es un archivo con URL binaria directa
-            videoWrapper.style.display = "flex";
-            videoElement.src = driveUrl;
-            videoElement.load();
-            videoElement.play().catch(e => console.log("Autoplay bloqueado:", e));
+            previewUrl = driveUrl.replace("/view?usp=drivesdk", "/preview").replace("/view", "/preview");
         }
+
+        // Carga mediante location.replace para no registrar entradas intermedias en el historial móvil
+        setTimeout(() => {
+            if (frame.contentWindow) {
+                frame.contentWindow.location.replace(previewUrl);
+            } else {
+                frame.src = previewUrl;
+            }
+        }, 50);
         return;
     }
 
@@ -1247,28 +1254,44 @@ async function openViewerModal(driveUrl, nombreArchivo) {
     }
 
     // 4. CASO GENERAL: DOCUMENTOS Y PLANOS PDF / HTML
+    scalerWrapper.style.display = "block";
     let previewUrl = driveUrl;
     if (driveUrl.includes("drive.google.com/file/d/")) {
         previewUrl = driveUrl.replace("/view?usp=drivesdk", "/preview").replace("/view", "/preview");
     }
-    frame.src = previewUrl;
-    frame.style.display = "block";
+    
+    setTimeout(() => {
+        if (frame.contentWindow) {
+            frame.contentWindow.location.replace(previewUrl);
+        } else {
+            frame.src = previewUrl;
+        }
+    }, 50);
 }
 
 function closeViewerModal(triggerHistory = true) {
     const modal = document.getElementById("viewerModal");
+    const scalerWrapper = document.getElementById("iframeScalerWrapper");
     const frame = document.getElementById("modalViewerFrame");
     const imgWrapper = document.getElementById("imageViewerWrapper");
-    const videoWrapper = document.getElementById("videoViewerWrapper");
-    const videoElement = document.getElementById("modalVideoPlayer");
     const ifcCont = document.getElementById("modalIfcContainer");
     const loading = document.getElementById("viewerLoadingIndicator");
 
-    if (frame) { frame.src = ""; frame.style.display = "none"; }
-    if (imgWrapper) { imgWrapper.style.display = "none"; resetImageZoom(); }
-    if (videoElement) { videoElement.pause(); videoElement.src = ""; }
-    if (videoWrapper) { videoWrapper.style.display = "none"; }
-    if (loading) { loading.style.display = "none"; }
+    // Limpieza física del iframe para eliminar pantalla negra residual
+    if (frame) {
+        frame.src = "about:blank";
+    }
+    if (scalerWrapper) {
+        scalerWrapper.style.display = "none";
+        scalerWrapper.classList.remove("video-mode");
+    }
+    if (imgWrapper) {
+        imgWrapper.style.display = "none";
+        resetImageZoom();
+    }
+    if (loading) {
+        loading.style.display = "none";
+    }
 
     // Limpieza de memoria y WebGL para IFC
     if (ifcAnimationId) {
@@ -1284,12 +1307,14 @@ function closeViewerModal(triggerHistory = true) {
         ifcCont.style.display = "none";
     }
 
-    // Ocultar modal del DOM de forma explícita
+    // Ocultar modal del DOM de forma inmediata y garantizada
     if (modal) {
-        modal.style.display = "none";
+        modal.style.setProperty("display", "none", "important");
         modal.classList.remove("modal-overlay");
         modal.classList.add("modal-hidden");
     }
+
+    modalActivoId = null;
 
     if (triggerHistory && window.history.state && window.history.state.modalOpen) {
         window.history.back();
@@ -1794,6 +1819,7 @@ function closeProjectModal(triggerHistory = true) {
         modal.classList.remove("modal-overlay");
         modal.classList.add("modal-hidden");
     }
+    modalActivoId = null;
     if (triggerHistory && window.history.state && window.history.state.modalOpen) {
         window.history.back();
     }
