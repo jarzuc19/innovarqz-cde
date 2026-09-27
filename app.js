@@ -23,7 +23,9 @@ const SUBCARPETAS_MAP = {
     "04_ARCHIVED": []
 };
 
-// INSTANCIA Y ESTADO DEL MOTOR 3D IFC
+// ==============================================================================
+// VARIABLES DEL MOTOR 3D IFC (THAT OPEN COMPANY WEB-IFC v0.0.78)
+// ==============================================================================
 let ifcScene = null;
 let ifcRenderer = null;
 let ifcCamera = null;
@@ -32,7 +34,21 @@ let ifcAnimationId = null;
 let ifcApiInstance = null;
 let ifcGridHelper = null;
 let ifcCurrentGroup = null;
-let ifcModelBounds = { center: new THREE.Vector3(), maxDim: 30 };
+let ifcModelBounds = { center: new THREE.Vector3(), size: new THREE.Vector3(), maxDim: 30 };
+let currentLoadedModelID = null;
+
+// GESTIÓN DE PLANOS DE CORTE / SECCIONES (CLIPPING PLANES)
+let ifcClippingPlane = null;
+let ifcClipInverted = false;
+let ifcClipAxis = 'Y';
+let isSectionToolActive = false;
+
+// INTERACCIÓN Y SELECCIÓN DE PROPIEDADES BIM
+let raycaster = null;
+let mousePointer = null;
+let highlightedMesh = null;
+let originalMaterial = null;
+const ifcMeshesList = [];
 
 // ESTADO DE ZOOM Y PANEO UNIVERSAL (IMÁGENES Y PDF)
 let activeZoomScale = 1;
@@ -42,14 +58,14 @@ let isPanningActive = false;
 let startPanX = 0;
 let startPanY = 0;
 let touchStartDist = 0;
-let activeZoomTarget = null; // 'IMAGE' o 'PDF'
-let currentExternalUrl = "";  // Para botón oficial "Abrir Externo"
+let activeZoomTarget = null;
+let currentExternalUrl = "";
 
 // CONTROL DE PILA DE HISTORIAL
 let modalActivoId = null;
 
 // ==============================================================================
-// INICIALIZACIÓN, NAVEGACIÓN Y CONTROL DE ESCAPE / ATRÁS NATIVO
+// INICIALIZACIÓN Y NAVEGACIÓN
 // ==============================================================================
 document.addEventListener("DOMContentLoaded", () => {
     const loginForm = document.getElementById("loginForm");
@@ -80,22 +96,17 @@ document.addEventListener("DOMContentLoaded", () => {
     setupDropdownWithOther("tipoSelect", "tipoOtherInput");
     setupUniversalZoomInteractions();
 
-    // INTERCEPTOR GLOBAL: TECLA ESCAPE EN PC
     window.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") {
-            cerrarCualquierModalAbierto();
-        }
+        if (e.key === "Escape") cerrarCualquierModalAbierto();
     });
 
-    // INTERCEPTOR GLOBAL: BOTÓN ATRÁS EN MÓVILES (ANDROID / IOS)
-    window.addEventListener("popstate", (e) => {
+    window.addEventListener("popstate", () => {
         cerrarCualquierModalAbierto(false);
     });
 
     document.querySelectorAll(".tab-btn").forEach(btn => {
         btn.addEventListener("click", (e) => {
             const requestedTab = e.target.dataset.tab;
-
             if (!validarAccesoPestana(requestedTab)) {
                 alert(`⛔ Acceso denegado: Su rol (${currentUser ? currentUser.cargo : 'Sin Rol'}) no tiene permisos para acceder a la carpeta ${requestedTab}.`);
                 return;
@@ -117,7 +128,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 });
 
-// GESTIÓN DE PILA DE MODALES (HISTORY API)
+// GESTIÓN DE PILA DE MODALES
 function registrarAperturaModalEnHistorial(modalId) {
     modalActivoId = modalId;
     history.pushState({ modalOpen: true, modalId: modalId }, "");
@@ -171,7 +182,6 @@ function renderizarBarraSubcarpetas() {
     if (!container) return;
 
     const subcarpetas = SUBCARPETAS_MAP[activeTab] || [];
-
     if (subcarpetas.length === 0) {
         container.style.display = "none";
         return;
@@ -183,7 +193,6 @@ function renderizarBarraSubcarpetas() {
     subcarpetas.forEach(sub => {
         const esActiva = activeSubfolder === sub;
         const nombreLimpio = sub === "TODAS" ? "Ver Todas" : sub.replace(/_/g, " ");
-        
         container.innerHTML += `
             <button 
                 type="button"
@@ -206,7 +215,6 @@ function actualizarPistaSubcarpetaModal() {
     const isoName = document.getElementById("isoNameInput").value.trim().toUpperCase();
     const targetTab = document.getElementById("uploadTargetTab").value;
     const hintSpan = document.getElementById("hintFolderName");
-
     if (!hintSpan) return;
 
     if (!isoName) {
@@ -252,7 +260,6 @@ async function handleLogin(e) {
     if (!emailInput) return;
 
     const email = emailInput.value.trim();
-
     if (!email) {
         alert("Por favor ingrese su correo electrónico.");
         return;
@@ -327,7 +334,6 @@ async function loadProjects() {
 
     if (proyectosVisibles.length > 0) {
         const proyectosUnicos = new Map();
-
         proyectosVisibles.forEach(p => {
             if (p.codigo_proyecto && !proyectosUnicos.has(p.codigo_proyecto)) {
                 proyectosUnicos.set(p.codigo_proyecto, p);
@@ -388,11 +394,8 @@ function aplicarRestriccionPestanasVisuales() {
     if (tabArchived) tabArchived.style.display = userPermissions.permiso_wip ? "inline-block" : "none";
 
     document.querySelectorAll(".tab-btn").forEach(b => {
-        if (b.dataset.tab === activeTab) {
-            b.classList.add("active");
-        } else {
-            b.classList.remove("active");
-        }
+        if (b.dataset.tab === activeTab) b.classList.add("active");
+        else b.classList.remove("active");
     });
 
     const clientCard = document.getElementById("clientApprovalCard");
@@ -538,7 +541,6 @@ async function handleRevisorInstructionSubmit(e) {
     e.preventDefault();
     const asunto = document.getElementById("revisorSubjectInput").value.trim();
     const detalle = document.getElementById("revisorDetailInput").value.trim();
-
     if (!asunto || !detalle) return;
 
     let comentarioEstructurado = `${asunto} | Detalle: ${detalle}`;
@@ -603,11 +605,9 @@ async function cargarTimelineActividad() {
     });
 
     let html = "<ul style='margin-left: 15px; margin-top: 2px; padding: 0; list-style-type: square; font-size: 0.8rem;'>";
-    
     logs.forEach(l => {
         const fecha = l.version || "Sin fecha";
         let eventoNombre = l.archivo_nombre.replace("NOTA_TECNICA_", "");
-        
         let icono = "📄";
         let estiloTexto = "color: #38bdf8;";
 
@@ -619,10 +619,8 @@ async function cargarTimelineActividad() {
 
         let mensajeOriginal = l.drive_file_url || "";
         let asuntoCorto = mensajeOriginal.split(" | Detalle: ")[0];
-
         html += `<li style='${estiloTexto}; margin-bottom: 4px;'><strong>${fecha}</strong> — ${icono} <strong>[${eventoNombre}]</strong>: <em>${asuntoCorto}</em></li>`;
     });
-    
     html += "</ul>";
     timelineDiv.innerHTML = html;
 }
@@ -642,9 +640,7 @@ function openUploadModal() {
         currentUser.cargo.includes("Director General")
     );
 
-    if (optPublished) {
-        optPublished.style.display = esSuperAdminOBimManager ? "block" : "none";
-    }
+    if (optPublished) optPublished.style.display = esSuperAdminOBimManager ? "block" : "none";
 
     if (currentUser && currentUser.cargo.includes("REVISOR") && !esSuperAdminOBimManager) {
         if (optWip) optWip.style.display = "none";
@@ -697,24 +693,17 @@ function validarNomenclaturaISO19650(nombreArchivo) {
 function extraerEstadoDeNombre(nombreArchivo) {
     const nombreSinExt = nombreArchivo.split('.').slice(0, -1).join('.');
     const partes = nombreSinExt.split('_');
-    if (partes.length >= 6) {
-        return partes[5].toUpperCase();
-    }
-    return "";
+    return (partes.length >= 6) ? partes[5].toUpperCase() : "";
 }
 
 function extraerTipoDeNombre(nombreArchivo) {
     const nombreSinExt = nombreArchivo.split('.').slice(0, -1).join('.');
     const partes = nombreSinExt.split('_');
-    if (partes.length >= 6) {
-        return partes[3].toUpperCase();
-    }
-    return "";
+    return (partes.length >= 6) ? partes[3].toUpperCase() : "";
 }
 
 function validarCoherenciaTipoYExtension(tipo, extension) {
     const ext = extension.toLowerCase();
-    
     const REGLAS_EXTENSIONES = {
         "M3": ["ifc", "rvt", "pln", "nwc", "nwd"],
         "PL": ["dwg", "pdf", "dxf", "plt"],
@@ -726,18 +715,13 @@ function validarCoherenciaTipoYExtension(tipo, extension) {
         "ACT": ["pdf"],
         "CON": ["pdf"]
     };
-
-    if (REGLAS_EXTENSIONES[tipo]) {
-        return REGLAS_EXTENSIONES[tipo].includes(ext);
-    }
-    return true;
+    return REGLAS_EXTENSIONES[tipo] ? REGLAS_EXTENSIONES[tipo].includes(ext) : true;
 }
 
 function recalcularEstadoEnNombre(nombreOriginal, nuevoEstadoISO) {
     const partesExt = nombreOriginal.split('.');
     const ext = partesExt.pop();
     const nombreSinExt = partesExt.join('.');
-    
     const comp = nombreSinExt.split('_');
     if (comp.length >= 6) {
         comp[5] = nuevoEstadoISO;
@@ -748,7 +732,6 @@ function recalcularEstadoEnNombre(nombreOriginal, nuevoEstadoISO) {
 
 async function handleFileUpload(e) {
     e.preventDefault();
-    
     const method = document.getElementById("uploadMethodSelect").value;
     const isoNameInput = document.getElementById("isoNameInput").value.trim();
     const targetTab = document.getElementById("uploadTargetTab").value;
@@ -760,7 +743,7 @@ async function handleFileUpload(e) {
     }
 
     if (!validarNomenclaturaISO19650(isoNameInput) && !isoNameInput.endsWith(".html")) {
-        alert(`❌ REGLA ISO 19650 INCUMPLIDA:\n\nEl nombre "${isoNameInput}" no cumple la estructura de 6 campos:\n[PROYECTO]_[ORIGINADOR]_[ZONA]_[TIPO]_[DISCIPLINA]_[ESTADO].[ext]\n\nEjemplo: PRY2026-001_INNOVARQZ_ZZ_M3_ARQ_S0.rvt`);
+        alert(`❌ REGLA ISO 19650 INCUMPLIDA:\n\nEl nombre "${isoNameInput}" no cumple la estructura de 6 campos:\n[PROYECTO]_[ORIGINADOR]_[ZONA]_[TIPO]_[DISCIPLINA]_[ESTADO].[ext]`);
         return;
     }
 
@@ -769,17 +752,17 @@ async function handleFileUpload(e) {
     const extEscrita = isoNameInput.split('.').pop().toLowerCase();
 
     if (!validarCoherenciaTipoYExtension(tipoArchivo, extEscrita)) {
-        alert(`❌ CONFLICTO TÉCNICO TIPO vs. EXTENSIÓN:\n\nEl tipo declarado es [${tipoArchivo}], pero la extensión ingresada es [.${extEscrita}].\n\n• Si es un video, use tipo [VI] y extensión [.mp4 / .mov].\n• Si es una imagen o render, use tipo [IM] y extensión [.png / .jpg].\n• Si es un plano, use tipo [PL] y extensión [.pdf / .dwg].\n• Si es un modelo 3D, use tipo [M3] y extensión [.ifc / .rvt].`);
+        alert(`❌ CONFLICTO TÉCNICO TIPO vs. EXTENSIÓN:\n\nEl tipo declarado es [${tipoArchivo}], pero la extensión ingresada es [.${extEscrita}].`);
         return;
     }
 
     if (targetTab === "01_WIP" && estadoArchivo !== "S0" && !estadoArchivo.startsWith("P0")) {
-        alert(`⛔ VIOLACIÓN DE NORMA ISO 19650:\n\nEl archivo tiene el estado "${estadoArchivo}". En la carpeta 01_WIP solo se permiten entregables nativos en estado "S0" (o borradores P0).\n\nRenombre el archivo a S0 o seleccione la carpeta correspondiente.`);
+        alert(`⛔ VIOLACIÓN DE NORMA ISO 19650:\n\nEn 01_WIP solo se permiten entregables en estado "S0" (o borradores P0).`);
         return;
     }
 
     if (targetTab === "02_SHARED" && (!estadoArchivo.startsWith("S") || estadoArchivo === "S0")) {
-        alert(`⛔ VIOLACIÓN DE NORMA ISO 19650:\n\nEl archivo tiene el estado "${estadoArchivo}". En la carpeta 02_SHARED solo se permiten entregables de coordinación en estado S1, S2, S3, etc.\n\nPromueva el archivo desde WIP o corrija el nombre antes de subir.`);
+        alert(`⛔ VIOLACIÓN DE NORMA ISO 19650:\n\nEn 02_SHARED solo se permiten entregables en estado S1, S2, S3, etc.`);
         return;
     }
 
@@ -787,7 +770,7 @@ async function handleFileUpload(e) {
     const esValidoEnPublished = estadoArchivo.startsWith("A") || estadosValidosPublished.includes(estadoArchivo);
 
     if (targetTab === "03_PUBLISHED" && !esValidoEnPublished) {
-        alert(`⛔ VIOLACIÓN DE NORMA ISO 19650:\n\nEl archivo tiene el estado "${estadoArchivo}". En 03_PUBLISHED solo se permiten entregables aprobados/contractuales en estado A1, A2... o códigos especiales (${estadosValidosPublished.join(', ')}).\n\nVerifique el nombre antes de proceder.`);
+        alert(`⛔ VIOLACIÓN DE NORMA ISO 19650:\n\nEn 03_PUBLISHED solo se permiten entregables en estado A1, A2... o códigos especiales (${estadosValidosPublished.join(', ')}).`);
         return;
     }
 
@@ -821,12 +804,10 @@ async function handleFileUpload(e) {
                 btnSubmit.innerText = "Procesar Entregable";
                 return;
             }
-            
             const file = fileInput.files[0];
             const extReal = file.name.split('.').pop().toLowerCase();
-
             if (extReal !== extEscrita) {
-                alert(`❌ CONFLICTO DE EXTENSIÓN:\n\nEl archivo físico seleccionado es (.${extReal}) pero en el CDE escribió (.${extEscrita}). Corrija el nombre para que coincida exactamente.`);
+                alert(`❌ CONFLICTO DE EXTENSIÓN:\n\nEl archivo seleccionado es (.${extReal}) pero en el CDE escribió (.${extEscrita}).`);
                 btnSubmit.disabled = false;
                 btnSubmit.innerText = "Procesar Entregable";
                 return;
@@ -848,7 +829,6 @@ async function handleFileUpload(e) {
             headers: { "Content-Type": "text/plain;charset=utf-8" },
             body: JSON.stringify(payload)
         });
-
         const data = await res.json();
 
         if (data.status === "success") {
@@ -892,7 +872,6 @@ async function promoverArchivo(nombreArchivo, estadoOrigen, estadoDestino) {
             body: JSON.stringify(payload)
         });
         const responseData = await res.json();
-
         if (responseData.status === "success") {
             alert("¡Promoción física en Drive procesada exitosamente!");
             loadFiles();
@@ -913,7 +892,6 @@ async function procesarAprobacionCliente(estadoAprobacion) {
         alert("⚠️ Por favor ingrese un asunto/resumen corto para la firma/solicitud.");
         return;
     }
-
     if (estadoAprobacion === "RECHAZADO" && !observaciones) {
         alert("⚠️ Por favor ingrese sus observaciones detalladas.");
         return;
@@ -973,7 +951,7 @@ async function procesarAprobacionCliente(estadoAprobacion) {
 }
 
 // ==============================================================================
-// GENERACIÓN DE ACTA PDF FORMAL CON MEMBRETE OFICIAL INNOVARQZ
+// GENERACIÓN DE ACTA PDF FORMAL
 // ==============================================================================
 async function generarPDFActaRecibo() {
     if (!window.PDFLib) {
@@ -987,7 +965,6 @@ async function generarPDFActaRecibo() {
 
     const { PDFDocument, rgb, degrees, StandardFonts } = window.PDFLib;
     const pdfDoc = await PDFDocument.create();
-    
     const pageWidth = 612;
     const pageHeight = 792;
     const page = pdfDoc.addPage([pageWidth, pageHeight]);
@@ -1006,59 +983,30 @@ async function generarPDFActaRecibo() {
     const printableWidth = rightMargin - leftMargin;
 
     page.drawText("InnovArqZ", {
-        x: 140,
-        y: 290,
-        size: 72,
-        font: fontBold,
+        x: 140, y: 290, size: 72, font: fontBold,
         color: rgb(15 / 255, 23 / 255, 42 / 255),
-        opacity: 0.035,
-        rotate: degrees(32)
+        opacity: 0.035, rotate: degrees(32)
     });
 
     page.drawText("Innov", { x: leftMargin, y: 738, size: 24, font: fontBold, color: colorDark });
     page.drawText("ArqZ", { x: leftMargin + 65, y: 738, size: 24, font: fontBold, color: colorCopper });
-
-    page.drawText("SOLUCIONES INTEGRALES", { 
-        x: leftMargin, y: 724, size: 8, font: fontBold, color: colorSlate 
-    });
-    page.drawText("Consultoría BIM/CIM • Arquitectura • Ingeniería", { 
-        x: leftMargin, y: 711, size: 7.5, font: fontBold, color: colorCopper 
-    });
+    page.drawText("SOLUCIONES INTEGRALES", { x: leftMargin, y: 724, size: 8, font: fontBold, color: colorSlate });
+    page.drawText("Consultoría BIM/CIM • Arquitectura • Ingeniería", { x: leftMargin, y: 711, size: 7.5, font: fontBold, color: colorCopper });
 
     const credDirector = "DIRECTOR: Arq. James R. Zuñiga C.";
     const credMatricula = "M.P CPNAA No: A137812026-1122783013";
     const credWeb = "PORTAFOLIO: www.innovarqzsas.com/portafolio";
 
-    const wDir = fontRegular.widthOfTextAtSize(credDirector, 7.5);
-    const wMat = fontRegular.widthOfTextAtSize(credMatricula, 7.5);
-    const wWeb = fontRegular.widthOfTextAtSize(credWeb, 7.5);
-
-    page.drawText(credDirector, { x: rightMargin - wDir, y: 738, size: 7.5, font: fontRegular, color: colorDark });
-    page.drawText(credMatricula, { x: rightMargin - wMat, y: 724, size: 7.5, font: fontRegular, color: colorDark });
-    page.drawText(credWeb, { x: rightMargin - wWeb, y: 711, size: 7.5, font: fontRegular, color: colorDark });
+    page.drawText(credDirector, { x: rightMargin - fontRegular.widthOfTextAtSize(credDirector, 7.5), y: 738, size: 7.5, font: fontRegular, color: colorDark });
+    page.drawText(credMatricula, { x: rightMargin - fontRegular.widthOfTextAtSize(credMatricula, 7.5), y: 724, size: 7.5, font: fontRegular, color: colorDark });
+    page.drawText(credWeb, { x: rightMargin - fontRegular.widthOfTextAtSize(credWeb, 7.5), y: 711, size: 7.5, font: fontRegular, color: colorDark });
 
     const yLine = 698;
     const copperWidth = printableWidth * 0.32;
-    page.drawLine({
-        start: { x: leftMargin, y: yLine },
-        end: { x: leftMargin + copperWidth, y: yLine },
-        thickness: 2.5,
-        color: colorCopper
-    });
-    page.drawLine({
-        start: { x: leftMargin + copperWidth, y: yLine },
-        end: { x: rightMargin, y: yLine },
-        thickness: 2.5,
-        color: colorDark
-    });
+    page.drawLine({ start: { x: leftMargin, y: yLine }, end: { x: leftMargin + copperWidth, y: yLine }, thickness: 2.5, color: colorCopper });
+    page.drawLine({ start: { x: leftMargin + copperWidth, y: yLine }, end: { x: rightMargin, y: yLine }, thickness: 2.5, color: colorDark });
 
-    page.drawText("ACTA DE RECIBO A SATISFACCIÓN Y CIERRE DE HITO", {
-        x: leftMargin,
-        y: 668,
-        size: 11.5,
-        font: fontBold,
-        color: colorDark
-    });
+    page.drawText("ACTA DE RECIBO A SATISFACCIÓN Y CIERRE DE HITO", { x: leftMargin, y: 668, size: 11.5, font: fontBold, color: colorDark });
 
     const fechaStr = new Date().toLocaleString();
     let yMeta = 642;
@@ -1072,27 +1020,13 @@ async function generarPDFActaRecibo() {
 
     let yDecl = yMeta - 22;
     page.drawText("DECLARACIÓN DE CONFORMIDAD", { x: leftMargin, y: yDecl, size: 10, font: fontBold, color: colorCopper });
-    
     yDecl -= 15;
-    const textoClausula = "Por medio del presente documento, el cliente hace constar que INNOVARQZ SOLUCIONES INTEGRALES S.A.S. cumplió a cabalidad con los entregables técnicos de información, planos y modelos acordados. Se confirma la recepción a satisfacción de la documentación aprobada y se autoriza formalmente el cierre del hito correspondiente.";
-    page.drawText(textoClausula, {
-        x: leftMargin,
-        y: yDecl,
-        size: 8.5,
-        font: fontRegular,
-        color: colorDark,
-        maxWidth: printableWidth,
-        lineHeight: 12
+    page.drawText("Por medio del presente documento, el cliente hace constar que INNOVARQZ SOLUCIONES INTEGRALES S.A.S. cumplió a cabalidad con los entregables técnicos de información, planos y modelos acordados. Se confirma la recepción a satisfacción de la documentación aprobada y se autoriza formalmente el cierre del hito correspondiente.", {
+        x: leftMargin, y: yDecl, size: 8.5, font: fontRegular, color: colorDark, maxWidth: printableWidth, lineHeight: 12
     });
 
     let yList = yDecl - 40;
-    page.drawText("LISTA DE ENTREGABLES APROBADOS (03_PUBLISHED):", {
-        x: leftMargin,
-        y: yList,
-        size: 9.5,
-        font: fontBold,
-        color: colorDark
-    });
+    page.drawText("LISTA DE ENTREGABLES APROBADOS (03_PUBLISHED):", { x: leftMargin, y: yList, size: 9.5, font: fontBold, color: colorDark });
 
     const { data: files } = await supabaseClient
         .from("audit_logs")
@@ -1105,41 +1039,20 @@ async function generarPDFActaRecibo() {
     if (files && files.length > 0) {
         const unicosPublished = new Map();
         files.forEach(f => {
-            if (
-                !f.archivo_nombre.includes("ACTA_") && 
-                !f.archivo_nombre.includes("NOTA_TECNICA") && 
-                !f.archivo_nombre.includes("CARGA DE ENTREGABLE") && 
-                !f.archivo_nombre.includes("PROMOCIÓN_")
-            ) {
+            if (!f.archivo_nombre.includes("ACTA_") && !f.archivo_nombre.includes("NOTA_TECNICA") && !f.archivo_nombre.includes("CARGA DE ENTREGABLE") && !f.archivo_nombre.includes("PROMOCIÓN_")) {
                 if (!unicosPublished.has(f.archivo_nombre)) unicosPublished.set(f.archivo_nombre, f);
             }
         });
 
         unicosPublished.forEach(f => {
             if (yPos > 175) {
-                page.drawText(`• ${f.archivo_nombre} (${f.version || 'V1.0'})`, {
-                    x: leftMargin + 10,
-                    y: yPos,
-                    size: 8,
-                    font: fontRegular,
-                    color: colorDark
-                });
+                page.drawText(`• ${f.archivo_nombre} (${f.version || 'V1.0'})`, { x: leftMargin + 10, y: yPos, size: 8, font: fontRegular, color: colorDark });
                 yPos -= 14;
             }
         });
-    } else {
-        page.drawText("• Sin entregables técnicos registrados en 03_PUBLISHED a la fecha.", {
-            x: leftMargin + 10,
-            y: yPos,
-            size: 8,
-            font: fontRegular,
-            color: colorSlate
-        });
-        yPos -= 14;
     }
 
     const yFirmaLine = 135;
-    
     page.drawLine({ start: { x: leftMargin, y: yFirmaLine }, end: { x: leftMargin + 200, y: yFirmaLine }, thickness: 1, color: colorSlate });
     page.drawText("ARQ. JAMES RAMIRO ZUÑIGA CAIPE", { x: leftMargin, y: yFirmaLine - 14, size: 8.5, font: fontBold, color: colorDark });
     page.drawText("Representante Legal", { x: leftMargin, y: yFirmaLine - 25, size: 8, font: fontRegular, color: colorSlate });
@@ -1147,15 +1060,12 @@ async function generarPDFActaRecibo() {
 
     const colRightX = rightMargin - 200;
     page.drawLine({ start: { x: colRightX, y: yFirmaLine }, end: { x: rightMargin, y: yFirmaLine }, thickness: 1, color: colorSlate });
-    page.drawText(currentUser.nombre_completo ? currentUser.nombre_completo.toUpperCase() : "CLIENTE FINAL", { 
-        x: colRightX, y: yFirmaLine - 14, size: 8.5, font: fontBold, color: colorDark 
-    });
+    page.drawText(currentUser.nombre_completo ? currentUser.nombre_completo.toUpperCase() : "CLIENTE FINAL", { x: colRightX, y: yFirmaLine - 14, size: 8.5, font: fontBold, color: colorDark });
     page.drawText("Firma Digital y Sello CDE", { x: colRightX, y: yFirmaLine - 25, size: 8, font: fontRegular, color: colorSlate });
     page.drawText(`Verificación: ${currentUser.email || ''}`, { x: colRightX, y: yFirmaLine - 36, size: 7.5, font: fontRegular, color: colorDark });
 
     const yFooterLine = 68;
     page.drawLine({ start: { x: leftMargin, y: yFooterLine }, end: { x: rightMargin, y: yFooterLine }, thickness: 1, color: colorBorder });
-
     page.drawText("InnovArqZ Soluciones Integrales", { x: leftMargin, y: 53, size: 8, font: fontBold, color: colorDark });
     page.drawText('"Construimos juntos el valor de tus espacios', { x: leftMargin, y: 41, size: 7.5, font: fontOblique, color: colorDark });
     page.drawText('DE PRINCIPIO A FIN"', { x: leftMargin, y: 28, size: 10, font: fontBold, color: colorCopper });
@@ -1164,20 +1074,15 @@ async function generarPDFActaRecibo() {
     const lineEmail = "Email: gerenciabim@innovarqzsas.com";
     const lineTel = "TEL / WA: +57 315 850 5885";
 
-    const wFWeb = fontRegular.widthOfTextAtSize(lineWeb, 7.5);
-    const wFEmail = fontRegular.widthOfTextAtSize(lineEmail, 7.5);
-    const wFTel = fontRegular.widthOfTextAtSize(lineTel, 7.5);
+    page.drawText(lineWeb, { x: rightMargin - fontRegular.widthOfTextAtSize(lineWeb, 7.5), y: 53, size: 7.5, font: fontRegular, color: colorDark });
+    page.drawText(lineEmail, { x: rightMargin - fontRegular.widthOfTextAtSize(lineEmail, 7.5), y: 41, size: 7.5, font: fontRegular, color: colorDark });
+    page.drawText(lineTel, { x: rightMargin - fontRegular.widthOfTextAtSize(lineTel, 7.5), y: 28, size: 7.5, font: fontBold, color: colorDark });
 
-    page.drawText(lineWeb, { x: rightMargin - wFWeb, y: 53, size: 7.5, font: fontRegular, color: colorDark });
-    page.drawText(lineEmail, { x: rightMargin - wFEmail, y: 41, size: 7.5, font: fontRegular, color: colorDark });
-    page.drawText(lineTel, { x: rightMargin - wFTel, y: 28, size: 7.5, font: fontBold, color: colorDark });
-
-    const pdfBytes = await pdfDoc.saveAsBase64({ dataUri: false });
-    return pdfBytes;
+    return await pdfDoc.saveAsBase64({ dataUri: false });
 }
 
 // ==============================================================================
-// GESTIÓN DEL VISOR MULTIMODAL CON ARQUITECTURA RESPONSIVA DE DISPOSITIVO
+// GESTIÓN DEL VISOR MULTIMODAL
 // ==============================================================================
 async function openViewerModal(driveUrl, nombreArchivo) {
     const ext = nombreArchivo.split('.').pop().toLowerCase();
@@ -1189,41 +1094,31 @@ async function openViewerModal(driveUrl, nombreArchivo) {
     }
     currentExternalUrl = targetDirectUrl;
 
-    // 1. CASO VIDEOS (.MP4, .WEBM, .MOV)
     if (["mp4", "webm", "mov"].includes(ext)) {
-        if (esMovilPequeno) {
-            window.open(targetDirectUrl, "_blank");
-            return;
-        }
-
+        if (esMovilPequeno) { window.open(targetDirectUrl, "_blank"); return; }
         registrarAperturaModalEnHistorial("viewerModal");
         desplegarModalIframe(targetDirectUrl, nombreArchivo, false);
         return;
     }
 
-    // 2. CASO MODELOS BIM IFC 3D (.IFC)
     if (ext === "ifc") {
         registrarAperturaModalEnHistorial("viewerModal");
         desplegarModalIFC(driveUrl, nombreArchivo);
         return;
     }
 
-    // 3. CASO IMÁGENES / RENDERS (.PNG, .JPG, .JPEG, .WEBP)
     if (["png", "jpg", "jpeg", "webp"].includes(ext)) {
         registrarAperturaModalEnHistorial("viewerModal");
         desplegarModalImagen(driveUrl, nombreArchivo);
         return;
     }
 
-    // 4. CASO DOCUMENTOS Y PLANOS PDF / HTML
     registrarAperturaModalEnHistorial("viewerModal");
     desplegarModalIframe(targetDirectUrl, nombreArchivo, esMovilPequeno);
 }
 
 function openCurrentInExternalTab() {
-    if (currentExternalUrl) {
-        window.open(currentExternalUrl, "_blank");
-    }
+    if (currentExternalUrl) window.open(currentExternalUrl, "_blank");
 }
 
 function desplegarModalIframe(url, titulo, mostrarZoomControls) {
@@ -1240,7 +1135,7 @@ function desplegarModalIframe(url, titulo, mostrarZoomControls) {
     title.innerText = `Previsualizando: ${titulo}`;
 
     if (imgWrapper) imgWrapper.style.display = "none";
-    if (ifcCont) { ifcCont.style.display = "none"; }
+    if (ifcCont) ifcCont.style.display = "none";
     if (loading) loading.style.display = "none";
 
     resetActiveZoom();
@@ -1254,11 +1149,8 @@ function desplegarModalIframe(url, titulo, mostrarZoomControls) {
     modal.classList.add("modal-overlay");
 
     setTimeout(() => {
-        if (frame.contentWindow) {
-            frame.contentWindow.location.replace(url);
-        } else {
-            frame.src = url;
-        }
+        if (frame.contentWindow) frame.contentWindow.location.replace(url);
+        else frame.src = url;
     }, 40);
 }
 
@@ -1278,7 +1170,7 @@ function desplegarModalImagen(driveUrl, titulo) {
 
     if (scalerWrapper) scalerWrapper.style.display = "none";
     if (frame) frame.src = "about:blank";
-    if (ifcCont) { ifcCont.style.display = "none"; }
+    if (ifcCont) ifcCont.style.display = "none";
     if (loading) loading.style.display = "none";
 
     resetActiveZoom();
@@ -1290,9 +1182,7 @@ function desplegarModalImagen(driveUrl, titulo) {
     let imgDirectUrl = driveUrl;
     if (driveUrl.includes("drive.google.com")) {
         const match = driveUrl.match(/[-\w]{25,}/);
-        if (match) {
-            imgDirectUrl = `https://drive.google.com/uc?export=view&id=${match[0]}`;
-        }
+        if (match) imgDirectUrl = `https://drive.google.com/uc?export=view&id=${match[0]}`;
     }
     imgElement.src = imgDirectUrl;
 
@@ -1325,7 +1215,7 @@ async function desplegarModalIFC(driveUrl, titulo) {
     ifcCont.style.display = "block";
     if (loading) {
         loading.style.display = "block";
-        loading.innerHTML = `<div style="margin-bottom:6px;">⏳ Descargando modelo desde Google Drive...</div><small style="color:#94a3b8;">(Optimizando geometría 3D y aristas técnicas)</small>`;
+        loading.innerHTML = `<div style="margin-bottom:6px;">⏳ Descargando modelo desde Google Drive...</div><small style="color:#94a3b8;">(Procesando geometría BIM 3D con That Open Company v0.0.78)</small>`;
     }
 
     modal.style.display = "flex";
@@ -1360,6 +1250,7 @@ function closeViewerModal(triggerHistory = true) {
     if (loading) loading.style.display = "none";
 
     resetActiveZoom();
+    cerrarCardPropiedadesIFC();
 
     if (ifcAnimationId) {
         cancelAnimationFrame(ifcAnimationId);
@@ -1372,9 +1263,15 @@ function closeViewerModal(triggerHistory = true) {
         ifcRenderer.dispose();
         ifcRenderer = null;
     }
-    if (ifcCont) {
-        ifcCont.style.display = "none";
+    if (ifcCont) ifcCont.style.display = "none";
+
+    if (ifcApiInstance && currentLoadedModelID !== null) {
+        try { ifcApiInstance.CloseModel(currentLoadedModelID); } catch(e){}
+        currentLoadedModelID = null;
     }
+
+    modalActivoId = null;
+    currentExternalUrl = "";
 
     if (modal) {
         modal.style.setProperty("display", "none", "important");
@@ -1382,16 +1279,13 @@ function closeViewerModal(triggerHistory = true) {
         modal.classList.add("modal-hidden");
     }
 
-    modalActivoId = null;
-    currentExternalUrl = "";
-
     if (triggerHistory && window.history.state && window.history.state.modalOpen) {
         window.history.back();
     }
 }
 
 // ==============================================================================
-// GESTIÓN UNIVERSAL DE ZOOM Y PANEO 360° (CON CAPA INTERCEPTORA DINÁMICA)
+// GESTIÓN UNIVERSAL DE ZOOM Y PANEO
 // ==============================================================================
 function setupUniversalZoomInteractions() {
     const container = document.getElementById("viewerContainer");
@@ -1447,9 +1341,7 @@ function setupUniversalZoomInteractions() {
         }
     }, { passive: true });
 
-    dragOverlay.addEventListener("touchend", () => {
-        isPanningActive = false;
-    });
+    dragOverlay.addEventListener("touchend", () => { isPanningActive = false; });
 }
 
 function getTouchDistance(touches) {
@@ -1460,16 +1352,9 @@ function getTouchDistance(touches) {
 
 function zoomActiveElement(delta) {
     activeZoomScale = Math.min(Math.max(1, activeZoomScale + delta), 4.5);
-    
     const dragOverlay = document.getElementById("dragCaptureOverlay");
-    if (dragOverlay) {
-        dragOverlay.style.display = (activeZoomScale > 1) ? "block" : "none";
-    }
-
-    if (activeZoomScale === 1) {
-        activePanX = 0;
-        activePanY = 0;
-    }
+    if (dragOverlay) dragOverlay.style.display = (activeZoomScale > 1) ? "block" : "none";
+    if (activeZoomScale === 1) { activePanX = 0; activePanY = 0; }
     applyActiveTransform();
 }
 
@@ -1477,16 +1362,13 @@ function resetActiveZoom() {
     activeZoomScale = 1;
     activePanX = 0;
     activePanY = 0;
-
     const dragOverlay = document.getElementById("dragCaptureOverlay");
     if (dragOverlay) dragOverlay.style.display = "none";
-
     applyActiveTransform();
 }
 
 function applyActiveTransform() {
     const transformStyle = `translate(${activePanX}px, ${activePanY}px) scale(${activeZoomScale})`;
-    
     if (activeZoomTarget === "IMAGE") {
         const img = document.getElementById("modalImageViewer");
         if (img) img.style.transform = transformStyle;
@@ -1497,74 +1379,69 @@ function applyActiveTransform() {
 }
 
 // ==============================================================================
-// MOTOR BIM OPEN SOURCE 3D PARA IFC (SHADED CON LÍNEAS, TERRENO Y VISTAS)
+// MOTOR BIM OPEN SOURCE 3D (THAT OPEN COMPANY WEB-IFC v0.0.78 CON CLIPPING Y VISTAS)
 // ==============================================================================
 async function obtenerConstructorIfcAPI() {
-    if (window.WebIFC && window.WebIFC.IfcAPI) {
-        return window.WebIFC.IfcAPI;
-    }
-    if (window.IfcAPI) {
-        return window.IfcAPI;
-    }
+    if (window.WebIFC && window.WebIFC.IfcAPI) return window.WebIFC.IfcAPI;
+    if (window.IfcAPI) return window.IfcAPI;
 
     try {
-        const modulo = await import("https://cdn.jsdelivr.net/npm/web-ifc@0.0.44/web-ifc-api.js");
-        if (modulo && modulo.IfcAPI) {
-            return modulo.IfcAPI;
-        }
+        const modulo = await import("https://cdn.jsdelivr.net/npm/web-ifc@0.0.78/web-ifc-api.js");
+        if (modulo && modulo.IfcAPI) return modulo.IfcAPI;
     } catch (e) {
-        console.warn("Fallback dinámico ESM no disponible:", e);
+        console.warn("Fallback dynamic import v0.0.78 no disponible:", e);
     }
-
-    throw new Error("No se pudo cargar la librería WebIFC en el navegador.");
+    throw new Error("No se pudo cargar la librería WebIFC v0.0.78 en el navegador.");
 }
 
 async function inicializarVisorIFC(fileUrl, container) {
-    // 1. Conservar la botonera de navegación si ya existe en el DOM
-    const navToolbar = document.getElementById("ifcNavToolbar");
     if (ifcRenderer && ifcRenderer.domElement && ifcRenderer.domElement.parentNode === container) {
         container.removeChild(ifcRenderer.domElement);
     }
+    ifcMeshesList.length = 0;
 
     const width = container.clientWidth || 800;
     const height = container.clientHeight || 550;
 
-    // 2. Escena con fondo neutro de software técnico (Gris azulado claro)
     ifcScene = new THREE.Scene();
     ifcScene.background = new THREE.Color(0xf1f5f9);
 
-    // 3. Cámara en perspectiva y renderizador sRGB
-    ifcCamera = new THREE.PerspectiveCamera(45, width / height, 0.1, 2500);
-    ifcCamera.position.set(30, 25, 30);
+    ifcCamera = new THREE.PerspectiveCamera(45, width / height, 0.1, 3000);
+    ifcCamera.position.set(35, 25, 35);
 
     ifcRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     ifcRenderer.setSize(width, height);
     ifcRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     ifcRenderer.outputEncoding = THREE.sRGBEncoding;
+    ifcRenderer.localClippingEnabled = true; // Activa cortes dinámicos 3D
     container.insertBefore(ifcRenderer.domElement, container.firstChild);
 
     ifcControls = new THREE.OrbitControls(ifcCamera, ifcRenderer.domElement);
     ifcControls.enableDamping = true;
     ifcControls.dampingFactor = 0.08;
-    ifcControls.maxPolarAngle = Math.PI / 2 + 0.05;
 
-    // 4. Esquema de iluminación técnico: Hemisferio + Sol principal + Relleno suave
+    // Iluminación Técnica Bim
     const hemiLight = new THREE.HemisphereLight(0xffffff, 0xcfd8dc, 0.85);
     hemiLight.position.set(0, 60, 0);
     ifcScene.add(hemiLight);
 
     const sunLight = new THREE.DirectionalLight(0xfffdfa, 0.75);
-    sunLight.position.set(45, 65, 35);
+    sunLight.position.set(50, 70, 40);
     ifcScene.add(sunLight);
 
     const fillLight = new THREE.DirectionalLight(0xe2e8f0, 0.4);
-    fillLight.position.set(-45, 20, -35);
+    fillLight.position.set(-50, 20, -40);
     ifcScene.add(fillLight);
 
-    // 5. Cuadrícula sutil de referencia
     ifcGridHelper = new THREE.GridHelper(60, 60, 0x94a3b8, 0xe2e8f0);
     ifcGridHelper.position.y = -0.01;
     ifcScene.add(ifcGridHelper);
+
+    // Inicializar Raycaster para selección de propiedades
+    raycaster = new THREE.Raycaster();
+    mousePointer = new THREE.Vector2();
+
+    ifcRenderer.domElement.addEventListener('click', onIfcModelClick);
 
     function animate() {
         ifcAnimationId = requestAnimationFrame(animate);
@@ -1573,20 +1450,21 @@ async function inicializarVisorIFC(fileUrl, container) {
     }
     animate();
 
-    // 6. Motor WebIFC WebAssembly
+    // 1. Motor WebIFC v0.0.78 de That Open Company
     const IfcAPIClass = await obtenerConstructorIfcAPI();
     if (!ifcApiInstance) {
         ifcApiInstance = new IfcAPIClass();
-        ifcApiInstance.SetWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.44/");
+        ifcApiInstance.SetWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.78/");
         await ifcApiInstance.Init();
     }
 
-    // 7. Descarga directa binaria desde Google Drive API
+    // 2. Extraer ID del archivo en Drive
     let fileId = "";
     const match = fileUrl.match(/[-\w]{25,}/);
     if (match) fileId = match[0];
     if (!fileId) throw new Error("No se pudo detectar el ID del archivo en Google Drive.");
 
+    // 3. Descarga Directa Binaria con Google Drive API Key
     const directApiUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${GOOGLE_DRIVE_API_KEY}`;
     const response = await fetch(directApiUrl);
     if (!response.ok) {
@@ -1597,9 +1475,17 @@ async function inicializarVisorIFC(fileUrl, container) {
     const buffer = await response.arrayBuffer();
     const bytesArray = new Uint8Array(buffer);
 
-    // 8. Decodificación y generación de mallas con aristas geométricas (Shaded with Edges)
-    const modelID = ifcApiInstance.OpenModel(bytesArray);
+    // 4. Apertura con configuración avanzada de That Open Company
+    const modelSettings = {
+        COORDINATE_TO_ORIGIN: true, // Reubica masas de emplazamiento / IfcSite al centro de la escena
+        USE_FAST_BOOLS: true        // Acelera cálculo de vanos y cortes topográficos
+    };
+
+    currentLoadedModelID = ifcApiInstance.OpenModel(bytesArray, modelSettings);
     ifcCurrentGroup = new THREE.Group();
+
+    // Inicializar plano de corte en Y
+    ifcClippingPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 100);
 
     const edgeLineMaterial = new THREE.LineBasicMaterial({
         color: 0x334155,
@@ -1607,11 +1493,12 @@ async function inicializarVisorIFC(fileUrl, container) {
         opacity: 0.35
     });
 
-    ifcApiInstance.StreamAllMeshes(modelID, (flatMesh) => {
+    // 5. Procesamiento de mallas con aristas y planos de corte activos
+    ifcApiInstance.StreamAllMeshes(currentLoadedModelID, (flatMesh) => {
         const placedGeometries = flatMesh.geometries;
         for (let i = 0; i < placedGeometries.size(); i++) {
             const placedGeometry = placedGeometries.get(i);
-            const meshGeometry = ifcApiInstance.GetGeometry(modelID, placedGeometry.geometryExpressID);
+            const meshGeometry = ifcApiInstance.GetGeometry(currentLoadedModelID, placedGeometry.geometryExpressID);
 
             const verts = ifcApiInstance.GetVertexArray(meshGeometry.GetVertexData(), meshGeometry.GetVertexDataSize());
             const indices = ifcApiInstance.GetIndexArray(meshGeometry.GetIndexData(), meshGeometry.GetIndexDataSize());
@@ -1639,14 +1526,22 @@ async function inicializarVisorIFC(fileUrl, container) {
                 transparent: esTransparente,
                 roughness: 0.45,
                 metalness: 0.05,
-                side: THREE.DoubleSide
+                side: THREE.DoubleSide,
+                clippingPlanes: [ifcClippingPlane],
+                clipShadows: true
             });
 
             const mesh = new THREE.Mesh(bufferGeometry, material);
             const matrix = new THREE.Matrix4().fromArray(placedGeometry.flatTransformation);
             mesh.applyMatrix4(matrix);
 
-            // Generar aristas de bordes técnicos en elementos volumétricos
+            // Metadata para inspección de propiedades al clic
+            mesh.userData = {
+                expressID: placedGeometry.geometryExpressID,
+                modelID: currentLoadedModelID
+            };
+
+            // Delineado de bordes sobre geometría
             if (!esTransparente && posFloats.length < 6000) {
                 const edges = new THREE.EdgesGeometry(bufferGeometry, 24);
                 const lineSegments = new THREE.LineSegments(edges, edgeLineMaterial);
@@ -1654,30 +1549,31 @@ async function inicializarVisorIFC(fileUrl, container) {
             }
 
             ifcCurrentGroup.add(mesh);
+            ifcMeshesList.push(mesh);
         }
     });
 
-    ifcApiInstance.CloseModel(modelID);
-
-    // 9. Centrar geométricamente y calcular caja de encuadre
+    // 6. Centrado y caja de encuadre
     const box = new THREE.Box3().setFromObject(ifcCurrentGroup);
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
 
     ifcCurrentGroup.position.x -= center.x;
-    ifcCurrentGroup.position.y -= center.y - (size.y / 2); // Apoyar base en el suelo Y=0
+    ifcCurrentGroup.position.y -= center.y - (size.y / 2);
     ifcCurrentGroup.position.z -= center.z;
 
     ifcScene.add(ifcCurrentGroup);
 
     ifcModelBounds.center.set(0, size.y / 2, 0);
+    ifcModelBounds.size.copy(size);
     ifcModelBounds.maxDim = Math.max(size.x, size.y, size.z);
 
+    configurarPlanoCorte();
     ajustarVistaModeloIFC();
 }
 
 // ==============================================================================
-// CONTROLADORES DE LA BOTONERA DE NAVEGACIÓN BIM
+// BOTONERA COMPLETA DE VISTAS ORTOGONALES Y 3D
 // ==============================================================================
 function ajustarVistaModeloIFC() {
     if (!ifcCamera || !ifcControls) return;
@@ -1696,10 +1592,16 @@ function cambiarVistaIFC(tipo) {
         ifcCamera.position.set(d * 1.3, d * 1.0, d * 1.3);
     } else if (tipo === 'FRONTAL') {
         ifcCamera.position.set(0, cy, d * 1.8);
-    } else if (tipo === 'LATERAL') {
+    } else if (tipo === 'POSTERIOR') {
+        ifcCamera.position.set(0, cy, -d * 1.8);
+    } else if (tipo === 'LATERAL_IZQ') {
+        ifcCamera.position.set(-d * 1.8, cy, 0);
+    } else if (tipo === 'LATERAL_DER') {
         ifcCamera.position.set(d * 1.8, cy, 0);
     } else if (tipo === 'PLANTA') {
-        ifcCamera.position.set(0, d * 2.2, 0.001); // Leve desvío en Z para asegurar el eje de OrbitControls
+        ifcCamera.position.set(0, d * 2.2, 0.001);
+    } else if (tipo === 'INFERIOR') {
+        ifcCamera.position.set(0, -d * 2.2, 0.001);
     }
 
     ifcControls.target.copy(ifcModelBounds.center);
@@ -1707,13 +1609,149 @@ function cambiarVistaIFC(tipo) {
 }
 
 function alternarCuadriculaIFC() {
-    if (ifcGridHelper) {
-        ifcGridHelper.visible = !ifcGridHelper.visible;
+    if (ifcGridHelper) ifcGridHelper.visible = !ifcGridHelper.visible;
+}
+
+// ==============================================================================
+// HERRAMIENTA DE SECCIÓN Y CORTES 3D DINÁMICOS (CLIPPING)
+// ==============================================================================
+function alternarPanelCorteIFC() {
+    const panel = document.getElementById("ifcSectionToolPanel");
+    const btn = document.getElementById("btnToggleSectionBox");
+    if (!panel) return;
+
+    isSectionToolActive = !isSectionToolActive;
+    panel.style.display = isSectionToolActive ? "block" : "none";
+    if (btn) btn.style.background = isSectionToolActive ? "#10b981" : "#0284c7";
+
+    if (!isSectionToolActive && ifcClippingPlane) {
+        ifcClippingPlane.constant = 5000; // Desactiva el corte visual alejando el plano
+    } else {
+        configurarPlanoCorte();
+    }
+}
+
+function configurarPlanoCorte() {
+    if (!ifcClippingPlane) return;
+    const radios = document.getElementsByName("clipAxis");
+    radios.forEach(r => { if (r.checked) ifcClipAxis = r.value; });
+
+    let normal = new THREE.Vector3(0, -1, 0);
+    if (ifcClipAxis === 'X') normal.set(-1, 0, 0);
+    else if (ifcClipAxis === 'Z') normal.set(0, 0, -1);
+
+    if (ifcClipInverted) normal.negate();
+    ifcClippingPlane.normal.copy(normal);
+
+    const slider = document.getElementById("clipSlider");
+    if (slider) actualizarPosicionCorte(slider.value);
+}
+
+function actualizarPosicionCorte(valPercent) {
+    if (!ifcClippingPlane) return;
+    const pct = parseFloat(valPercent) / 100;
+    let min = 0, max = 0;
+
+    if (ifcClipAxis === 'Y') {
+        min = 0;
+        max = ifcModelBounds.size.y || 20;
+    } else if (ifcClipAxis === 'X') {
+        min = -ifcModelBounds.size.x / 2;
+        max = ifcModelBounds.size.x / 2;
+    } else if (ifcClipAxis === 'Z') {
+        min = -ifcModelBounds.size.z / 2;
+        max = ifcModelBounds.size.z / 2;
+    }
+
+    const currentPos = min + (max - min) * pct;
+    ifcClippingPlane.constant = ifcClipInverted ? -currentPos : currentPos;
+}
+
+function invertirPlanoCorte() {
+    ifcClipInverted = !ifcClipInverted;
+    configurarPlanoCorte();
+}
+
+// ==============================================================================
+// INSPECCIÓN DE PROPIEDADES BIM AL CLIC
+// ==============================================================================
+function onIfcModelClick(event) {
+    const rect = ifcRenderer.domElement.getBoundingClientRect();
+    mousePointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mousePointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    raycaster.setFromCamera(mousePointer, ifcCamera);
+    const intersects = raycaster.intersectObjects(ifcMeshesList);
+
+    if (intersects.length > 0) {
+        const hit = intersects[0].object;
+        resaltarElementoIFC(hit);
+        mostrarPropiedadesElementoIFC(hit.userData);
+    }
+}
+
+function resaltarElementoIFC(mesh) {
+    if (highlightedMesh && originalMaterial) {
+        highlightedMesh.material = originalMaterial;
+    }
+    highlightedMesh = mesh;
+    originalMaterial = mesh.material;
+
+    mesh.material = new THREE.MeshStandardMaterial({
+        color: 0xd97706,
+        roughness: 0.2,
+        metalness: 0.1,
+        side: THREE.DoubleSide,
+        clippingPlanes: [ifcClippingPlane]
+    });
+}
+
+function mostrarPropiedadesElementoIFC(userData) {
+    const card = document.getElementById("ifcPropertyCard");
+    const title = document.getElementById("ifcPropTitle");
+    const content = document.getElementById("ifcPropContent");
+    if (!card || !content) return;
+
+    card.style.display = "block";
+    title.innerText = `Elemento BIM (ID: ${userData.expressID || 'N/A'})`;
+
+    let html = `
+        <div style="margin-bottom: 4px;"><strong>ExpressID:</strong> ${userData.expressID}</div>
+        <div style="margin-bottom: 4px;"><strong>Modelo ID:</strong> ${userData.modelID}</div>
+        <div style="margin-bottom: 4px;"><strong>Norma:</strong> ISO 19650 Compliance</div>
+    `;
+
+    // Consulta de esquema a That Open Company
+    if (ifcApiInstance && userData.modelID !== undefined && userData.expressID !== undefined) {
+        try {
+            const props = ifcApiInstance.GetLine(userData.modelID, userData.expressID);
+            if (props) {
+                html += `
+                    <div style="margin-bottom: 4px;"><strong>Tipo IFC:</strong> ${props.__proto__.constructor.name || 'IfcElement'}</div>
+                    ${props.Name ? `<div><strong>Nombre:</strong> ${props.Name.value}</div>` : ''}
+                    ${props.ObjectType ? `<div><strong>Objeto:</strong> ${props.ObjectType.value}</div>` : ''}
+                `;
+            }
+        } catch (e) {
+            console.warn("Propiedad no consultable directamente:", e);
+        }
+    }
+
+    content.innerHTML = html;
+}
+
+function cerrarCardPropiedadesIFC() {
+    const card = document.getElementById("ifcPropertyCard");
+    if (card) card.style.display = "none";
+    if (highlightedMesh && originalMaterial) {
+        highlightedMesh.material = originalMaterial;
+        highlightedMesh = null;
+        originalMaterial = null;
     }
 }
 
 // ==============================================================================
-// RENDERIZADO DE ENTREGABLES CON FILTRO POR SUBCARPETAS Y EXCLUSIÓN DE EVENTOS
+// RENDERIZADO DE ENTREGABLES CON EXCLUSIÓN DE EVENTOS DE AUDITORÍA
 // ==============================================================================
 async function loadFiles() {
     const tbody = document.getElementById("filesTableBody");
@@ -1732,7 +1770,6 @@ async function loadFiles() {
         .order("id", { ascending: false });
 
     tbody.innerHTML = "";
-
     if (error) {
         tbody.innerHTML = `<tr><td colspan="5" style="color:#ef4444;">Error al cargar datos: ${error.message}</td></tr>`;
         return;
@@ -1749,41 +1786,31 @@ async function loadFiles() {
         listaAProcesar = files.filter(f => f.estado_origen === "04_ARCHIVED" || f.estado_destino === "04_ARCHIVED" || f.archivo_nombre.includes("_OLD_"));
     } else {
         const mapaUnicos = new Map();
-
         files.forEach(f => {
-            // IGNORAR REGISTROS DE SISTEMA Y EVENTOS DE AUDITORÍA
             if (
                 f.archivo_nombre.startsWith("ACTA_DECISION_CLIENTE") || 
                 f.archivo_nombre.startsWith("NOTA_TECNICA_") ||
                 f.archivo_nombre.startsWith("CARGA DE ENTREGABLE") ||
                 f.archivo_nombre.startsWith("PROMOCIÓN_")
-            ) {
-                return;
-            }
+            ) return;
 
-            if (f.archivo_nombre.includes("_OLD_")) {
-                return;
-            }
+            if (f.archivo_nombre.includes("_OLD_")) return;
 
             const eDestino = f.estado_destino || "";
             const eOrigen = f.estado_origen || "";
-
             let perteneceAPestana = (eDestino === activeTab || eOrigen === activeTab);
 
             const partes = f.archivo_nombre.split("_");
             if (!perteneceAPestana && partes.length >= 6) {
                 const codigoEstado = partes[5].split(".")[0].toUpperCase();
                 const estadosValidosPublished = ["CR", "ACT", "AP", "CON"];
-                
                 if (activeTab === "01_WIP" && (codigoEstado === "S0" || eOrigen === "01_WIP")) perteneceAPestana = true;
                 if (activeTab === "02_SHARED" && (codigoEstado.startsWith("S") || eOrigen === "02_SHARED")) perteneceAPestana = true;
                 if (activeTab === "03_PUBLISHED" && (codigoEstado.startsWith("A") || estadosValidosPublished.includes(codigoEstado) || eOrigen === "03_PUBLISHED")) perteneceAPestana = true;
             }
 
-            if (perteneceAPestana) {
-                if (!mapaUnicos.has(f.archivo_nombre)) {
-                    mapaUnicos.set(f.archivo_nombre, f);
-                }
+            if (perteneceAPestana && !mapaUnicos.has(f.archivo_nombre)) {
+                mapaUnicos.set(f.archivo_nombre, f);
             }
         });
 
@@ -1794,7 +1821,6 @@ async function loadFiles() {
         listaAProcesar = listaAProcesar.filter(f => {
             const nameUpper = f.archivo_nombre.toUpperCase();
             const esInstalacion = ["_MEP_", "_HID_", "_SAN_", "_ELE_", "_MEC_", "_PCI_", "_GAS_", "_VAC_"].some(tag => nameUpper.includes(tag));
-            
             if (activeTab === "01_WIP") {
                 if (activeSubfolder === "ARQ_Arquitectura") return nameUpper.includes("_ARQ_");
                 if (activeSubfolder === "EST_Estructura") return nameUpper.includes("_EST_");
@@ -1820,11 +1846,9 @@ async function loadFiles() {
     listaAProcesar.forEach(f => {
         const nombreCompleto = f.archivo_nombre || "";
         const parts = nombreCompleto.split("_");
-        
         const esValidoISO = parts.length >= 6;
         const disciplina = esValidoISO ? parts[4] : "SIN_FORMATO";
         const estadoISO = esValidoISO ? parts[5].split(".")[0] : activeTab;
-
         const ext = nombreCompleto.split('.').pop().toLowerCase();
         const esVisualizable = ["pdf", "png", "jpg", "jpeg", "webp", "html", "htm", "mp4", "webm", "mov", "ifc"].includes(ext);
         const fechaUltimaModificacion = f.version || "N/A";
@@ -1879,14 +1903,13 @@ async function loadFiles() {
     });
 }
 
-// Helpers Modales
+// Helpers Modales Proyectos
 async function prepareAndOpenProjectModal() {
     registrarAperturaModalEnHistorial("projectModal");
     const yearCurrent = new Date().getFullYear();
     const prefix = `PRY${yearCurrent}`;
 
     const { data: proyectos } = await supabaseClient.from("proyectos").select("codigo_proyecto");
-
     let maxNum = 0;
     if (proyectos && proyectos.length > 0) {
         proyectos.forEach(p => {
@@ -1902,7 +1925,6 @@ async function prepareAndOpenProjectModal() {
 
     const nextNum = String(maxNum + 1).padStart(3, '0');
     const autoCode = `${prefix}-${nextNum}`;
-
     const inputCodigo = document.getElementById("codigoProj");
     if (inputCodigo) {
         inputCodigo.value = autoCode;
@@ -1945,14 +1967,11 @@ function obtenerValorCampo(selectId, otherInputId) {
 }
 
 function esValidoTextoCampo(val) {
-    if (!val || val.length < 3) return false;
-    if (/^\d+$/.test(val)) return false;
-    return true;
+    return !(!val || val.length < 3 || /^\d+$/.test(val));
 }
 
 async function handleCreateProject(e) {
     e.preventDefault();
-    
     const codigo = document.getElementById("codigoProj").value.trim();
     const cliente = document.getElementById("clienteProj").value.trim();
     const ubicacion = obtenerValorCampo("ubicacionSelect", "ubicacionOtherInput");
@@ -1980,7 +1999,6 @@ async function handleCreateProject(e) {
             body: JSON.stringify(payload)
         });
         const responseData = await res.json();
-
         if (responseData.status === "success") {
             closeProjectModal();
             alert("¡Estructura generada exitosamente!");
