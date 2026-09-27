@@ -30,14 +30,15 @@ let ifcControls = null;
 let ifcAnimationId = null;
 let ifcApi = null;
 
-// ESTADO DE ZOOM Y PANEO PARA IMÁGENES
-let imgScale = 1;
-let imgPanX = 0;
-let imgPanY = 0;
-let isPanning = false;
+// ESTADO DE ZOOM Y PANEO UNIVERSAL (IMÁGENES Y PDF)
+let activeZoomScale = 1;
+let activePanX = 0;
+let activePanY = 0;
+let isPanningActive = false;
 let startPanX = 0;
 let startPanY = 0;
 let touchStartDist = 0;
+let activeZoomTarget = null; // 'IMAGE' o 'PDF'
 
 // CONTROL DE PILA DE HISTORIAL
 let modalActivoId = null;
@@ -72,7 +73,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     setupDropdownWithOther("ubicacionSelect", "ubicacionOtherInput");
     setupDropdownWithOther("tipoSelect", "tipoOtherInput");
-    setupImageZoomAndPan();
+    setupUniversalZoomInteractions();
 
     // INTERCEPTOR GLOBAL: TECLA ESCAPE EN PC
     window.addEventListener("keydown", (e) => {
@@ -111,46 +112,42 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 });
 
-// GESTIÓN DE PILA DE MODALES (HISTORY API ROBUSTA)
+// GESTIÓN DE PILA DE MODALES (HISTORY API)
 function registrarAperturaModalEnHistorial(modalId) {
     modalActivoId = modalId;
     history.pushState({ modalOpen: true, modalId: modalId }, "");
 }
 
 function cerrarCualquierModalAbierto(triggerHistoryBack = true) {
-    let seCerró = false;
+    let seCerro = false;
 
-    // 1. Viewer Modal
     const vModal = document.getElementById("viewerModal");
     if (vModal && (vModal.style.display === "flex" || vModal.classList.contains("modal-overlay"))) {
         closeViewerModal(false);
-        seCerró = true;
+        seCerro = true;
     }
 
-    // 2. Upload Modal
     const uModal = document.getElementById("uploadModal");
     if (uModal && (uModal.style.display === "flex" || uModal.classList.contains("modal-overlay"))) {
         closeUploadModal(false);
-        seCerró = true;
+        seCerro = true;
     }
 
-    // 3. Revisor Instruction Modal
     const rModal = document.getElementById("revisorInstructionModal");
     if (rModal && (rModal.style.display === "flex" || rModal.classList.contains("modal-overlay"))) {
         closeRevisorInstructionModal(false);
-        seCerró = true;
+        seCerro = true;
     }
 
-    // 4. Project Modal
     const pModal = document.getElementById("projectModal");
     if (pModal && (pModal.style.display === "flex" || pModal.classList.contains("modal-overlay"))) {
         closeProjectModal(false);
-        seCerró = true;
+        seCerro = true;
     }
 
     modalActivoId = null;
 
-    if (seCerró && triggerHistoryBack && window.history.state && window.history.state.modalOpen) {
+    if (seCerro && triggerHistoryBack && window.history.state && window.history.state.modalOpen) {
         window.history.back();
     }
 }
@@ -1170,7 +1167,7 @@ async function generarPDFActaRecibo() {
 }
 
 // ==============================================================================
-// GESTIÓN DEL VISOR MULTIMODAL CON VIEWPORT ESCALADO
+// GESTIÓN DEL VISOR MULTIMODAL CON VIEWPORT ESCALADO Y ZOOM UNIVERSAL
 // ==============================================================================
 async function openViewerModal(driveUrl, nombreArchivo) {
     registrarAperturaModalEnHistorial("viewerModal");
@@ -1183,6 +1180,7 @@ async function openViewerModal(driveUrl, nombreArchivo) {
     const ifcCont = document.getElementById("modalIfcContainer");
     const loading = document.getElementById("viewerLoadingIndicator");
     const title = document.getElementById("viewerTitle");
+    const zoomControls = document.getElementById("viewerFloatingZoomControls");
 
     if (!modal) return;
 
@@ -1191,28 +1189,29 @@ async function openViewerModal(driveUrl, nombreArchivo) {
     // Resetear visibilidad y limpiar contenidos
     if (scalerWrapper) { scalerWrapper.style.display = "none"; scalerWrapper.classList.remove("video-mode"); }
     if (frame) { frame.src = "about:blank"; }
-    if (imgWrapper) { imgWrapper.style.display = "none"; resetImageZoom(); }
+    if (imgWrapper) { imgWrapper.style.display = "none"; }
     if (ifcCont) { ifcCont.style.display = "none"; ifcCont.innerHTML = ""; }
     if (loading) { loading.style.display = "none"; }
+    if (zoomControls) { zoomControls.style.display = "none"; }
+    
+    resetActiveZoom();
 
     const ext = nombreArchivo.split('.').pop().toLowerCase();
     
-    // Forzar visualización directa del modal contenedor
     modal.style.display = "flex";
     modal.classList.remove("modal-hidden");
     modal.classList.add("modal-overlay");
 
-    // 1. CASO VIDEOS (.MP4, .WEBM, .MOV) - VIEWPORT FORZADO DE TABLET/PC
+    // 1. CASO VIDEOS (.MP4, .WEBM, .MOV) - 16:9 CONTENIDO SIN RECORTES
     if (["mp4", "webm", "mov"].includes(ext)) {
         scalerWrapper.style.display = "flex";
-        scalerWrapper.classList.add("video-mode"); // Activa emulación de pantalla ancha en móvil
+        scalerWrapper.classList.add("video-mode");
 
         let previewUrl = driveUrl;
         if (driveUrl.includes("drive.google.com")) {
             previewUrl = driveUrl.replace("/view?usp=drivesdk", "/preview").replace("/view", "/preview");
         }
 
-        // Carga mediante location.replace para no registrar entradas intermedias en el historial móvil
         setTimeout(() => {
             if (frame.contentWindow) {
                 frame.contentWindow.location.replace(previewUrl);
@@ -1225,7 +1224,10 @@ async function openViewerModal(driveUrl, nombreArchivo) {
 
     // 2. CASO IMÁGENES / RENDERS (.PNG, .JPG, .JPEG, .WEBP) CON ZOOM
     if (["png", "jpg", "jpeg", "webp"].includes(ext)) {
+        activeZoomTarget = "IMAGE";
         imgWrapper.style.display = "flex";
+        if (zoomControls) zoomControls.style.display = "flex";
+
         let imgDirectUrl = driveUrl;
         if (driveUrl.includes("drive.google.com")) {
             const match = driveUrl.match(/[-\w]{25,}/);
@@ -1253,8 +1255,11 @@ async function openViewerModal(driveUrl, nombreArchivo) {
         return;
     }
 
-    // 4. CASO GENERAL: DOCUMENTOS Y PLANOS PDF / HTML
-    scalerWrapper.style.display = "block";
+    // 4. CASO GENERAL: DOCUMENTOS Y PLANOS PDF / HTML (CON ZOOM HABILITADO)
+    activeZoomTarget = "PDF";
+    scalerWrapper.style.display = "flex";
+    if (zoomControls) zoomControls.style.display = "flex";
+
     let previewUrl = driveUrl;
     if (driveUrl.includes("drive.google.com/file/d/")) {
         previewUrl = driveUrl.replace("/view?usp=drivesdk", "/preview").replace("/view", "/preview");
@@ -1276,8 +1281,9 @@ function closeViewerModal(triggerHistory = true) {
     const imgWrapper = document.getElementById("imageViewerWrapper");
     const ifcCont = document.getElementById("modalIfcContainer");
     const loading = document.getElementById("viewerLoadingIndicator");
+    const zoomControls = document.getElementById("viewerFloatingZoomControls");
 
-    // Limpieza física del iframe para eliminar pantalla negra residual
+    // Limpieza física total para prevenir pantalla negra residual
     if (frame) {
         frame.src = "about:blank";
     }
@@ -1287,13 +1293,17 @@ function closeViewerModal(triggerHistory = true) {
     }
     if (imgWrapper) {
         imgWrapper.style.display = "none";
-        resetImageZoom();
+    }
+    if (zoomControls) {
+        zoomControls.style.display = "none";
     }
     if (loading) {
         loading.style.display = "none";
     }
 
-    // Limpieza de memoria y WebGL para IFC
+    resetActiveZoom();
+
+    // Limpieza de recursos WebGL del motor IFC
     if (ifcAnimationId) {
         cancelAnimationFrame(ifcAnimationId);
         ifcAnimationId = null;
@@ -1307,7 +1317,7 @@ function closeViewerModal(triggerHistory = true) {
         ifcCont.style.display = "none";
     }
 
-    // Ocultar modal del DOM de forma inmediata y garantizada
+    // Ocultar modal del DOM de forma inmediata
     if (modal) {
         modal.style.setProperty("display", "none", "important");
         modal.classList.remove("modal-overlay");
@@ -1322,62 +1332,70 @@ function closeViewerModal(triggerHistory = true) {
 }
 
 // ==============================================================================
-// VISOR DE IMÁGENES: ZOOM CON RUEDA, BOTONES Y GESTOS TÁCTILES
+// GESTIÓN UNIVERSAL DE ZOOM Y PANEO (PDF E IMÁGENES)
 // ==============================================================================
-function setupImageZoomAndPan() {
-    const wrapper = document.getElementById("imageViewerWrapper");
-    const img = document.getElementById("modalImageViewer");
-    if (!wrapper || !img) return;
+function setupUniversalZoomInteractions() {
+    const container = document.getElementById("viewerContainer");
+    if (!container) return;
 
-    wrapper.addEventListener("wheel", (e) => {
-        e.preventDefault();
-        const delta = e.deltaY > 0 ? -0.2 : 0.2;
-        zoomImage(delta);
+    // Rueda de ratón (PC)
+    container.addEventListener("wheel", (e) => {
+        if (activeZoomTarget === "IMAGE" || activeZoomTarget === "PDF") {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? -0.2 : 0.2;
+            zoomActiveElement(delta);
+        }
     }, { passive: false });
 
-    wrapper.addEventListener("mousedown", (e) => {
-        if (imgScale <= 1) return;
-        isPanning = true;
-        startPanX = e.clientX - imgPanX;
-        startPanY = e.clientY - imgPanY;
+    // Paneo con ratón (PC)
+    container.addEventListener("mousedown", (e) => {
+        if (activeZoomScale <= 1 || (!activeZoomTarget)) return;
+        isPanningActive = true;
+        startPanX = e.clientX - activePanX;
+        startPanY = e.clientY - activePanY;
     });
 
     window.addEventListener("mousemove", (e) => {
-        if (!isPanning) return;
-        imgPanX = e.clientX - startPanX;
-        imgPanY = e.clientY - startPanY;
-        applyImageTransform();
+        if (!isPanningActive) return;
+        activePanX = e.clientX - startPanX;
+        activePanY = e.clientY - startPanY;
+        applyActiveTransform();
     });
 
-    window.addEventListener("mouseup", () => { isPanning = false; });
+    window.addEventListener("mouseup", () => { isPanningActive = false; });
 
-    wrapper.addEventListener("touchstart", (e) => {
+    // Gestos táctiles: Pinch-to-zoom y desplazamiento con dos dedos / un dedo (Móvil)
+    container.addEventListener("touchstart", (e) => {
+        if (!activeZoomTarget) return;
+
         if (e.touches.length === 2) {
             touchStartDist = getTouchDistance(e.touches);
-        } else if (e.touches.length === 1 && imgScale > 1) {
-            isPanning = true;
-            startPanX = e.touches[0].clientX - imgPanX;
-            startPanY = e.touches[0].clientY - imgPanY;
+        } else if (e.touches.length === 1 && activeZoomScale > 1) {
+            isPanningActive = true;
+            startPanX = e.touches[0].clientX - activePanX;
+            startPanY = e.touches[0].clientY - activePanY;
         }
     }, { passive: true });
 
-    wrapper.addEventListener("touchmove", (e) => {
+    container.addEventListener("touchmove", (e) => {
+        if (!activeZoomTarget) return;
+
         if (e.touches.length === 2) {
             const currentDist = getTouchDistance(e.touches);
             const diff = currentDist - touchStartDist;
-            if (Math.abs(diff) > 5) {
-                zoomImage(diff * 0.005);
+            if (Math.abs(diff) > 4) {
+                zoomActiveElement(diff * 0.006);
                 touchStartDist = currentDist;
             }
-        } else if (e.touches.length === 1 && isPanning) {
-            imgPanX = e.touches[0].clientX - startPanX;
-            imgPanY = e.touches[0].clientY - startPanY;
-            applyImageTransform();
+        } else if (e.touches.length === 1 && isPanningActive) {
+            activePanX = e.touches[0].clientX - startPanX;
+            activePanY = e.touches[0].clientY - startPanY;
+            applyActiveTransform();
         }
     }, { passive: true });
 
-    wrapper.addEventListener("touchend", () => {
-        isPanning = false;
+    container.addEventListener("touchend", () => {
+        isPanningActive = false;
     });
 }
 
@@ -1387,26 +1405,31 @@ function getTouchDistance(touches) {
     return Math.sqrt(dx * dx + dy * dy);
 }
 
-function zoomImage(delta) {
-    imgScale = Math.min(Math.max(1, imgScale + delta), 4.5);
-    if (imgScale === 1) {
-        imgPanX = 0;
-        imgPanY = 0;
+function zoomActiveElement(delta) {
+    activeZoomScale = Math.min(Math.max(1, activeZoomScale + delta), 4.5);
+    if (activeZoomScale === 1) {
+        activePanX = 0;
+        activePanY = 0;
     }
-    applyImageTransform();
+    applyActiveTransform();
 }
 
-function resetImageZoom() {
-    imgScale = 1;
-    imgPanX = 0;
-    imgPanY = 0;
-    applyImageTransform();
+function resetActiveZoom() {
+    activeZoomScale = 1;
+    activePanX = 0;
+    activePanY = 0;
+    applyActiveTransform();
 }
 
-function applyImageTransform() {
-    const img = document.getElementById("modalImageViewer");
-    if (img) {
-        img.style.transform = `translate(${imgPanX}px, ${imgPanY}px) scale(${imgScale})`;
+function applyActiveTransform() {
+    const transformStyle = `translate(${activePanX}px, ${activePanY}px) scale(${activeZoomScale})`;
+    
+    if (activeZoomTarget === "IMAGE") {
+        const img = document.getElementById("modalImageViewer");
+        if (img) img.style.transform = transformStyle;
+    } else if (activeZoomTarget === "PDF") {
+        const frame = document.getElementById("modalViewerFrame");
+        if (frame) frame.style.transform = transformStyle;
     }
 }
 
