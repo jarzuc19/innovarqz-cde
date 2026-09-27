@@ -30,8 +30,20 @@ let ifcControls = null;
 let ifcAnimationId = null;
 let ifcApi = null;
 
+// ESTADO DE ZOOM Y PANEO PARA IMÁGENES
+let imgScale = 1;
+let imgPanX = 0;
+let imgPanY = 0;
+let isPanning = false;
+let startPanX = 0;
+let startPanY = 0;
+let touchStartDist = 0;
+
+// ESTADO DEL REPRODUCTOR DE VIDEO PERSONALIZADO
+let videoControlsTimeout = null;
+
 // ==============================================================================
-// INICIALIZACIÓN Y NAVEGACIÓN
+// INICIALIZACIÓN, NAVEGACIÓN Y CONTROL DE ESCAPE / ATRÁS NATIVO
 // ==============================================================================
 document.addEventListener("DOMContentLoaded", () => {
     const loginForm = document.getElementById("loginForm");
@@ -60,6 +72,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
     setupDropdownWithOther("ubicacionSelect", "ubicacionOtherInput");
     setupDropdownWithOther("tipoSelect", "tipoOtherInput");
+    setupVideoCustomControls();
+    setupImageZoomAndPan();
+
+    // INTERCEPTOR GLOBAL: TECLA ESCAPE EN PC
+    window.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+            cerrarCualquierModalAbierto();
+        }
+    });
+
+    // INTERCEPTOR GLOBAL: BOTÓN ATRÁS EN NAVEGADORES MÓVILES (ANDROID / IOS)
+    window.addEventListener("popstate", (e) => {
+        cerrarCualquierModalAbierto(false); // No disparar history.back extra
+    });
 
     document.querySelectorAll(".tab-btn").forEach(btn => {
         btn.addEventListener("click", (e) => {
@@ -85,6 +111,34 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 });
+
+// GESTIÓN DE PILA DE MODALES (HISTORY API)
+function registrarAperturaModalEnHistorial() {
+    history.pushState({ modalOpen: true }, "");
+}
+
+function cerrarCualquierModalAbierto(triggerHistoryBack = true) {
+    const modales = [
+        { id: "viewerModal", closeFn: closeViewerModal },
+        { id: "uploadModal", closeFn: closeUploadModal },
+        { id: "revisorInstructionModal", closeFn: closeRevisorInstructionModal },
+        { id: "projectModal", closeFn: closeProjectModal }
+    ];
+
+    let cerrado = false;
+    for (let m of modales) {
+        const el = document.getElementById(m.id);
+        if (el && el.classList.contains("modal-overlay")) {
+            m.closeFn(false); // Cerrar visualmente sin history.back
+            cerrado = true;
+            break;
+        }
+    }
+
+    if (cerrado && triggerHistoryBack && window.history.state && window.history.state.modalOpen) {
+        window.history.back();
+    }
+}
 
 function validarAccesoPestana(tabName) {
     if (!userPermissions) return false;
@@ -442,13 +496,17 @@ async function evaluarNotasTecnicasActivas() {
 }
 
 function openRevisorInstructionModal() {
+    registrarAperturaModalEnHistorial();
     const modal = document.getElementById("revisorInstructionModal");
     if (modal) modal.className = "modal-overlay";
 }
 
-function closeRevisorInstructionModal() {
+function closeRevisorInstructionModal(triggerHistory = true) {
     const modal = document.getElementById("revisorInstructionModal");
     if (modal) modal.className = "modal-hidden";
+    if (triggerHistory && window.history.state && window.history.state.modalOpen) {
+        window.history.back();
+    }
 }
 
 async function handleRevisorInstructionSubmit(e) {
@@ -548,6 +606,7 @@ async function cargarTimelineActividad() {
 // GESTIÓN DE SUBIDAS Y VALIDACIÓN RIGUROSA ISO 19650
 // ==============================================================================
 function openUploadModal() {
+    registrarAperturaModalEnHistorial();
     const optWip = document.getElementById("optUploadWip");
     const optShared = document.getElementById("optUploadShared");
     const optPublished = document.getElementById("optUploadPublished");
@@ -574,9 +633,12 @@ function openUploadModal() {
     if (modal) modal.className = "modal-overlay";
 }
 
-function closeUploadModal() {
+function closeUploadModal(triggerHistory = true) {
     const modal = document.getElementById("uploadModal");
     if (modal) modal.className = "modal-hidden";
+    if (triggerHistory && window.history.state && window.history.state.modalOpen) {
+        window.history.back();
+    }
 }
 
 function toggleUploadMethod() {
@@ -1077,12 +1139,17 @@ async function generarPDFActaRecibo() {
 }
 
 // ==============================================================================
-// GESTIÓN DEL VISOR MULTIMODAL (IFRAME, VIDEO NATIVO E IFC 3D)
+// GESTIÓN DEL VISOR MULTIMODAL AVANZADO (IFRAME, ZOOM IMAGEN, VIDEO CUSTOM, IFC 3D)
 // ==============================================================================
 async function openViewerModal(driveUrl, nombreArchivo) {
+    registrarAperturaModalEnHistorial();
+
     const modal = document.getElementById("viewerModal");
     const frame = document.getElementById("modalViewerFrame");
-    const video = document.getElementById("modalVideoPlayer");
+    const imgWrapper = document.getElementById("imageViewerWrapper");
+    const imgElement = document.getElementById("modalImageViewer");
+    const videoWrapper = document.getElementById("videoViewerWrapper");
+    const videoElement = document.getElementById("modalVideoPlayer");
     const ifcCont = document.getElementById("modalIfcContainer");
     const loading = document.getElementById("viewerLoadingIndicator");
     const title = document.getElementById("viewerTitle");
@@ -1091,32 +1158,52 @@ async function openViewerModal(driveUrl, nombreArchivo) {
 
     title.innerText = `Previsualizando: ${nombreArchivo}`;
 
-    // Ocultar todos los visores inicialmente
+    // Resetear visibilidad de todos los contenedores
     if (frame) { frame.style.display = "none"; frame.src = ""; }
-    if (video) { video.style.display = "none"; video.pause(); video.src = ""; }
+    if (imgWrapper) { imgWrapper.style.display = "none"; resetImageZoom(); }
+    if (videoWrapper) { videoWrapper.style.display = "none"; }
+    if (videoElement) { videoElement.pause(); videoElement.src = ""; }
     if (ifcCont) { ifcCont.style.display = "none"; ifcCont.innerHTML = ""; }
     if (loading) { loading.style.display = "none"; }
 
     const ext = nombreArchivo.split('.').pop().toLowerCase();
     modal.className = "modal-overlay";
 
-    // 1. CASO VIDEOS (.MP4, .WEBM, .MOV)
+    // 1. CASO VIDEOS (.MP4, .WEBM, .MOV) - REPRODUCTOR MINIMALISTA NATIVO
     if (["mp4", "webm", "mov"].includes(ext)) {
+        videoWrapper.style.display = "flex";
+        
+        let videoDirectUrl = driveUrl;
         if (driveUrl.includes("drive.google.com")) {
-            // Streaming progresivo optimizado con el reproductor de Drive
-            let previewUrl = driveUrl.replace("/view?usp=drivesdk", "/preview").replace("/view", "/preview");
-            frame.src = previewUrl;
-            frame.style.display = "block";
-        } else {
-            // Reproductor nativo HTML5 para URLs directas
-            video.src = driveUrl;
-            video.style.display = "block";
-            video.play().catch(e => console.log("Autoplay bloqueado:", e));
+            const match = driveUrl.match(/[-\w]{25,}/);
+            if (match) {
+                // Stream directo evitando el visor pesado de Drive
+                videoDirectUrl = `https://drive.google.com/uc?export=download&id=${match[0]}`;
+            }
         }
+
+        videoElement.src = videoDirectUrl;
+        videoElement.load();
+        videoElement.play().catch(e => console.log("Autoplay bloqueado:", e));
+        resetVideoControlsTimer();
         return;
     }
 
-    // 2. CASO MODELOS BIM IFC 3D (.IFC)
+    // 2. CASO IMÁGENES / RENDERS (.PNG, .JPG, .JPEG, .WEBP) CON ZOOM & PAN
+    if (["png", "jpg", "jpeg", "webp"].includes(ext)) {
+        imgWrapper.style.display = "flex";
+        let imgDirectUrl = driveUrl;
+        if (driveUrl.includes("drive.google.com")) {
+            const match = driveUrl.match(/[-\w]{25,}/);
+            if (match) {
+                imgDirectUrl = `https://drive.google.com/uc?export=view&id=${match[0]}`;
+            }
+        }
+        imgElement.src = imgDirectUrl;
+        return;
+    }
+
+    // 3. CASO MODELOS BIM IFC 3D (.IFC)
     if (ext === "ifc") {
         ifcCont.style.display = "block";
         if (loading) loading.style.display = "block";
@@ -1132,7 +1219,7 @@ async function openViewerModal(driveUrl, nombreArchivo) {
         return;
     }
 
-    // 3. CASO GENERAL: DOCUMENTOS, PLANOS E IMÁGENES (.PDF, .PNG, .JPG, .HTML)
+    // 4. CASO GENERAL: DOCUMENTOS Y PLANOS PDF / HTML
     let previewUrl = driveUrl;
     if (driveUrl.includes("drive.google.com/file/d/")) {
         previewUrl = driveUrl.replace("/view?usp=drivesdk", "/preview").replace("/view", "/preview");
@@ -1141,15 +1228,19 @@ async function openViewerModal(driveUrl, nombreArchivo) {
     frame.style.display = "block";
 }
 
-function closeViewerModal() {
+function closeViewerModal(triggerHistory = true) {
     const modal = document.getElementById("viewerModal");
     const frame = document.getElementById("modalViewerFrame");
-    const video = document.getElementById("modalVideoPlayer");
+    const imgWrapper = document.getElementById("imageViewerWrapper");
+    const videoWrapper = document.getElementById("videoViewerWrapper");
+    const videoElement = document.getElementById("modalVideoPlayer");
     const ifcCont = document.getElementById("modalIfcContainer");
     const loading = document.getElementById("viewerLoadingIndicator");
 
     if (frame) { frame.src = ""; frame.style.display = "none"; }
-    if (video) { video.pause(); video.src = ""; video.style.display = "none"; }
+    if (imgWrapper) { imgWrapper.style.display = "none"; resetImageZoom(); }
+    if (videoElement) { videoElement.pause(); videoElement.src = ""; }
+    if (videoWrapper) { videoWrapper.style.display = "none"; }
     if (loading) { loading.style.display = "none"; }
 
     // Limpieza de memoria y recursos WebGL para el motor IFC
@@ -1167,6 +1258,193 @@ function closeViewerModal() {
     }
 
     if (modal) modal.className = "modal-hidden";
+
+    if (triggerHistory && window.history.state && window.history.state.modalOpen) {
+        window.history.back();
+    }
+}
+
+// ==============================================================================
+// REPRODUCTOR DE VIDEO PERSONALIZADO CON AUTO-OCULTADO INTELIGENTE
+// ==============================================================================
+function setupVideoCustomControls() {
+    const video = document.getElementById("modalVideoPlayer");
+    const container = document.getElementById("videoViewerWrapper");
+    const controls = document.getElementById("videoCustomControls");
+    const btnPlay = document.getElementById("btnVideoPlayPause");
+    const btnMute = document.getElementById("btnVideoMute");
+    const btnFs = document.getElementById("btnVideoFullscreen");
+    const progress = document.getElementById("videoProgressBar");
+    const curTime = document.getElementById("videoCurrentTime");
+    const durTime = document.getElementById("videoDuration");
+
+    if (!video || !controls) return;
+
+    btnPlay.addEventListener("click", () => {
+        if (video.paused) {
+            video.play();
+            btnPlay.innerText = "⏸";
+        } else {
+            video.pause();
+            btnPlay.innerText = "▶";
+        }
+        resetVideoControlsTimer();
+    });
+
+    video.addEventListener("play", () => btnPlay.innerText = "⏸");
+    video.addEventListener("pause", () => btnPlay.innerText = "▶");
+
+    video.addEventListener("timeupdate", () => {
+        if (video.duration) {
+            const pct = (video.currentTime / video.duration) * 100;
+            progress.value = pct;
+            curTime.innerText = formatTime(video.currentTime);
+            durTime.innerText = formatTime(video.duration);
+        }
+    });
+
+    progress.addEventListener("input", () => {
+        if (video.duration) {
+            video.currentTime = (progress.value / 100) * video.duration;
+        }
+        resetVideoControlsTimer();
+    });
+
+    btnMute.addEventListener("click", () => {
+        video.muted = !video.muted;
+        btnMute.innerText = video.muted ? "🔇" : "🔊";
+        resetVideoControlsTimer();
+    });
+
+    btnFs.addEventListener("click", () => {
+        if (!document.fullscreenElement) {
+            container.requestFullscreen().catch(err => console.log(err));
+        } else {
+            document.exitFullscreen().catch(err => console.log(err));
+        }
+        resetVideoControlsTimer();
+    });
+
+    // Auto-ocultamiento de controles e inactividad de cursor
+    container.addEventListener("mousemove", resetVideoControlsTimer);
+    container.addEventListener("touchstart", resetVideoControlsTimer, { passive: true });
+    container.addEventListener("click", resetVideoControlsTimer);
+}
+
+function resetVideoControlsTimer() {
+    const controls = document.getElementById("videoCustomControls");
+    const container = document.getElementById("videoViewerWrapper");
+    const video = document.getElementById("modalVideoPlayer");
+    if (!controls || !container) return;
+
+    controls.classList.remove("hidden-controls");
+    container.classList.remove("hide-cursor");
+
+    clearTimeout(videoControlsTimeout);
+    if (video && !video.paused) {
+        videoControlsTimeout = setTimeout(() => {
+            controls.classList.add("hidden-controls");
+            container.classList.add("hide-cursor");
+        }, 2500);
+    }
+}
+
+function formatTime(seconds) {
+    const mins = Math.floor(seconds / 60) || 0;
+    const secs = Math.floor(seconds % 60) || 0;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+}
+
+// ==============================================================================
+// VISOR DE IMÁGENES: ZOOM CON RUEDA, BOTONES Y GESTOS TÁCTILES
+// ==============================================================================
+function setupImageZoomAndPan() {
+    const wrapper = document.getElementById("imageViewerWrapper");
+    const img = document.getElementById("modalImageViewer");
+    if (!wrapper || !img) return;
+
+    // Zoom con rueda de ratón (PC)
+    wrapper.addEventListener("wheel", (e) => {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -0.2 : 0.2;
+        zoomImage(delta);
+    }, { passive: false });
+
+    // Paneo con clic sostenido (PC)
+    wrapper.addEventListener("mousedown", (e) => {
+        if (imgScale <= 1) return;
+        isPanning = true;
+        startPanX = e.clientX - imgPanX;
+        startPanY = e.clientY - imgPanY;
+    });
+
+    window.addEventListener("mousemove", (e) => {
+        if (!isPanning) return;
+        imgPanX = e.clientX - startPanX;
+        imgPanY = e.clientY - startPanY;
+        applyImageTransform();
+    });
+
+    window.addEventListener("mouseup", () => { isPanning = false; });
+
+    // Gestos táctiles: Pinch-to-zoom y paneo (Móvil)
+    wrapper.addEventListener("touchstart", (e) => {
+        if (e.touches.length === 2) {
+            touchStartDist = getTouchDistance(e.touches);
+        } else if (e.touches.length === 1 && imgScale > 1) {
+            isPanning = true;
+            startPanX = e.touches[0].clientX - imgPanX;
+            startPanY = e.touches[0].clientY - imgPanY;
+        }
+    }, { passive: true });
+
+    wrapper.addEventListener("touchmove", (e) => {
+        if (e.touches.length === 2) {
+            const currentDist = getTouchDistance(e.touches);
+            const diff = currentDist - touchStartDist;
+            if (Math.abs(diff) > 5) {
+                zoomImage(diff * 0.005);
+                touchStartDist = currentDist;
+            }
+        } else if (e.touches.length === 1 && isPanning) {
+            imgPanX = e.touches[0].clientX - startPanX;
+            imgPanY = e.touches[0].clientY - startPanY;
+            applyImageTransform();
+        }
+    }, { passive: true });
+
+    wrapper.addEventListener("touchend", () => {
+        isPanning = false;
+    });
+}
+
+function getTouchDistance(touches) {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+function zoomImage(delta) {
+    imgScale = Math.min(Math.max(1, imgScale + delta), 4.5);
+    if (imgScale === 1) {
+        imgPanX = 0;
+        imgPanY = 0;
+    }
+    applyImageTransform();
+}
+
+function resetImageZoom() {
+    imgScale = 1;
+    imgPanX = 0;
+    imgPanY = 0;
+    applyImageTransform();
+}
+
+function applyImageTransform() {
+    const img = document.getElementById("modalImageViewer");
+    if (img) {
+        img.style.transform = `translate(${imgPanX}px, ${imgPanY}px) scale(${imgScale})`;
+    }
 }
 
 // ==============================================================================
@@ -1180,7 +1458,7 @@ async function inicializarVisorIFC(fileUrl, container) {
 
     // Escena, Cámara y Renderer WebGL
     ifcScene = new THREE.Scene();
-    ifcScene.background = new THREE.Color(0x0f172a); // Fondo corporativo
+    ifcScene.background = new THREE.Color(0x0f172a);
 
     ifcCamera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
     ifcCamera.position.set(20, 20, 20);
@@ -1203,7 +1481,7 @@ async function inicializarVisorIFC(fileUrl, container) {
     dirLight1.position.set(25, 40, 20);
     ifcScene.add(dirLight1);
 
-    const dirLight2 = new THREE.DirectionalLight(0xd97706, 0.25); // Toque cálido institucional
+    const dirLight2 = new THREE.DirectionalLight(0xd97706, 0.25);
     dirLight2.position.set(-25, -20, -20);
     ifcScene.add(dirLight2);
 
@@ -1226,7 +1504,6 @@ async function inicializarVisorIFC(fileUrl, container) {
         await ifcApi.Init();
     }
 
-    // Convertir enlace de Google Drive en descarga directa para el fetch
     let downloadUrl = fileUrl;
     if (fileUrl.includes("drive.google.com")) {
         const match = fileUrl.match(/[-\w]{25,}/);
@@ -1244,7 +1521,6 @@ async function inicializarVisorIFC(fileUrl, container) {
     const modelID = ifcApi.OpenModel(data);
     const ifcGroup = new THREE.Group();
 
-    // Cargar geometría de mallas usando la API de Web-IFC
     ifcApi.StreamAllMeshes(modelID, (flatMesh) => {
         const placedGeometries = flatMesh.geometries;
         for (let i = 0; i < placedGeometries.size(); i++) {
@@ -1288,7 +1564,6 @@ async function inicializarVisorIFC(fileUrl, container) {
 
     ifcApi.CloseModel(modelID);
 
-    // Ajustar escala y centrar el modelo en el origen
     const box = new THREE.Box3().setFromObject(ifcGroup);
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
@@ -1299,7 +1574,6 @@ async function inicializarVisorIFC(fileUrl, container) {
 
     ifcScene.add(ifcGroup);
 
-    // Ubicar la cámara para enfocar todo el modelo
     const maxDim = Math.max(size.x, size.y, size.z);
     ifcCamera.position.set(maxDim * 1.5, maxDim * 1.2, maxDim * 1.5);
     ifcControls.target.set(0, size.y / 2, 0);
@@ -1378,7 +1652,6 @@ async function loadFiles() {
         listaAProcesar = Array.from(mapaUnicos.values());
     }
 
-    // FILTRADO ADICIONAL POR SUBCARPETAS (SOPORTE EXTENDIDO MEP)
     if (activeSubfolder !== "TODAS" && activeTab !== "04_ARCHIVED") {
         listaAProcesar = listaAProcesar.filter(f => {
             const nameUpper = f.archivo_nombre.toUpperCase();
@@ -1415,8 +1688,6 @@ async function loadFiles() {
         const estadoISO = esValidoISO ? parts[5].split(".")[0] : activeTab;
 
         const ext = nombreCompleto.split('.').pop().toLowerCase();
-        
-        // HABILITACIÓN DE PREVISUALIZACIÓN MULTIMODAL COMPLETA
         const esVisualizable = ["pdf", "png", "jpg", "jpeg", "webp", "html", "htm", "mp4", "webm", "mov", "ifc"].includes(ext);
         const fechaUltimaModificacion = f.version || "N/A";
 
@@ -1472,6 +1743,7 @@ async function loadFiles() {
 
 // Helpers Modales
 async function prepareAndOpenProjectModal() {
+    registrarAperturaModalEnHistorial();
     const yearCurrent = new Date().getFullYear();
     const prefix = `PRY${yearCurrent}`;
 
@@ -1579,7 +1851,10 @@ async function handleCreateProject(e) {
     }
 }
 
-function closeProjectModal() {
+function closeProjectModal(triggerHistory = true) {
     const modal = document.getElementById("projectModal");
     if (modal) modal.className = "modal-hidden";
+    if (triggerHistory && window.history.state && window.history.state.modalOpen) {
+        window.history.back();
+    }
 }
