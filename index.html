@@ -205,15 +205,22 @@
     <div id="viewerModal" class="modal-hidden">
         <div class="modal-content card viewer-modal-layout">
             <div class="viewer-modal-header">
-                <h4 id="viewerTitle" style="color: var(--accent-copper); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 85%;">Previsualización de Entregable</h4>
-                <button type="button" onclick="closeViewerModal()" class="btn-secondary btn-close-modal">✕</button>
+                <h4 id="viewerTitle" style="color: var(--accent-copper); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 65%;">Previsualización de Entregable</h4>
+                
+                <!-- Acciones superiores: Botón oficial externo + Botón Cerrar -->
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <button type="button" id="btnViewerExternalOpen" onclick="openCurrentInExternalTab()" class="btn-secondary btn-header-external" title="Abrir en pantalla completa externa">⤢ Abrir</button>
+                    <button type="button" onclick="closeViewerModal()" class="btn-secondary btn-close-modal" title="Cerrar visor">✕</button>
+                </div>
             </div>
             
             <div id="viewerContainer" class="viewer-display-area">
                 
-                <!-- 1. Contenedor de Iframe para Documentos, Planos PDF y Videos en Tablet/PC -->
+                <!-- 1. Contenedor de Iframe para Documentos/Planos PDF y Videos en Tablet/PC -->
                 <div id="iframeScalerWrapper" class="iframe-scaler-wrapper" style="display: none;">
                     <iframe id="modalViewerFrame" src="about:blank" frameborder="0" allow="autoplay; fullscreen"></iframe>
+                    <!-- Capa de bloqueo para ocultar el botón diminuto de Drive en móvil -->
+                    <div id="driveCornerBlocker" class="drive-corner-blocker"></div>
                 </div>
 
                 <!-- 2. Visor de Imágenes con Zoom y Paneo -->
@@ -224,7 +231,10 @@
                 <!-- 3. Visor BIM 3D (IFC) -->
                 <div id="modalIfcContainer" class="viewer-item" style="display: none; cursor: grab;"></div>
 
-                <!-- 4. Controles Flotantes de Zoom (Vertical en Móvil para PDF/Imágenes) -->
+                <!-- 4. Capa transparente activa para arrastrar con el dedo sin que el iframe bloquee el paneo -->
+                <div id="dragCaptureOverlay" class="drag-capture-overlay" style="display: none;"></div>
+
+                <!-- 5. Controles Flotantes de Zoom (En móvil pasa a columna vertical a la derecha) -->
                 <div id="viewerFloatingZoomControls" class="viewer-floating-zoom" style="display: none;">
                     <button type="button" onclick="zoomActiveElement(0.25)" title="Acercar">+</button>
                     <button type="button" onclick="zoomActiveElement(-0.25)" title="Alejar">−</button>
