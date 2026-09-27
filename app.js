@@ -1167,11 +1167,92 @@ async function generarPDFActaRecibo() {
 }
 
 // ==============================================================================
-// GESTIÓN DEL VISOR MULTIMODAL CON VIEWPORT ESCALADO Y ZOOM UNIVERSAL
+// GESTIÓN DEL VISOR MULTIMODAL CON ARQUITECTURA RESPONSIVA DE DISPOSITIVO
 // ==============================================================================
 async function openViewerModal(driveUrl, nombreArchivo) {
-    registrarAperturaModalEnHistorial("viewerModal");
+    const ext = nombreArchivo.split('.').pop().toLowerCase();
+    const esMovilPequeno = window.innerWidth < 600;
 
+    // 1. CASO VIDEOS (.MP4, .WEBM, .MOV)
+    if (["mp4", "webm", "mov"].includes(ext)) {
+        let previewUrl = driveUrl;
+        if (driveUrl.includes("drive.google.com")) {
+            previewUrl = driveUrl.replace("/view?usp=drivesdk", "/preview").replace("/view", "/preview");
+        }
+
+        // En Móviles (< 600px): Abre en ventana externa para aprovechar controles nativos que se auto-ocultan
+        if (esMovilPequeno) {
+            window.open(previewUrl, "_blank");
+            return;
+        }
+
+        // En Tablets y PC (>= 600px): Abre en el modal tradicional 100% visible
+        registrarAperturaModalEnHistorial("viewerModal");
+        desplegarModalIframe(previewUrl, nombreArchivo, false);
+        return;
+    }
+
+    // 2. CASO MODELOS BIM IFC 3D (.IFC)
+    if (ext === "ifc") {
+        registrarAperturaModalEnHistorial("viewerModal");
+        desplegarModalIFC(driveUrl, nombreArchivo);
+        return;
+    }
+
+    // 3. CASO IMÁGENES / RENDERS (.PNG, .JPG, .JPEG, .WEBP)
+    if (["png", "jpg", "jpeg", "webp"].includes(ext)) {
+        registrarAperturaModalEnHistorial("viewerModal");
+        desplegarModalImagen(driveUrl, nombreArchivo);
+        return;
+    }
+
+    // 4. CASO DOCUMENTOS Y PLANOS PDF / HTML
+    registrarAperturaModalEnHistorial("viewerModal");
+    let docUrl = driveUrl;
+    if (driveUrl.includes("drive.google.com/file/d/")) {
+        docUrl = driveUrl.replace("/view?usp=drivesdk", "/preview").replace("/view", "/preview");
+    }
+    // Si es móvil pequeño habilita la barra flotante de zoom vertical; en tablet/PC usa la lupa nativa de Drive
+    desplegarModalIframe(docUrl, nombreArchivo, esMovilPequeno);
+}
+
+function desplegarModalIframe(url, titulo, mostrarZoomControls) {
+    const modal = document.getElementById("viewerModal");
+    const scalerWrapper = document.getElementById("iframeScalerWrapper");
+    const frame = document.getElementById("modalViewerFrame");
+    const imgWrapper = document.getElementById("imageViewerWrapper");
+    const ifcCont = document.getElementById("modalIfcContainer");
+    const loading = document.getElementById("viewerLoadingIndicator");
+    const title = document.getElementById("viewerTitle");
+    const zoomControls = document.getElementById("viewerFloatingZoomControls");
+
+    if (!modal) return;
+    title.innerText = `Previsualizando: ${titulo}`;
+
+    if (imgWrapper) imgWrapper.style.display = "none";
+    if (ifcCont) { ifcCont.style.display = "none"; ifcCont.innerHTML = ""; }
+    if (loading) loading.style.display = "none";
+
+    resetActiveZoom();
+    activeZoomTarget = "PDF";
+
+    scalerWrapper.style.display = "flex";
+    if (zoomControls) zoomControls.style.display = mostrarZoomControls ? "flex" : "none";
+
+    modal.style.display = "flex";
+    modal.classList.remove("modal-hidden");
+    modal.classList.add("modal-overlay");
+
+    setTimeout(() => {
+        if (frame.contentWindow) {
+            frame.contentWindow.location.replace(url);
+        } else {
+            frame.src = url;
+        }
+    }, 40);
+}
+
+function desplegarModalImagen(driveUrl, titulo) {
     const modal = document.getElementById("viewerModal");
     const scalerWrapper = document.getElementById("iframeScalerWrapper");
     const frame = document.getElementById("modalViewerFrame");
@@ -1183,95 +1264,69 @@ async function openViewerModal(driveUrl, nombreArchivo) {
     const zoomControls = document.getElementById("viewerFloatingZoomControls");
 
     if (!modal) return;
+    title.innerText = `Previsualizando: ${titulo}`;
 
-    title.innerText = `Previsualizando: ${nombreArchivo}`;
-
-    // Resetear visibilidad y limpiar contenidos
-    if (scalerWrapper) { scalerWrapper.style.display = "none"; scalerWrapper.classList.remove("video-mode"); }
-    if (frame) { frame.src = "about:blank"; }
-    if (imgWrapper) { imgWrapper.style.display = "none"; }
+    if (scalerWrapper) scalerWrapper.style.display = "none";
+    if (frame) frame.src = "about:blank";
     if (ifcCont) { ifcCont.style.display = "none"; ifcCont.innerHTML = ""; }
-    if (loading) { loading.style.display = "none"; }
-    if (zoomControls) { zoomControls.style.display = "none"; }
-    
-    resetActiveZoom();
+    if (loading) loading.style.display = "none";
 
-    const ext = nombreArchivo.split('.').pop().toLowerCase();
-    
+    resetActiveZoom();
+    activeZoomTarget = "IMAGE";
+
+    imgWrapper.style.display = "flex";
+    if (zoomControls) zoomControls.style.display = "flex";
+
+    let imgDirectUrl = driveUrl;
+    if (driveUrl.includes("drive.google.com")) {
+        const match = driveUrl.match(/[-\w]{25,}/);
+        if (match) {
+            imgDirectUrl = `https://drive.google.com/uc?export=view&id=${match[0]}`;
+        }
+    }
+    imgElement.src = imgDirectUrl;
+
+    modal.style.display = "flex";
+    modal.classList.remove("modal-hidden");
+    modal.classList.add("modal-overlay");
+}
+
+async function desplegarModalIFC(driveUrl, titulo) {
+    const modal = document.getElementById("viewerModal");
+    const scalerWrapper = document.getElementById("iframeScalerWrapper");
+    const frame = document.getElementById("modalViewerFrame");
+    const imgWrapper = document.getElementById("imageViewerWrapper");
+    const ifcCont = document.getElementById("modalIfcContainer");
+    const loading = document.getElementById("viewerLoadingIndicator");
+    const title = document.getElementById("viewerTitle");
+    const zoomControls = document.getElementById("viewerFloatingZoomControls");
+
+    if (!modal) return;
+    title.innerText = `Previsualizando: ${titulo}`;
+
+    if (scalerWrapper) scalerWrapper.style.display = "none";
+    if (frame) frame.src = "about:blank";
+    if (imgWrapper) imgWrapper.style.display = "none";
+    if (zoomControls) zoomControls.style.display = "none";
+
+    resetActiveZoom();
+    activeZoomTarget = null;
+
+    ifcCont.style.display = "block";
+    if (loading) loading.style.display = "block";
+
     modal.style.display = "flex";
     modal.classList.remove("modal-hidden");
     modal.classList.add("modal-overlay");
 
-    // 1. CASO VIDEOS (.MP4, .WEBM, .MOV) - 16:9 CONTENIDO SIN RECORTES
-    if (["mp4", "webm", "mov"].includes(ext)) {
-        scalerWrapper.style.display = "flex";
-        scalerWrapper.classList.add("video-mode");
-
-        let previewUrl = driveUrl;
-        if (driveUrl.includes("drive.google.com")) {
-            previewUrl = driveUrl.replace("/view?usp=drivesdk", "/preview").replace("/view", "/preview");
-        }
-
-        setTimeout(() => {
-            if (frame.contentWindow) {
-                frame.contentWindow.location.replace(previewUrl);
-            } else {
-                frame.src = previewUrl;
-            }
-        }, 50);
-        return;
+    try {
+        await inicializarVisorIFC(driveUrl, ifcCont);
+    } catch (err) {
+        console.error("Error al cargar IFC 3D:", err);
+        alert("⚠️ No se pudo inicializar la geometría del modelo IFC: " + err.message);
+    } finally {
+        if (loading) loading.style.display = "none";
     }
-
-    // 2. CASO IMÁGENES / RENDERS (.PNG, .JPG, .JPEG, .WEBP) CON ZOOM
-    if (["png", "jpg", "jpeg", "webp"].includes(ext)) {
-        activeZoomTarget = "IMAGE";
-        imgWrapper.style.display = "flex";
-        if (zoomControls) zoomControls.style.display = "flex";
-
-        let imgDirectUrl = driveUrl;
-        if (driveUrl.includes("drive.google.com")) {
-            const match = driveUrl.match(/[-\w]{25,}/);
-            if (match) {
-                imgDirectUrl = `https://drive.google.com/uc?export=view&id=${match[0]}`;
-            }
-        }
-        imgElement.src = imgDirectUrl;
-        return;
-    }
-
-    // 3. CASO MODELOS BIM IFC 3D (.IFC)
-    if (ext === "ifc") {
-        ifcCont.style.display = "block";
-        if (loading) loading.style.display = "block";
-
-        try {
-            await inicializarVisorIFC(driveUrl, ifcCont);
-        } catch (err) {
-            console.error("Error al cargar IFC 3D:", err);
-            alert("⚠️ No se pudo inicializar la geometría del modelo IFC: " + err.message);
-        } finally {
-            if (loading) loading.style.display = "none";
-        }
-        return;
-    }
-
-    // 4. CASO GENERAL: DOCUMENTOS Y PLANOS PDF / HTML (CON ZOOM HABILITADO)
-    activeZoomTarget = "PDF";
-    scalerWrapper.style.display = "flex";
-    if (zoomControls) zoomControls.style.display = "flex";
-
-    let previewUrl = driveUrl;
-    if (driveUrl.includes("drive.google.com/file/d/")) {
-        previewUrl = driveUrl.replace("/view?usp=drivesdk", "/preview").replace("/view", "/preview");
-    }
-    
-    setTimeout(() => {
-        if (frame.contentWindow) {
-            frame.contentWindow.location.replace(previewUrl);
-        } else {
-            frame.src = previewUrl;
-        }
-    }, 50);
 }
 
 function closeViewerModal(triggerHistory = true) {
@@ -1283,27 +1338,14 @@ function closeViewerModal(triggerHistory = true) {
     const loading = document.getElementById("viewerLoadingIndicator");
     const zoomControls = document.getElementById("viewerFloatingZoomControls");
 
-    // Limpieza física total para prevenir pantalla negra residual
-    if (frame) {
-        frame.src = "about:blank";
-    }
-    if (scalerWrapper) {
-        scalerWrapper.style.display = "none";
-        scalerWrapper.classList.remove("video-mode");
-    }
-    if (imgWrapper) {
-        imgWrapper.style.display = "none";
-    }
-    if (zoomControls) {
-        zoomControls.style.display = "none";
-    }
-    if (loading) {
-        loading.style.display = "none";
-    }
+    if (frame) frame.src = "about:blank";
+    if (scalerWrapper) scalerWrapper.style.display = "none";
+    if (imgWrapper) imgWrapper.style.display = "none";
+    if (zoomControls) zoomControls.style.display = "none";
+    if (loading) loading.style.display = "none";
 
     resetActiveZoom();
 
-    // Limpieza de recursos WebGL del motor IFC
     if (ifcAnimationId) {
         cancelAnimationFrame(ifcAnimationId);
         ifcAnimationId = null;
@@ -1317,7 +1359,6 @@ function closeViewerModal(triggerHistory = true) {
         ifcCont.style.display = "none";
     }
 
-    // Ocultar modal del DOM de forma inmediata
     if (modal) {
         modal.style.setProperty("display", "none", "important");
         modal.classList.remove("modal-overlay");
@@ -1338,7 +1379,6 @@ function setupUniversalZoomInteractions() {
     const container = document.getElementById("viewerContainer");
     if (!container) return;
 
-    // Rueda de ratón (PC)
     container.addEventListener("wheel", (e) => {
         if (activeZoomTarget === "IMAGE" || activeZoomTarget === "PDF") {
             e.preventDefault();
@@ -1347,7 +1387,6 @@ function setupUniversalZoomInteractions() {
         }
     }, { passive: false });
 
-    // Paneo con ratón (PC)
     container.addEventListener("mousedown", (e) => {
         if (activeZoomScale <= 1 || (!activeZoomTarget)) return;
         isPanningActive = true;
@@ -1364,7 +1403,6 @@ function setupUniversalZoomInteractions() {
 
     window.addEventListener("mouseup", () => { isPanningActive = false; });
 
-    // Gestos táctiles: Pinch-to-zoom y desplazamiento con dos dedos / un dedo (Móvil)
     container.addEventListener("touchstart", (e) => {
         if (!activeZoomTarget) return;
 
