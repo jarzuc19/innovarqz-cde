@@ -11,7 +11,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
 
-    <!-- Motor 3D Open Source Three.js y OrbitControls -->
+    <!-- Motor 3D Three.js y OrbitControls -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
@@ -34,12 +34,9 @@
 
         <!-- VISTA DASHBOARD -->
         <div id="dashboardView" class="dashboard-hidden">
-            
             <div class="cde-split-layout">
-                
                 <!-- COLUMNA IZQUIERDA (60%): CONTROLES Y ENTREGABLES -->
                 <div class="cde-main-column">
-                    
                     <div class="controls-bar card">
                         <div class="control-group">
                             <label for="projectSelect">Proyecto:</label>
@@ -59,9 +56,7 @@
                     </div>
 
                     <!-- BARRA DINÁMICA DE SUBCARPETAS (JERARQUÍA ISO 19650) -->
-                    <div id="subcarpetas-bar" class="card" style="display: none; padding: 8px 12px; margin-bottom: 12px; background: rgba(30, 41, 59, 0.6); border: 1px solid #334155; gap: 8px; flex-wrap: wrap; align-items: center;">
-                        <!-- Se puebla dinámicamente con app.js -->
-                    </div>
+                    <div id="subcarpetas-bar" class="card" style="display: none; padding: 8px 12px; margin-bottom: 12px; background: rgba(30, 41, 59, 0.6); border: 1px solid #334155; gap: 8px; flex-wrap: wrap; align-items: center;"></div>
 
                     <!-- VISTO BUENO Y FIRMA DIGITAL (EXCLUSIVO CLIENTE) -->
                     <div id="clientApprovalCard" class="card" style="display: none; border-left: 4px solid var(--accent-copper); background: rgba(217, 119, 6, 0.05); margin-bottom: 1rem;">
@@ -99,13 +94,10 @@
 
                 <!-- COLUMNA DERECHA (40%): CENTRO DE MONITOREO -->
                 <div class="cde-sidebar-column">
-                    
                     <!-- HILO TÉCNICO INTERNO -->
                     <div id="technicalNoteCard" class="card monitoring-panel">
                         <h4 style="color: var(--accent-copper); margin-bottom: 8px;">💬 Hilo de Interacción Técnica</h4>
-                        <div id="interactionThreadContainer" class="thread-content scrollable-panel">
-                            <!-- Se renderiza dinámicamente -->
-                        </div>
+                        <div id="interactionThreadContainer" class="thread-content scrollable-panel"></div>
                         <div id="threadActionsContainer" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #334155; display: none; gap: 6px; flex-wrap: wrap;">
                             <button id="btnConfirmarLectura" class="btn-primary" style="background: #10b981; font-size: 0.75rem; padding: 6px 8px;">✅ Confirmar Lectura</button>
                             <button id="btnSolicitarComite" class="btn-secondary" style="background: #d97706; color: #fff; font-size: 0.75rem; padding: 6px 8px;">📅 Solicitar Comité</button>
@@ -116,15 +108,10 @@
                     <!-- BITÁCORA ISO 19650 -->
                     <div id="auditLogCard" class="card monitoring-panel">
                         <h4 style="color: #38bdf8; margin-bottom: 8px;">🕒 Bitácora de Eventos (ISO 19650)</h4>
-                        <div id="activityTimeline" class="audit-content scrollable-panel">
-                            <!-- Se renderiza dinámicamente -->
-                        </div>
+                        <div id="activityTimeline" class="audit-content scrollable-panel"></div>
                     </div>
-
                 </div>
-
             </div>
-
         </div>
     </div>
 
@@ -132,7 +119,6 @@
     <div id="uploadModal" class="modal-hidden">
         <div class="modal-content card" style="max-width: 520px;">
             <h3>Subir / Registrar Entregable (ISO 19650)</h3>
-            
             <div style="margin-bottom: 12px; font-size: 0.8rem; color: #94a3b8; background: rgba(30,41,59,0.8); padding: 8px 12px; border-radius: 6px; border-left: 3px solid var(--accent-copper);">
                 ℹ️ <strong>Instrucciones ISO 19650:</strong><br>
                 • Estado <strong>S0</strong> exclusivo para <strong>01_WIP</strong>.<br>
@@ -179,7 +165,7 @@
         </div>
     </div>
 
-    <!-- MODAL REVISOR: INSTRUCCIÓN TÉCNICA MULTILÍNEA -->
+    <!-- MODAL REVISOR -->
     <div id="revisorInstructionModal" class="modal-hidden">
         <div class="modal-content card" style="max-width: 550px;">
             <h3 style="color: var(--accent-copper);">Emitir Instrucción Técnica a Modelador</h3>
@@ -205,51 +191,80 @@
         <div class="modal-content card viewer-modal-layout">
             <div class="viewer-modal-header">
                 <h4 id="viewerTitle" style="color: var(--accent-copper); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 65%;">Previsualización de Entregable</h4>
-                
-                <!-- Acciones superiores: Botón oficial externo + Botón Cerrar -->
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <button type="button" id="btnViewerExternalOpen" onclick="openCurrentInExternalTab()" class="btn-secondary btn-header-external" title="Abrir en pantalla completa externa">⤢ Abrir</button>
                     <button type="button" onclick="closeViewerModal()" class="btn-secondary btn-close-modal" title="Cerrar visor">✕</button>
                 </div>
             </div>
             
-            <div id="viewerContainer" class="viewer-display-area">
-                
-                <!-- 1. Contenedor de Iframe para Documentos/Planos PDF y Videos en Tablet/PC -->
+            <div id="viewerContainer" class="viewer-display-area" style="position: relative;">
+                <!-- 1. Iframe para PDF y Videos -->
                 <div id="iframeScalerWrapper" class="iframe-scaler-wrapper" style="display: none;">
                     <iframe id="modalViewerFrame" src="about:blank" frameborder="0" allow="autoplay; fullscreen"></iframe>
                 </div>
 
-                <!-- 2. Visor de Imágenes con Zoom y Paneo -->
+                <!-- 2. Visor de Imágenes -->
                 <div id="imageViewerWrapper" class="viewer-item image-zoom-wrapper" style="display: none;">
                     <img id="modalImageViewer" src="" alt="Previsualización Render / Imagen" draggable="false">
                 </div>
 
-                <!-- 3. Visor BIM 3D (IFC) CON BOTONERA FLOTANTE -->
+                <!-- 3. Visor BIM 3D (IFC) -->
                 <div id="modalIfcContainer" class="viewer-item" style="display: none; position: relative; width: 100%; height: 100%; overflow: hidden; cursor: grab;">
-                    <!-- Botonera Flotante BIM Integrada -->
-                    <div id="ifcNavToolbar" style="position: absolute; top: 12px; right: 12px; z-index: 20; display: flex; flex-direction: column; gap: 6px; background: rgba(15, 23, 42, 0.85); padding: 8px; border-radius: 8px; backdrop-filter: blur(6px); border: 1px solid rgba(255, 255, 255, 0.15); box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
-                        <button type="button" class="btn-ifc-nav" onclick="cambiarVistaIFC('ISO')" title="Vista Isométrica 3D" style="padding: 6px 10px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer; transition: all 0.2s;">🧭 Iso</button>
-                        <button type="button" class="btn-ifc-nav" onclick="cambiarVistaIFC('FRONTAL')" title="Fachada Frontal" style="padding: 6px 10px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer; transition: all 0.2s;">🏢 Frontal</button>
-                        <button type="button" class="btn-ifc-nav" onclick="cambiarVistaIFC('LATERAL')" title="Costado Lateral" style="padding: 6px 10px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer; transition: all 0.2s;">📐 Lateral</button>
-                        <button type="button" class="btn-ifc-nav" onclick="cambiarVistaIFC('PLANTA')" title="Vista Superior / Planta" style="padding: 6px 10px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer; transition: all 0.2s;">🗺️ Planta</button>
+                    <!-- Botonera de Orientación y Vistas (Esquina Superior Derecha) -->
+                    <div id="ifcNavToolbar" style="position: absolute; top: 12px; right: 12px; z-index: 20; display: flex; flex-direction: column; gap: 5px; background: rgba(15, 23, 42, 0.85); padding: 8px; border-radius: 8px; backdrop-filter: blur(6px); border: 1px solid rgba(255, 255, 255, 0.15); box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                        <button type="button" onclick="cambiarVistaIFC('ISO')" title="Vista Isométrica 3D" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">🧭 Iso</button>
+                        <button type="button" onclick="cambiarVistaIFC('FRONTAL')" title="Fachada Frontal" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">🏢 Frontal</button>
+                        <button type="button" onclick="cambiarVistaIFC('POSTERIOR')" title="Fachada Posterior" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">🏠 Posterior</button>
+                        <button type="button" onclick="cambiarVistaIFC('LATERAL_IZQ')" title="Costado Izquierdo" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">📐 Izq</button>
+                        <button type="button" onclick="cambiarVistaIFC('LATERAL_DER')" title="Costado Derecho" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">📐 Der</button>
+                        <button type="button" onclick="cambiarVistaIFC('PLANTA')" title="Vista Aérea / Cubierta" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">🗺️ Planta</button>
+                        <button type="button" onclick="cambiarVistaIFC('INFERIOR')" title="Vista Inferior" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">⬇️ Inferior</button>
                         <div style="height: 1px; background: rgba(255, 255, 255, 0.2); margin: 2px 0;"></div>
-                        <button type="button" class="btn-ifc-nav" onclick="ajustarVistaModeloIFC()" title="Ajustar y Centrar Modelo" style="padding: 6px 10px; font-size: 0.72rem; background: var(--accent-copper, #d97706); color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; transition: all 0.2s;">🎯 Ajustar</button>
-                        <button type="button" class="btn-ifc-nav" onclick="alternarCuadriculaIFC()" title="Mostrar u Ocultar Rejilla" style="padding: 6px 10px; font-size: 0.72rem; background: #1e293b; color: #cbd5e1; border: 1px solid #475569; border-radius: 4px; cursor: pointer; transition: all 0.2s;">▦ Rejilla</button>
+                        <button type="button" onclick="ajustarVistaModeloIFC()" title="Ajustar y Centrar Modelo" style="padding: 5px 8px; font-size: 0.72rem; background: var(--accent-copper, #d97706); color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">🎯 Centrar</button>
+                        <button type="button" onclick="alternarCuadriculaIFC()" title="Mostrar u Ocultar Rejilla" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #cbd5e1; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">▦ Rejilla</button>
+                        <button type="button" id="btnToggleSectionBox" onclick="alternarPanelCorteIFC()" title="Caja de Sección y Cortes 3D" style="padding: 5px 8px; font-size: 0.72rem; background: #0284c7; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">✂️ Corte</button>
+                    </div>
+
+                    <!-- Panel Flotante de Herramienta de Sección / Corte (Clipping) -->
+                    <div id="ifcSectionToolPanel" style="position: absolute; bottom: 12px; left: 12px; z-index: 20; display: none; background: rgba(15, 23, 42, 0.9); padding: 10px 14px; border-radius: 8px; backdrop-filter: blur(6px); border: 1px solid #38bdf8; color: #fff; box-shadow: 0 4px 14px rgba(0,0,0,0.4); min-width: 250px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <strong style="font-size: 0.75rem; color: #38bdf8;">✂️ Caja de Sección / Cortes</strong>
+                            <button type="button" onclick="alternarPanelCorteIFC()" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 0.8rem;">✕</button>
+                        </div>
+                        <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+                            <label style="font-size: 0.72rem; display: flex; align-items: center; gap: 4px;"><input type="radio" name="clipAxis" value="Y" checked onchange="configurarPlanoCorte()"> Nivel (Y)</label>
+                            <label style="font-size: 0.72rem; display: flex; align-items: center; gap: 4px;"><input type="radio" name="clipAxis" value="X" onchange="configurarPlanoCorte()"> Transversal (X)</label>
+                            <label style="font-size: 0.72rem; display: flex; align-items: center; gap: 4px;"><input type="radio" name="clipAxis" value="Z" onchange="configurarPlanoCorte()"> Longitudinal (Z)</label>
+                        </div>
+                        <input type="range" id="clipSlider" min="0" max="100" value="100" style="width: 100%; cursor: pointer;" oninput="actualizarPosicionCorte(this.value)">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.68rem; color: #94a3b8; margin-top: 4px;">
+                            <span id="clipMinVal">Base</span>
+                            <button type="button" onclick="invertirPlanoCorte()" style="background: #334155; border: none; color: #cbd5e1; border-radius: 3px; padding: 2px 6px; cursor: pointer;">Invertir Lado</button>
+                            <span id="clipMaxVal">Techo</span>
+                        </div>
+                    </div>
+
+                    <!-- Tarjeta Informativa de Propiedades BIM al Seleccionar -->
+                    <div id="ifcPropertyCard" style="position: absolute; top: 12px; left: 12px; z-index: 20; display: none; background: rgba(15, 23, 42, 0.9); padding: 10px 14px; border-radius: 8px; backdrop-filter: blur(6px); border: 1px solid var(--accent-copper); color: #fff; max-width: 280px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 4px; margin-bottom: 6px;">
+                            <strong id="ifcPropTitle" style="font-size: 0.75rem; color: var(--accent-copper);">Elemento BIM</strong>
+                            <button type="button" onclick="cerrarCardPropiedadesIFC()" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 0.8rem;">✕</button>
+                        </div>
+                        <div id="ifcPropContent" style="font-size: 0.72rem; color: #cbd5e1; max-height: 160px; overflow-y: auto;"></div>
                     </div>
                 </div>
 
-                <!-- 4. Capa transparente activa para arrastrar con el dedo sin que el iframe bloquee el paneo -->
+                <!-- 4. Overlay de Arrastre -->
                 <div id="dragCaptureOverlay" class="drag-capture-overlay" style="display: none;"></div>
 
-                <!-- 5. Controles Flotantes de Zoom (Verticales en Móvil) -->
+                <!-- 5. Controles Flotantes de Zoom Universal -->
                 <div id="viewerFloatingZoomControls" class="viewer-floating-zoom" style="display: none;">
                     <button type="button" onclick="zoomActiveElement(0.25)" title="Acercar">+</button>
                     <button type="button" onclick="zoomActiveElement(-0.25)" title="Alejar">−</button>
                     <button type="button" onclick="resetActiveZoom()" title="Restablecer">↺</button>
                 </div>
 
-                <!-- Indicador de Carga 3D / Multimedia -->
+                <!-- Indicador de Carga -->
                 <div id="viewerLoadingIndicator" class="viewer-loading-banner" style="display: none;">
                     <div style="margin-bottom: 6px;">⏳ Cargando entregable...</div>
                     <small style="color: #94a3b8; font-weight: normal;">(Espere un momento)</small>
