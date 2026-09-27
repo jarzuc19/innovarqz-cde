@@ -1651,7 +1651,6 @@ function alternarModoMedicionIFC() {
         if (btn) {
             btn.style.background = "#0284c7";
             btn.style.color = "#fff";
-            btn.innerText = "📏 Midiento...";
         }
         if (card) card.style.display = "block";
         if (container) container.style.cursor = "crosshair";
@@ -1671,7 +1670,6 @@ function desactivarModoMedicion() {
     if (btn) {
         btn.style.background = "#1e293b";
         btn.style.color = "#38bdf8";
-        btn.innerText = "📏 Medir";
     }
     if (card) card.style.display = "none";
     if (container) container.style.cursor = "grab";
@@ -1704,7 +1702,7 @@ function procesarClickMedicion(intersectPoint) {
     measurePoints.push(intersectPoint.clone());
 
     // Crear marcador esférico visible siempre en primer plano
-    const sphereGeo = new THREE.SphereGeometry(0.2, 16, 16);
+    const sphereGeo = new THREE.SphereGeometry(0.18, 16, 16);
     const sphereMat = new THREE.MeshBasicMaterial({ 
         color: (measurePoints.length === 1) ? 0x38bdf8 : 0x10b981, 
         depthTest: false,
@@ -1831,7 +1829,7 @@ function onIfcModelClick(event) {
 
     raycaster.setFromCamera(mousePointer, ifcCamera);
     
-    // Filtrar solo las mallas visibles y válidas del modelo
+    // Filtrar solo las mallas válidas del edificio
     const mallasValidas = ifcMeshesList.filter(m => m.visible);
     const intersects = raycaster.intersectObjects(mallasValidas, false);
 
