@@ -1102,7 +1102,7 @@ async function generarPDFActaRecibo() {
     if (files && files.length > 0) {
         const unicosPublished = new Map();
         files.forEach(f => {
-            if (!f.archivo_nombre.includes("ACTA_") && !f.archivo_nombre.includes("NOTA_TECNICA")) {
+            if (!f.archivo_nombre.includes("ACTA_") && !f.archivo_nombre.includes("NOTA_TECNICA") && !f.archivo_nombre.includes("CARGA DE ENTREGABLE") && !f.archivo_nombre.includes("PROMOCIÓN_")) {
                 if (!unicosPublished.has(f.archivo_nombre)) unicosPublished.set(f.archivo_nombre, f);
             }
         });
@@ -1645,7 +1645,7 @@ async function inicializarVisorIFC(fileUrl, container) {
 }
 
 // ==============================================================================
-// RENDERIZADO DE ENTREGABLES CON FILTRO POR SUBCARPETAS Y EXCLUSIÓN _OLD_
+// RENDERIZADO DE ENTREGABLES CON FILTRO POR SUBCARPETAS Y EXCLUSIÓN DE EVENTOS
 // ==============================================================================
 async function loadFiles() {
     const tbody = document.getElementById("filesTableBody");
@@ -1683,7 +1683,13 @@ async function loadFiles() {
         const mapaUnicos = new Map();
 
         files.forEach(f => {
-            if (f.archivo_nombre.startsWith("ACTA_DECISION_CLIENTE") || f.archivo_nombre.startsWith("NOTA_TECNICA_")) {
+            // IGNORAR REGISTROS DE SISTEMA Y EVENTOS DE AUDITORÍA
+            if (
+                f.archivo_nombre.startsWith("ACTA_DECISION_CLIENTE") || 
+                f.archivo_nombre.startsWith("NOTA_TECNICA_") ||
+                f.archivo_nombre.startsWith("CARGA DE ENTREGABLE") ||
+                f.archivo_nombre.startsWith("PROMOCIÓN_")
+            ) {
                 return;
             }
 
