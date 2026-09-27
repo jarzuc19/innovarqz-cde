@@ -4,6 +4,7 @@
 const SUPABASE_URL = "https://bjlqtzrcrofpqlmyvoob.supabase.co";
 const SUPABASE_KEY = "sb_publishable_htPtQvL-1wrLfu7ACHBg1w_epAZsu1E";
 const WEBHOOK_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbyZROxo0lJW9ImGGlRfS-Ila6H5pMAgN4RupXKV4_WwKcBewLku3kgyvh_Tr359Oij01w/exec";
+const GOOGLE_DRIVE_API_KEY = "AIzaSyDeV3Idy0ZPoCkzDcdEmO78VkdR7t0HpDQ";
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -1316,7 +1317,7 @@ async function desplegarModalIFC(driveUrl, titulo) {
     ifcCont.style.display = "block";
     if (loading) {
         loading.style.display = "block";
-        loading.innerHTML = `<div style="margin-bottom:6px;">⏳ Inicializando y procesando modelo IFC...</div><small style="color:#94a3b8;">(Optimizando geometría 3D)</small>`;
+        loading.innerHTML = `<div style="margin-bottom:6px;">⏳ Descargando modelo desde Google Drive...</div><small style="color:#94a3b8;">(Procesando geometría 3D sin límites)</small>`;
     }
 
     modal.style.display = "flex";
@@ -1486,7 +1487,7 @@ function applyActiveTransform() {
 }
 
 // ==============================================================================
-// MOTOR BIM OPEN SOURCE 3D PARA IFC (WEB-IFC + THREE.JS ROBUSTO CON PROXY CORS)
+// MOTOR BIM OPEN SOURCE 3D PARA IFC (DESCARGA DIRECTA GOOGLE DRIVE API KEY)
 // ==============================================================================
 async function obtenerConstructorIfcAPI() {
     if (window.WebIFC && window.WebIFC.IfcAPI) {
@@ -1558,38 +1559,28 @@ async function inicializarVisorIFC(fileUrl, container) {
         await ifcApiInstance.Init();
     }
 
-    // 2. Extraer ID de archivo en Drive
+    // 2. Extraer ID del archivo en Google Drive
     let fileId = "";
     const match = fileUrl.match(/[-\w]{25,}/);
     if (match) fileId = match[0];
 
-    // 3. Descarga de bytes mediante Apps Script para evitar restricciones CORS
-    const payload = {
-        accion: "OBTENER_BYTES_IFC",
-        file_id: fileId,
-        drive_url: fileUrl
-    };
-
-    const response = await fetch(WEBHOOK_APPS_SCRIPT, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify(payload)
-    });
-
-    const data = await response.json();
-    if (data.status !== "success" || !data.base64) {
-        throw new Error(data.message || "No se pudo obtener el contenido del modelo desde el servidor.");
+    if (!fileId) {
+        throw new Error("No se pudo detectar el ID del archivo en Google Drive.");
     }
 
-    // 4. Convertir Base64 a Uint8Array binario nativo
-    const binaryString = atob(data.base64);
-    const bytesLength = binaryString.length;
-    const bytesArray = new Uint8Array(bytesLength);
-    for (let i = 0; i < bytesLength; i++) {
-        bytesArray[i] = binaryString.charCodeAt(i);
+    // 3. Descarga directa binaria mediante Google Drive API v3 (Sin límite de tamaño ni cuellos de botella)
+    const directApiUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${GOOGLE_DRIVE_API_KEY}`;
+    
+    const response = await fetch(directApiUrl);
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Error en Google Drive API (${response.status}): ${errorText}`);
     }
 
-    // 5. Cargar geometría con WebIFC y generar mallas en Three.js
+    const buffer = await response.arrayBuffer();
+    const bytesArray = new Uint8Array(buffer);
+
+    // 4. Decodificar geometría con WebIFC y generar mallas en Three.js
     const modelID = ifcApiInstance.OpenModel(bytesArray);
     const ifcGroup = new THREE.Group();
 
@@ -1636,7 +1627,7 @@ async function inicializarVisorIFC(fileUrl, container) {
 
     ifcApiInstance.CloseModel(modelID);
 
-    // 6. Centrar modelo y ajustar encuadre automático de cámara
+    // 5. Centrar modelo y ajustar encuadre automático de cámara
     const box = new THREE.Box3().setFromObject(ifcGroup);
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
