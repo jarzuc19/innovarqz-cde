@@ -224,6 +224,24 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
     border-radius: 6px;
 }
 
+.btn-header-external {
+    background: #0284c7;
+    border: none;
+    color: #fff;
+    padding: 4px 10px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.btn-header-external:hover {
+    background: #0369a1;
+}
+
 .viewer-display-area {
     flex: 1;
     width: 100%;
@@ -234,7 +252,7 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
     display: flex;
     align-items: center;
     justify-content: center;
-    touch-action: pan-x pan-y pinch-zoom !important;
+    touch-action: none; /* Controlado dinámicamente */
 }
 
 .viewer-item {
@@ -243,7 +261,7 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
     border: none;
 }
 
-/* Contenedor Iframe (Restaura la tablet al 100% nativo original) */
+/* 1. Contenedor Iframe (Tablet y PC al 100% natural) */
 .iframe-scaler-wrapper {
     width: 100%;
     height: 100%;
@@ -253,8 +271,6 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
     align-items: center;
     justify-content: center;
     background: #000;
-    touch-action: pan-x pan-y pinch-zoom !important;
-    -webkit-overflow-scrolling: touch;
 }
 
 .iframe-scaler-wrapper iframe {
@@ -262,10 +278,30 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
     height: 100%;
     border: none;
     transform-origin: center center;
-    transition: transform 0.08s ease-out;
+    transition: transform 0.05s ease-out;
 }
 
-/* 2. Visor de Imágenes */
+/* Bloqueador de esquina para ocultar botón interno de Drive solo en móvil */
+.drive-corner-blocker {
+    display: none;
+}
+
+/* 2. Capa transparente activa para capturar paneo en zoom sin interferencia del iframe */
+.drag-capture-overlay {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: transparent;
+    z-index: 40;
+    cursor: grab;
+    touch-action: none;
+}
+
+.drag-capture-overlay:active {
+    cursor: grabbing;
+}
+
+/* 3. Visor de Imágenes */
 .image-zoom-wrapper {
     position: relative;
     overflow: hidden;
@@ -274,7 +310,6 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
     justify-content: center;
     user-select: none;
     cursor: grab;
-    touch-action: pan-x pan-y pinch-zoom !important;
 }
 
 .image-zoom-wrapper:active {
@@ -286,11 +321,11 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
     max-height: 100%;
     object-fit: contain;
     transform-origin: center center;
-    transition: transform 0.08s ease-out;
+    transition: transform 0.05s ease-out;
     pointer-events: none;
 }
 
-/* 3. Botones Flotantes de Zoom (Horizontales en PC/Tablet) */
+/* 4. Botones Flotantes de Zoom (Horizontales en PC/Tablet) */
 .viewer-floating-zoom {
     position: absolute;
     bottom: 16px;
@@ -486,21 +521,34 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
 }
 
 /* ==============================================================================
-   AJUSTES EXCLUSIVOS PARA SMARTPHONES VERTICALES (< 600px)
+   AJUSTES EXCLUSIVOS PARA SMARTPHONES (< 600px / 6.9")
    ============================================================================== */
 @media (max-width: 600px) {
-    /* Botones de Zoom en disposición VERTICAL en el lateral derecho para no tapar paginación */
+    /* Ocultar el botón interno diminuto de Google Drive en móvil mediante máscara negra */
+    .drive-corner-blocker {
+        display: block !important;
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 52px;
+        height: 52px;
+        background: #000;
+        z-index: 10;
+        pointer-events: auto;
+    }
+
+    /* Botones de Zoom en DISPOSICIÓN VERTICAL en el lateral derecho */
     .viewer-floating-zoom {
         flex-direction: column !important;
-        right: 10px !important;
-        bottom: 75px !important; /* Despeja completamente el centro inferior */
+        right: 12px !important;
+        bottom: 85px !important; /* Despeja completamente el centro inferior (Paginación libre) */
         padding: 6px 4px !important;
         gap: 6px !important;
     }
 
     .viewer-floating-zoom button {
-        width: 32px !important;
-        height: 32px !important;
-        font-size: 1rem !important;
+        width: 34px !important;
+        height: 34px !important;
+        font-size: 1.05rem !important;
     }
 }
