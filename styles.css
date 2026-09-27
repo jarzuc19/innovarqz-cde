@@ -1,5 +1,5 @@
 /* ==============================================================================
-   VARIABLES GENERALES Y TEMAS
+   VARIABLES GENERALES Y BASE CDE INNOVARQZ
    ============================================================================== */
 :root {
     --bg-dark: #0b1120;
@@ -21,9 +21,15 @@
     font-family: var(--font-sans);
 }
 
-body {
+html, body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
     background-color: var(--bg-dark);
     color: var(--text-main);
+}
+
+body {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -34,13 +40,15 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px 24px;
+    padding: 10px 16px;
     background: #0f172a;
     border-bottom: 1px solid var(--card-border);
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
 .logo {
-    font-size: 1.25rem;
+    font-size: 1.2rem;
     font-weight: 700;
     color: #fff;
 }
@@ -50,7 +58,7 @@ body {
 }
 
 .logo small {
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     color: var(--text-muted);
     margin-left: 6px;
     font-weight: 400;
@@ -58,13 +66,14 @@ body {
 
 .user-info {
     text-align: right;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
+    line-height: 1.25;
 }
 
 /* CONTENEDOR PRINCIPAL */
 .container {
     flex: 1;
-    padding: 16px;
+    padding: 12px;
     max-width: 1600px;
     margin: 0 auto;
     width: 100%;
@@ -74,21 +83,22 @@ body {
     background: var(--card-bg);
     border: 1px solid var(--card-border);
     border-radius: 8px;
-    padding: 16px;
+    padding: 12px 14px;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
 }
 
-/* BOTONES */
+/* BOTONES GLOBALES */
 .btn-primary {
     background: var(--accent-copper);
     color: #fff;
     border: none;
     border-radius: 6px;
-    padding: 8px 14px;
-    font-size: 0.85rem;
+    padding: 7px 12px;
+    font-size: 0.82rem;
     cursor: pointer;
     font-weight: 600;
     transition: opacity 0.2s;
+    white-space: nowrap;
 }
 
 .btn-primary:hover {
@@ -100,10 +110,11 @@ body {
     color: #cbd5e1;
     border: 1px solid #475569;
     border-radius: 6px;
-    padding: 8px 14px;
-    font-size: 0.85rem;
+    padding: 7px 12px;
+    font-size: 0.82rem;
     cursor: pointer;
     transition: background 0.2s;
+    white-space: nowrap;
 }
 
 .btn-secondary:hover {
@@ -111,15 +122,16 @@ body {
     color: #fff;
 }
 
-/* FORMULARIOS */
+/* CAMPOS DE FORMULARIO */
 input[type="text"], input[type="email"], input[type="password"], input[type="url"], select, textarea {
     background: #0f172a;
     color: #fff;
     border: 1px solid var(--card-border);
     border-radius: 6px;
-    padding: 8px 10px;
-    font-size: 0.85rem;
+    padding: 7px 10px;
+    font-size: 0.82rem;
     outline: none;
+    max-width: 100%;
 }
 
 input:focus, select:focus, textarea:focus {
@@ -129,45 +141,50 @@ input:focus, select:focus, textarea:focus {
 /* LOGIN VIEW */
 .login-card {
     max-width: 380px;
-    margin: 80px auto;
+    margin: 60px auto;
     text-align: center;
 }
 
 .login-card h2 {
-    margin-bottom: 16px;
-    font-size: 1.25rem;
+    margin-bottom: 14px;
+    font-size: 1.2rem;
     color: var(--accent-copper);
 }
 
 .login-card form {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
 }
 
 .dashboard-hidden {
     display: none;
 }
 
-/* SPLIT LAYOUT CDE */
+/* ==============================================================================
+   DASHBOARD SPLIT LAYOUT (ESCRITORIO Y TABLET)
+   ============================================================================== */
 .cde-split-layout {
     display: flex;
-    gap: 16px;
-    align-items: flex-start;
+    gap: 14px;
+    align-items: stretch;
+    width: 100%;
 }
 
 .cde-main-column {
-    flex: 6;
+    flex: 1 1 65%;
+    min-width: 0; /* Previene el desbordamiento horizontal */
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
 }
 
 .cde-sidebar-column {
-    flex: 4;
+    flex: 1 1 35%;
+    min-width: 280px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
 }
 
 .controls-bar {
@@ -175,39 +192,50 @@ input:focus, select:focus, textarea:focus {
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
-    gap: 10px;
-    padding: 12px 16px;
+    gap: 8px;
+    padding: 10px 12px;
 }
 
 .control-group {
     display: flex;
     align-items: center;
     gap: 8px;
+    flex: 1 1 auto;
+    min-width: 220px;
+}
+
+.control-group select {
+    flex: 1;
+    min-width: 150px;
 }
 
 .action-buttons-group {
     display: flex;
-    gap: 8px;
+    gap: 6px;
+    flex-wrap: wrap;
 }
 
+/* PESTAÑAS Y SUBCARPETAS */
 .tabs {
     display: flex;
     gap: 6px;
     border-bottom: 1px solid var(--card-border);
     padding-bottom: 6px;
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .tab-btn {
     background: #0f172a;
     color: var(--text-muted);
     border: 1px solid var(--card-border);
-    padding: 6px 14px;
+    padding: 6px 12px;
     border-radius: 6px;
     cursor: pointer;
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     font-weight: 600;
     white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .tab-btn.active {
@@ -216,27 +244,30 @@ input:focus, select:focus, textarea:focus {
     border-color: var(--accent-copper);
 }
 
-/* TABLA */
+/* TABLA DE ENTREGABLES */
 .table-card {
     padding: 0;
-    overflow: hidden;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .scrollable-panel {
-    max-height: 580px;
+    max-height: 520px;
     overflow-y: auto;
 }
 
 table {
     width: 100%;
+    min-width: 580px; /* Permite scroll horizontal en móvil sin romper el contenedor */
     border-collapse: collapse;
     text-align: left;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
 }
 
 th, td {
-    padding: 10px 14px;
+    padding: 8px 10px;
     border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+    white-space: nowrap;
 }
 
 th {
@@ -244,8 +275,11 @@ th {
     color: var(--text-muted);
     font-weight: 600;
     text-transform: uppercase;
-    font-size: 0.72rem;
-    letter-spacing: 0.05em;
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    position: sticky;
+    top: 0;
+    z-index: 2;
 }
 
 tr:hover {
@@ -256,32 +290,35 @@ tr:hover {
     background: var(--accent-blue);
     color: #0f172a;
     font-weight: bold;
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 0.72rem;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 0.68rem;
 }
 
-/* SIDEBAR PANELS */
+/* PANELES LATERALES (HILO TÉCNICO Y BITÁCORA) */
 .monitoring-panel {
     display: flex;
     flex-direction: column;
-    height: 290px;
+    min-height: 250px;
+    flex: 1;
 }
 
 .thread-content, .audit-content {
     flex: 1;
     overflow-y: auto;
-    font-size: 0.8rem;
+    font-size: 0.78rem;
 }
 
-/* MODALES */
+/* ==============================================================================
+   MODAL DE VISUALIZACIÓN
+   ============================================================================== */
 .modal-overlay {
     position: fixed;
     top: 0;
     left: 0;
     width: 100vw;
     height: 100vh;
-    background: rgba(0, 0, 0, 0.75);
+    background: rgba(0, 0, 0, 0.78);
     backdrop-filter: blur(4px);
     display: flex;
     justify-content: center;
@@ -294,7 +331,7 @@ tr:hover {
 }
 
 .modal-content {
-    width: 90%;
+    width: 92%;
     max-height: 90vh;
     overflow-y: auto;
 }
@@ -305,7 +342,7 @@ tr:hover {
     max-width: 1600px;
     display: flex;
     flex-direction: column;
-    padding: 12px;
+    padding: 10px;
     background: #0f172a;
 }
 
@@ -313,7 +350,7 @@ tr:hover {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     padding-bottom: 6px;
     border-bottom: 1px solid var(--card-border);
 }
@@ -357,7 +394,6 @@ tr:hover {
     transition: transform 0.05s ease-out;
 }
 
-/* OVERLAY TRANSPARENTE DE ARRASTRE */
 .drag-capture-overlay {
     position: absolute;
     top: 0;
@@ -368,11 +404,10 @@ tr:hover {
     cursor: grab;
 }
 
-/* ZOOM FLOTANTE UNIVERSAL */
 .viewer-floating-zoom {
     position: absolute;
-    bottom: 16px;
-    right: 16px;
+    bottom: 14px;
+    right: 14px;
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -380,13 +415,13 @@ tr:hover {
 }
 
 .viewer-floating-zoom button {
-    width: 36px;
-    height: 36px;
+    width: 34px;
+    height: 34px;
     border-radius: 50%;
     background: #1e293b;
     border: 1px solid var(--card-border);
     color: #fff;
-    font-size: 1.1rem;
+    font-size: 1rem;
     cursor: pointer;
     display: flex;
     justify-content: center;
@@ -400,7 +435,7 @@ tr:hover {
     left: 50%;
     transform: translate(-50%, -50%);
     background: rgba(15, 23, 42, 0.95);
-    padding: 16px 24px;
+    padding: 14px 20px;
     border-radius: 8px;
     border: 1px solid var(--accent-copper);
     color: #fff;
@@ -409,181 +444,74 @@ tr:hover {
 }
 
 /* ==============================================================================
-   BOTONERA FLOTANTE DE VISTAS BIM 3D (DESKTOP / BASE)
+   RESPONSIVE: TABLETS Y PANTALLAS MEDIANAS (<= 992px)
    ============================================================================== */
-.ifc-nav-toolbar {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    z-index: 20;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    background: rgba(15, 23, 42, 0.88);
-    padding: 7px;
-    border-radius: 8px;
-    backdrop-filter: blur(6px);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
-}
-
-.btn-ifc-nav {
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 6px;
-    padding: 5px 8px;
-    font-size: 0.72rem;
-    background: #1e293b;
-    color: #fff;
-    border: 1px solid #475569;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all 0.15s ease;
-    white-space: nowrap;
-}
-
-.btn-ifc-nav:hover {
-    background: #334155;
-    border-color: #64748b;
-}
-
-.btn-ifc-nav.btn-accent {
-    background: var(--accent-copper);
-    border: none;
-    font-weight: bold;
-}
-
-.btn-ifc-nav.btn-section {
-    background: #0284c7;
-    border: none;
-    font-weight: bold;
-}
-
-.btn-ifc-nav.btn-measure {
-    color: #38bdf8;
-    border-color: #38bdf8;
-    font-weight: bold;
-}
-
-.btn-icon {
-    font-size: 0.85rem;
-    display: inline-block;
-    line-height: 1;
-}
-
-.btn-text {
-    display: inline;
-}
-
-.ifc-nav-divider {
-    height: 1px;
-    background: rgba(255, 255, 255, 0.2);
-    margin: 2px 0;
-}
-
-/* PANELES FLOTANTES (CORTE, MEDICIÓN, PROPIEDADES) */
-.ifc-floating-panel {
-    position: absolute;
-    z-index: 20;
-    background: rgba(15, 23, 42, 0.95);
-    padding: 10px 14px;
-    border-radius: 8px;
-    backdrop-filter: blur(6px);
-    color: #fff;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
-}
-
-.ifc-section-panel {
-    bottom: 12px;
-    left: 12px;
-    border: 1px solid #38bdf8;
-    min-width: 250px;
-}
-
-.ifc-measure-panel {
-    bottom: 12px;
-    right: 12px;
-    border: 1px solid #38bdf8;
-    min-width: 230px;
-}
-
-.ifc-property-panel {
-    top: 12px;
-    left: 12px;
-    border: 1px solid var(--accent-copper);
-    max-width: 280px;
-}
-
-.panel-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 6px;
-    font-size: 0.75rem;
-}
-
-.btn-close-subpanel {
-    background: none;
-    border: none;
-    color: #94a3b8;
-    cursor: pointer;
-    font-size: 0.85rem;
-}
-
-.btn-panel-action {
-    background: #334155;
-    border: none;
-    color: #cbd5e1;
-    border-radius: 4px;
-    padding: 3px 8px;
-    font-size: 0.68rem;
-    cursor: pointer;
-}
-
-.section-axis-group {
-    display: flex;
-    gap: 6px;
-    margin-bottom: 8px;
-    font-size: 0.72rem;
-}
-
-.section-controls-footer {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.68rem;
-    color: #94a3b8;
-    margin-top: 4px;
-}
-
-.measure-status-text {
-    font-size: 0.72rem;
-    color: #fbbf24;
-    margin-bottom: 4px;
-}
-
-.measure-data-grid {
-    font-size: 0.75rem;
-    line-height: 1.4;
-}
-
-.property-content-scroll {
-    font-size: 0.72rem;
-    color: #cbd5e1;
-    max-height: 160px;
-    overflow-y: auto;
-}
-
-/* ==============================================================================
-   ADAPTACIÓN RESPONSIVA PARA MÓVILES (< 600px)
-   ============================================================================== */
-@media (max-width: 600px) {
+@media (max-width: 992px) {
     .cde-split-layout {
         flex-direction: column;
     }
 
+    .cde-main-column, .cde-sidebar-column {
+        flex: 1 1 100%;
+        width: 100%;
+    }
+
+    .cde-sidebar-column {
+        min-width: 0;
+        margin-top: 10px;
+    }
+
+    .monitoring-panel {
+        height: auto;
+        min-height: 220px;
+    }
+}
+
+/* ==============================================================================
+   RESPONSIVE: MÓVILES (<= 600px)
+   ============================================================================== */
+@media (max-width: 600px) {
+    .navbar {
+        padding: 8px 10px;
+    }
+
+    .logo {
+        font-size: 1.05rem;
+    }
+
+    .user-info {
+        font-size: 0.72rem;
+        width: 100%;
+        text-align: left;
+        margin-top: 4px;
+    }
+
     .container {
+        padding: 6px;
+    }
+
+    .controls-bar {
         padding: 8px;
+    }
+
+    .control-group {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .control-group select {
+        width: 100%;
+    }
+
+    .action-buttons-group {
+        width: 100%;
+        display: flex;
+        justify-content: stretch;
+    }
+
+    .action-buttons-group button {
+        flex: 1;
+        text-align: center;
     }
 
     .viewer-modal-layout {
@@ -592,48 +520,5 @@ tr:hover {
         max-height: 100vh;
         border-radius: 0;
         padding: 6px;
-    }
-
-    /* BARRA LATERAL BIM COMPACTA (SOLO ICONOS) */
-    .ifc-nav-toolbar {
-        top: 8px;
-        right: 8px;
-        padding: 4px;
-        gap: 3px;
-        width: auto;
-    }
-
-    .btn-ifc-nav {
-        padding: 6px;
-        width: 32px;
-        height: 32px;
-        justify-content: center;
-        border-radius: 6px;
-    }
-
-    .btn-ifc-nav .btn-icon {
-        font-size: 0.95rem;
-        margin: 0;
-    }
-
-    /* Ocultar el texto en dispositivos móviles */
-    .btn-ifc-nav .btn-text {
-        display: none !important;
-    }
-
-    /* PANELES FLOTANTES ADAPTADOS */
-    .ifc-section-panel, .ifc-measure-panel {
-        bottom: 8px;
-        left: 8px;
-        right: 8px;
-        min-width: auto;
-        max-width: calc(100vw - 16px);
-        padding: 8px 10px;
-    }
-
-    .ifc-property-panel {
-        top: 8px;
-        left: 8px;
-        max-width: calc(100vw - 60px);
     }
 }
