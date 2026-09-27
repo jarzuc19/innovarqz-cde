@@ -47,6 +47,11 @@ let isSectionToolActive = false;
 const ifcEdgesList = [];
 let ifcEdgesVisible = true;
 
+// HERRAMIENTA DE MEDICIÓN 3D PUNTO A PUNTO
+let isMeasureToolActive = false;
+let measurePoints = [];
+const measureVisualObjects = [];
+
 // INTERACCIÓN Y SELECCIÓN DE PROPIEDADES BIM
 let raycaster = null;
 let mousePointer = null;
@@ -1255,6 +1260,7 @@ function closeViewerModal(triggerHistory = true) {
 
     resetActiveZoom();
     cerrarCardPropiedadesIFC();
+    desactivarModoMedicion();
 
     if (ifcAnimationId) {
         cancelAnimationFrame(ifcAnimationId);
@@ -1403,7 +1409,8 @@ async function inicializarVisorIFC(fileUrl, container) {
         container.removeChild(ifcRenderer.domElement);
     }
     ifcMeshesList.length = 0;
-    ifcEdgesList.length = 0; // Limpiar lista de aristas
+    ifcEdgesList.length = 0;
+    limpiarMedicionIFC();
 
     const width = container.clientWidth || 800;
     const height = container.clientHeight || 550;
@@ -1418,7 +1425,7 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcRenderer.setSize(width, height);
     ifcRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     ifcRenderer.outputEncoding = THREE.sRGBEncoding;
-    ifcRenderer.localClippingEnabled = true; // Activa cortes dinámicos 3D
+    ifcRenderer.localClippingEnabled = true;
     container.insertBefore(ifcRenderer.domElement, container.firstChild);
 
     ifcControls = new THREE.OrbitControls(ifcCamera, ifcRenderer.domElement);
@@ -1442,7 +1449,7 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcGridHelper.position.y = -0.01;
     ifcScene.add(ifcGridHelper);
 
-    // Inicializar Raycaster para selección de propiedades
+    // Inicializar Raycaster
     raycaster = new THREE.Raycaster();
     mousePointer = new THREE.Vector2();
 
@@ -1482,8 +1489,8 @@ async function inicializarVisorIFC(fileUrl, container) {
 
     // 4. Apertura con configuración avanzada de That Open Company
     const modelSettings = {
-        COORDINATE_TO_ORIGIN: true, // Reubica masas de emplazamiento / IfcSite al centro de la escena
-        USE_FAST_BOOLS: true        // Acelera cálculo de vanos y cortes topográficos
+        COORDINATE_TO_ORIGIN: true,
+        USE_FAST_BOOLS: true
     };
 
     currentLoadedModelID = ifcApiInstance.OpenModel(bytesArray, modelSettings);
@@ -1542,13 +1549,11 @@ async function inicializarVisorIFC(fileUrl, container) {
             const matrix = new THREE.Matrix4().fromArray(placedGeometry.flatTransformation);
             mesh.applyMatrix4(matrix);
 
-            // Metadata para inspección de propiedades al clic
             mesh.userData = {
                 expressID: placedGeometry.geometryExpressID,
                 modelID: currentLoadedModelID
             };
 
-            // Delineado de bordes sobre geometría
             if (!esTransparente && posFloats.length < 6000) {
                 const edges = new THREE.EdgesGeometry(bufferGeometry, 24);
                 const lineSegments = new THREE.LineSegments(edges, edgeLineMaterial);
@@ -1634,6 +1639,116 @@ function alternarAristasIFC() {
 }
 
 // ==============================================================================
+// HERRAMIENTA DE MEDICIÓN 3D PUNTO A PUNTO
+// ==============================================================================
+function alternarModoMedicionIFC() {
+    isMeasureToolActive = !isMeasureToolActive;
+    const btn = document.getElementById("btnToggleMeasure");
+    const card = document.getElementById("ifcMeasureCard");
+    const container = document.getElementById("modalIfcContainer");
+
+    if (isMeasureToolActive) {
+        if (btn) {
+            btn.style.background = "#0284c7";
+            btn.style.color = "#fff";
+        }
+        if (card) card.style.display = "block";
+        if (container) container.style.cursor = "crosshair";
+        cerrarCardPropiedadesIFC();
+        limpiarMedicionIFC();
+    } else {
+        desactivarModoMedicion();
+    }
+}
+
+function desactivarModoMedicion() {
+    isMeasureToolActive = false;
+    const btn = document.getElementById("btnToggleMeasure");
+    const card = document.getElementById("ifcMeasureCard");
+    const container = document.getElementById("modalIfcContainer");
+
+    if (btn) {
+        btn.style.background = "#1e293b";
+        btn.style.color = "#38bdf8";
+    }
+    if (card) card.style.display = "none";
+    if (container) container.style.cursor = "grab";
+    limpiarMedicionIFC();
+}
+
+function limpiarMedicionIFC() {
+    measurePoints = [];
+    measureVisualObjects.forEach(obj => {
+        if (ifcScene) ifcScene.remove(obj);
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) obj.material.dispose();
+    });
+    measureVisualObjects.length = 0;
+
+    const status = document.getElementById("ifcMeasureStatus");
+    const dataDiv = document.getElementById("ifcMeasureData");
+    if (status) {
+        status.innerText = "Haz clic en el Punto A...";
+        status.style.color = "#fbbf24";
+    }
+    if (dataDiv) dataDiv.style.display = "none";
+}
+
+function procesarClickMedicion(intersectPoint) {
+    if (measurePoints.length >= 2) {
+        limpiarMedicionIFC();
+    }
+
+    measurePoints.push(intersectPoint.clone());
+
+    // Crear marcador esférico en el punto seleccionado
+    const sphereGeo = new THREE.SphereGeometry(0.12, 16, 16);
+    const sphereMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, depthTest: false });
+    const sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
+    sphereMesh.renderOrder = 999;
+    sphereMesh.position.copy(intersectPoint);
+    ifcScene.add(sphereMesh);
+    measureVisualObjects.push(sphereMesh);
+
+    const status = document.getElementById("ifcMeasureStatus");
+    const dataDiv = document.getElementById("ifcMeasureData");
+
+    if (measurePoints.length === 1) {
+        if (status) {
+            status.innerText = "Punto A fijado. Haz clic en el Punto B...";
+            status.style.color = "#38bdf8";
+        }
+    } else if (measurePoints.length === 2) {
+        const p1 = measurePoints[0];
+        const p2 = measurePoints[1];
+
+        // Crear línea 3D conectora
+        const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+        const lineMat = new THREE.LineBasicMaterial({ color: 0x10b981, linewidth: 2, depthTest: false });
+        const lineObj = new THREE.Line(lineGeo, lineMat);
+        lineObj.renderOrder = 998;
+        ifcScene.add(lineObj);
+        measureVisualObjects.push(lineObj);
+
+        // Cálculos métricos
+        const distReal = p1.distanceTo(p2);
+        const distY = Math.abs(p2.y - p1.y);
+        const distXZ = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.z - p1.z, 2));
+
+        if (status) {
+            status.innerText = "✅ Medición completada:";
+            status.style.color = "#10b981";
+        }
+        if (dataDiv) {
+            dataDiv.style.display = "block";
+            document.getElementById("measureDistReal").innerText = `${distReal.toFixed(2)} m`;
+            document.getElementById("measureDistY").innerText = `${distY.toFixed(2)} m`;
+            document.getElementById("measureDistXZ").innerText = `${distXZ.toFixed(2)} m`;
+        }
+    }
+}
+
+// ==============================================================================
 // HERRAMIENTA DE SECCIÓN Y CORTES 3D DINÁMICOS (CLIPPING)
 // ==============================================================================
 function alternarPanelCorteIFC() {
@@ -1646,7 +1761,7 @@ function alternarPanelCorteIFC() {
     if (btn) btn.style.background = isSectionToolActive ? "#10b981" : "#0284c7";
 
     if (!isSectionToolActive && ifcClippingPlane) {
-        ifcClippingPlane.constant = 5000; // Desactiva el corte visual alejando el plano
+        ifcClippingPlane.constant = 5000;
     } else {
         configurarPlanoCorte();
     }
@@ -1694,7 +1809,7 @@ function invertirPlanoCorte() {
 }
 
 // ==============================================================================
-// INSPECCIÓN DE PROPIEDADES BIM AL CLIC
+// INSPECCIÓN DE PROPIEDADES BIM Y DISPATCHER DE CLICS
 // ==============================================================================
 function onIfcModelClick(event) {
     const rect = ifcRenderer.domElement.getBoundingClientRect();
@@ -1705,9 +1820,17 @@ function onIfcModelClick(event) {
     const intersects = raycaster.intersectObjects(ifcMeshesList);
 
     if (intersects.length > 0) {
-        const hit = intersects[0].object;
-        resaltarElementoIFC(hit);
-        mostrarPropiedadesElementoIFC(hit.userData);
+        const hit = intersects[0];
+
+        // MODO MEDICIÓN ACTIVO
+        if (isMeasureToolActive) {
+            procesarClickMedicion(hit.point);
+            return;
+        }
+
+        // MODO INSPECCIÓN DE PROPIEDADES
+        resaltarElementoIFC(hit.object);
+        mostrarPropiedadesElementoIFC(hit.object.userData);
     }
 }
 
@@ -1742,7 +1865,6 @@ function mostrarPropiedadesElementoIFC(userData) {
         <div style="margin-bottom: 4px;"><strong>Norma:</strong> ISO 19650 Compliance</div>
     `;
 
-    // Consulta de esquema a That Open Company
     if (ifcApiInstance && userData.modelID !== undefined && userData.expressID !== undefined) {
         try {
             const props = ifcApiInstance.GetLine(userData.modelID, userData.expressID);
