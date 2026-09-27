@@ -201,7 +201,7 @@
         </div>
     </div>
 
-    <!-- MODAL DE VISOR UNIVERSAL CON VIEWPORT ESCALADO -->
+    <!-- MODAL DE VISOR UNIVERSAL -->
     <div id="viewerModal" class="modal-hidden">
         <div class="modal-content card viewer-modal-layout">
             <div class="viewer-modal-header">
@@ -211,28 +211,30 @@
             
             <div id="viewerContainer" class="viewer-display-area">
                 
-                <!-- 1. Contenedor Viewport para Iframes de Documentos y Videos (Google Drive) -->
+                <!-- 1. Contenedor Dinámico para Documentos, Planos PDF y Videos -->
                 <div id="iframeScalerWrapper" class="iframe-scaler-wrapper" style="display: none;">
-                    <iframe id="modalViewerFrame" src="" frameborder="0" allow="autoplay; fullscreen"></iframe>
+                    <iframe id="modalViewerFrame" src="about:blank" frameborder="0" allow="autoplay; fullscreen"></iframe>
                 </div>
 
-                <!-- 2. Visor de Imágenes con Zoom y Paneo -->
+                <!-- 2. Visor de Imágenes Nativas con Zoom y Paneo -->
                 <div id="imageViewerWrapper" class="viewer-item image-zoom-wrapper" style="display: none;">
                     <img id="modalImageViewer" src="" alt="Previsualización Render / Imagen" draggable="false">
-                    <div class="image-zoom-controls">
-                        <button type="button" onclick="zoomImage(0.25)" title="Acercar">+</button>
-                        <button type="button" onclick="zoomImage(-0.25)" title="Alejar">−</button>
-                        <button type="button" onclick="resetImageZoom()" title="Restablecer vista">↺</button>
-                    </div>
                 </div>
 
                 <!-- 3. Visor BIM 3D (IFC) -->
                 <div id="modalIfcContainer" class="viewer-item" style="display: none; cursor: grab;"></div>
 
+                <!-- 4. Controles Flotantes Universales de Zoom (PDF e Imágenes) -->
+                <div id="viewerFloatingZoomControls" class="viewer-floating-zoom" style="display: none;">
+                    <button type="button" onclick="zoomActiveElement(0.25)" title="Acercar">+</button>
+                    <button type="button" onclick="zoomActiveElement(-0.25)" title="Alejar">−</button>
+                    <button type="button" onclick="resetActiveZoom()" title="Restablecer">↺</button>
+                </div>
+
                 <!-- Indicador de Carga 3D / Multimedia -->
                 <div id="viewerLoadingIndicator" class="viewer-loading-banner" style="display: none;">
-                    <div style="margin-bottom: 6px;">⏳ Cargando y procesando entregable...</div>
-                    <small style="color: #94a3b8; font-weight: normal;">(Espere un momento mientras se optimiza la vista)</small>
+                    <div style="margin-bottom: 6px;">⏳ Cargando y optimizando vista...</div>
+                    <small style="color: #94a3b8; font-weight: normal;">(Espere un momento)</small>
                 </div>
             </div>
         </div>
@@ -282,5 +284,4 @@
 
     <script src="app.js"></script>
 </body>
-    </html>
-    
+</html>
