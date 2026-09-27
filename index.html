@@ -210,66 +210,90 @@
 
                 <!-- 3. Visor BIM 3D (IFC) -->
                 <div id="modalIfcContainer" class="viewer-item" style="display: none; position: relative; width: 100%; height: 100%; overflow: hidden; cursor: grab;">
-                    <!-- Botonera de Orientación y Vistas (Esquina Superior Derecha) -->
-                    <div id="ifcNavToolbar" style="position: absolute; top: 12px; right: 12px; z-index: 20; display: flex; flex-direction: column; gap: 5px; background: rgba(15, 23, 42, 0.85); padding: 8px; border-radius: 8px; backdrop-filter: blur(6px); border: 1px solid rgba(255, 255, 255, 0.15); box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
-                        <button type="button" onclick="cambiarVistaIFC('ISO')" title="Vista Isométrica 3D" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">🧭 Iso</button>
-                        <button type="button" onclick="cambiarVistaIFC('FRONTAL')" title="Fachada Frontal" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">🏢 Frontal</button>
-                        <button type="button" onclick="cambiarVistaIFC('POSTERIOR')" title="Fachada Posterior" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">🏠 Posterior</button>
-                        <button type="button" onclick="cambiarVistaIFC('LATERAL_IZQ')" title="Costado Izquierdo" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">📐 Izq</button>
-                        <button type="button" onclick="cambiarVistaIFC('LATERAL_DER')" title="Costado Derecho" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">📐 Der</button>
-                        <button type="button" onclick="cambiarVistaIFC('PLANTA')" title="Vista Aérea / Cubierta" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">🗺️ Planta</button>
-                        <button type="button" onclick="cambiarVistaIFC('INFERIOR')" title="Vista Inferior" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">⬇️ Inferior</button>
-                        <div style="height: 1px; background: rgba(255, 255, 255, 0.2); margin: 2px 0;"></div>
-                        <button type="button" onclick="ajustarVistaModeloIFC()" title="Ajustar y Centrar Modelo" style="padding: 5px 8px; font-size: 0.72rem; background: var(--accent-copper, #d97706); color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">🎯 Centrar</button>
-                        <button type="button" onclick="alternarCuadriculaIFC()" title="Mostrar u Ocultar Rejilla" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #cbd5e1; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">▦ Rejilla</button>
-                        <button type="button" id="btnToggleEdges" onclick="alternarAristasIFC()" title="Mostrar u Ocultar Líneas de Arista" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #cbd5e1; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">🖋️ Líneas</button>
-                        <button type="button" id="btnToggleSectionBox" onclick="alternarPanelCorteIFC()" title="Caja de Sección y Cortes 3D" style="padding: 5px 8px; font-size: 0.72rem; background: #0284c7; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">✂️ Corte</button>
-                        <button type="button" id="btnToggleMeasure" onclick="alternarModoMedicionIFC()" title="Medición de Distancias Punto a Punto" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #38bdf8; border: 1px solid #38bdf8; border-radius: 4px; cursor: pointer; font-weight: bold;">📏 Medir</button>
+                    <!-- Botonera de Orientación y Vistas (Responsive para Móvil) -->
+                    <div id="ifcNavToolbar" class="ifc-nav-toolbar">
+                        <button type="button" class="btn-ifc-nav" onclick="cambiarVistaIFC('ISO')" title="Vista Isométrica 3D">
+                            <span class="btn-icon">🧭</span><span class="btn-text">Iso</span>
+                        </button>
+                        <button type="button" class="btn-ifc-nav" onclick="cambiarVistaIFC('FRONTAL')" title="Fachada Frontal">
+                            <span class="btn-icon">🏢</span><span class="btn-text">Frontal</span>
+                        </button>
+                        <button type="button" class="btn-ifc-nav" onclick="cambiarVistaIFC('POSTERIOR')" title="Fachada Posterior">
+                            <span class="btn-icon">🏠</span><span class="btn-text">Posterior</span>
+                        </button>
+                        <button type="button" class="btn-ifc-nav" onclick="cambiarVistaIFC('LATERAL_IZQ')" title="Costado Izquierdo">
+                            <span class="btn-icon">📐</span><span class="btn-text">Izq</span>
+                        </button>
+                        <button type="button" class="btn-ifc-nav" onclick="cambiarVistaIFC('LATERAL_DER')" title="Costado Derecho">
+                            <span class="btn-icon">📐</span><span class="btn-text">Der</span>
+                        </button>
+                        <button type="button" class="btn-ifc-nav" onclick="cambiarVistaIFC('PLANTA')" title="Vista Aérea / Cubierta">
+                            <span class="btn-icon">🗺️</span><span class="btn-text">Planta</span>
+                        </button>
+                        <button type="button" class="btn-ifc-nav" onclick="cambiarVistaIFC('INFERIOR')" title="Vista Inferior">
+                            <span class="btn-icon">⬇️</span><span class="btn-text">Inferior</span>
+                        </button>
+                        <div class="ifc-nav-divider"></div>
+                        <button type="button" class="btn-ifc-nav btn-accent" onclick="ajustarVistaModeloIFC()" title="Ajustar y Centrar Modelo">
+                            <span class="btn-icon">🎯</span><span class="btn-text">Centrar</span>
+                        </button>
+                        <button type="button" class="btn-ifc-nav" onclick="alternarCuadriculaIFC()" title="Mostrar u Ocultar Rejilla">
+                            <span class="btn-icon">▦</span><span class="btn-text">Rejilla</span>
+                        </button>
+                        <button type="button" id="btnToggleEdges" class="btn-ifc-nav" onclick="alternarAristasIFC()" title="Mostrar u Ocultar Líneas de Arista">
+                            <span class="btn-icon">🖋️</span><span class="btn-text">Líneas</span>
+                        </button>
+                        <button type="button" id="btnToggleSectionBox" class="btn-ifc-nav btn-section" onclick="alternarPanelCorteIFC()" title="Caja de Sección y Cortes 3D">
+                            <span class="btn-icon">✂️</span><span class="btn-text">Corte</span>
+                        </button>
+                        <button type="button" id="btnToggleMeasure" class="btn-ifc-nav btn-measure" onclick="alternarModoMedicionIFC()" title="Medición de Distancias Punto a Punto">
+                            <span class="btn-icon">📏</span><span class="btn-text">Medir</span>
+                        </button>
                     </div>
 
                     <!-- Panel Flotante de Herramienta de Sección / Corte (Clipping) -->
-                    <div id="ifcSectionToolPanel" style="position: absolute; bottom: 12px; left: 12px; z-index: 20; display: none; background: rgba(15, 23, 42, 0.9); padding: 10px 14px; border-radius: 8px; backdrop-filter: blur(6px); border: 1px solid #38bdf8; color: #fff; box-shadow: 0 4px 14px rgba(0,0,0,0.4); min-width: 250px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                            <strong style="font-size: 0.75rem; color: #38bdf8;">✂️ Caja de Sección / Cortes</strong>
-                            <button type="button" onclick="alternarPanelCorteIFC()" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 0.8rem;">✕</button>
+                    <div id="ifcSectionToolPanel" class="ifc-floating-panel ifc-section-panel" style="display: none;">
+                        <div class="panel-header">
+                            <strong style="color: #38bdf8;">✂️ Caja de Sección / Cortes</strong>
+                            <button type="button" class="btn-close-subpanel" onclick="alternarPanelCorteIFC()">✕</button>
                         </div>
-                        <div style="display: flex; gap: 6px; margin-bottom: 8px;">
-                            <label style="font-size: 0.72rem; display: flex; align-items: center; gap: 4px;"><input type="radio" name="clipAxis" value="Y" checked onchange="configurarPlanoCorte()"> Nivel (Y)</label>
-                            <label style="font-size: 0.72rem; display: flex; align-items: center; gap: 4px;"><input type="radio" name="clipAxis" value="X" onchange="configurarPlanoCorte()"> Transversal (X)</label>
-                            <label style="font-size: 0.72rem; display: flex; align-items: center; gap: 4px;"><input type="radio" name="clipAxis" value="Z" onchange="configurarPlanoCorte()"> Longitudinal (Z)</label>
+                        <div class="section-axis-group">
+                            <label><input type="radio" name="clipAxis" value="Y" checked onchange="configurarPlanoCorte()"> Nivel (Y)</label>
+                            <label><input type="radio" name="clipAxis" value="X" onchange="configurarPlanoCorte()"> Transv. (X)</label>
+                            <label><input type="radio" name="clipAxis" value="Z" onchange="configurarPlanoCorte()"> Long. (Z)</label>
                         </div>
-                        <input type="range" id="clipSlider" min="0" max="100" value="100" style="width: 100%; cursor: pointer;" oninput="actualizarPosicionCorte(this.value)">
-                        <div style="display: flex; justify-content: space-between; font-size: 0.68rem; color: #94a3b8; margin-top: 4px;">
+                        <input type="range" id="clipSlider" min="0" max="100" value="100" oninput="actualizarPosicionCorte(this.value)">
+                        <div class="section-controls-footer">
                             <span id="clipMinVal">Base</span>
-                            <button type="button" onclick="invertirPlanoCorte()" style="background: #334155; border: none; color: #cbd5e1; border-radius: 3px; padding: 2px 6px; cursor: pointer;">Invertir Lado</button>
+                            <button type="button" class="btn-panel-action" onclick="invertirPlanoCorte()">Invertir Lado</button>
                             <span id="clipMaxVal">Techo</span>
                         </div>
                     </div>
 
                     <!-- Panel Flotante de Resultados de Medición 3D -->
-                    <div id="ifcMeasureCard" style="position: absolute; bottom: 12px; right: 12px; z-index: 20; display: none; background: rgba(15, 23, 42, 0.95); padding: 10px 14px; border-radius: 8px; backdrop-filter: blur(6px); border: 1px solid #38bdf8; color: #fff; box-shadow: 0 4px 14px rgba(0,0,0,0.4); min-width: 230px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 4px; margin-bottom: 6px;">
-                            <strong style="font-size: 0.75rem; color: #38bdf8;">📏 Herramienta de Medición</strong>
-                            <button type="button" onclick="alternarModoMedicionIFC()" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 0.8rem;">✕</button>
+                    <div id="ifcMeasureCard" class="ifc-floating-panel ifc-measure-panel" style="display: none;">
+                        <div class="panel-header">
+                            <strong style="color: #38bdf8;">📏 Herramienta de Medición</strong>
+                            <button type="button" class="btn-close-subpanel" onclick="alternarModoMedicionIFC()">✕</button>
                         </div>
-                        <div id="ifcMeasureStatus" style="font-size: 0.72rem; color: #fbbf24; margin-bottom: 4px;">Haz clic en el Punto A...</div>
-                        <div id="ifcMeasureData" style="font-size: 0.75rem; display: none; line-height: 1.4;">
+                        <div id="ifcMeasureStatus" class="measure-status-text">Haz clic en el Punto A...</div>
+                        <div id="ifcMeasureData" class="measure-data-grid" style="display: none;">
                             <div><strong>Distancia Real:</strong> <span id="measureDistReal" style="color: #10b981; font-weight: bold;">0.00 m</span></div>
-                            <div><strong>Δ Altura (Y):</strong> <span id="measureDistY" style="color: #cbd5e1;">0.00 m</span></div>
-                            <div><strong>Δ Planta (XZ):</strong> <span id="measureDistXZ" style="color: #cbd5e1;">0.00 m</span></div>
+                            <div><strong>Δ Altura (Y):</strong> <span id="measureDistY">0.00 m</span></div>
+                            <div><strong>Δ Planta (XZ):</strong> <span id="measureDistXZ">0.00 m</span></div>
                         </div>
                         <div style="margin-top: 8px; text-align: right;">
-                            <button type="button" onclick="limpiarMedicionIFC()" style="background: #334155; border: none; color: #cbd5e1; border-radius: 4px; padding: 3px 8px; font-size: 0.68rem; cursor: pointer;">Reiniciar Puntos</button>
+                            <button type="button" class="btn-panel-action" onclick="limpiarMedicionIFC()">Reiniciar Puntos</button>
                         </div>
                     </div>
 
                     <!-- Tarjeta Informativa de Propiedades BIM al Seleccionar -->
-                    <div id="ifcPropertyCard" style="position: absolute; top: 12px; left: 12px; z-index: 20; display: none; background: rgba(15, 23, 42, 0.9); padding: 10px 14px; border-radius: 8px; backdrop-filter: blur(6px); border: 1px solid var(--accent-copper); color: #fff; max-width: 280px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
-                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 4px; margin-bottom: 6px;">
-                            <strong id="ifcPropTitle" style="font-size: 0.75rem; color: var(--accent-copper);">Elemento BIM</strong>
-                            <button type="button" onclick="cerrarCardPropiedadesIFC()" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 0.8rem;">✕</button>
+                    <div id="ifcPropertyCard" class="ifc-floating-panel ifc-property-panel" style="display: none;">
+                        <div class="panel-header" style="border-bottom: 1px solid #334155; padding-bottom: 4px; margin-bottom: 6px;">
+                            <strong id="ifcPropTitle" style="color: var(--accent-copper);">Elemento BIM</strong>
+                            <button type="button" class="btn-close-subpanel" onclick="cerrarCardPropiedadesIFC()">✕</button>
                         </div>
-                        <div id="ifcPropContent" style="font-size: 0.72rem; color: #cbd5e1; max-height: 160px; overflow-y: auto;"></div>
+                        <div id="ifcPropContent" class="property-content-scroll"></div>
                     </div>
                 </div>
 
