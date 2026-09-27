@@ -193,7 +193,7 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
 }
 
 /* ==============================================================================
-   VISOR MULTIMODAL CON CONTENEDOR SEGURO Y ZOOM FLUIDO
+   VISOR MULTIMODAL
    ============================================================================== */
 .viewer-modal-layout {
     max-width: 980px;
@@ -243,7 +243,7 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
     border: none;
 }
 
-/* 1. Contenedor de Iframes (PDF y Video) */
+/* Contenedor Iframe (Restaura la tablet al 100% nativo original) */
 .iframe-scaler-wrapper {
     width: 100%;
     height: 100%;
@@ -263,15 +263,6 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
     border: none;
     transform-origin: center center;
     transition: transform 0.08s ease-out;
-}
-
-/* Modo Video: Formato 16:9 que no recorta los controles ni el botón superior */
-.iframe-scaler-wrapper.video-mode iframe {
-    width: 100% !important;
-    height: auto !important;
-    aspect-ratio: 16 / 9;
-    max-height: 100%;
-    object-fit: contain;
 }
 
 /* 2. Visor de Imágenes */
@@ -299,12 +290,13 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
     pointer-events: none;
 }
 
-/* 3. Botones Flotantes Universales de Zoom */
+/* 3. Botones Flotantes de Zoom (Horizontales en PC/Tablet) */
 .viewer-floating-zoom {
     position: absolute;
     bottom: 16px;
     right: 16px;
     display: flex;
+    flex-direction: row;
     gap: 8px;
     background: rgba(15, 23, 42, 0.88);
     padding: 6px 10px;
@@ -491,17 +483,24 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
         height: 85vh !important;
         padding: 0.8rem !important;
     }
+}
 
+/* ==============================================================================
+   AJUSTES EXCLUSIVOS PARA SMARTPHONES VERTICALES (< 600px)
+   ============================================================================== */
+@media (max-width: 600px) {
+    /* Botones de Zoom en disposición VERTICAL en el lateral derecho para no tapar paginación */
     .viewer-floating-zoom {
-        bottom: 12px;
-        right: 12px;
-        padding: 4px 8px;
-        gap: 6px;
+        flex-direction: column !important;
+        right: 10px !important;
+        bottom: 75px !important; /* Despeja completamente el centro inferior */
+        padding: 6px 4px !important;
+        gap: 6px !important;
     }
 
     .viewer-floating-zoom button {
-        width: 32px;
-        height: 32px;
-        font-size: 1rem;
+        width: 32px !important;
+        height: 32px !important;
+        font-size: 1rem !important;
     }
 }
