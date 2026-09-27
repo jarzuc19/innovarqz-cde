@@ -1651,6 +1651,8 @@ function alternarModoMedicionIFC() {
         if (btn) {
             btn.style.background = "#0284c7";
             btn.style.color = "#fff";
+            const spanText = btn.querySelector(".btn-nav-text");
+            if (spanText) spanText.innerText = "Midiendo...";
         }
         if (card) card.style.display = "block";
         if (container) container.style.cursor = "crosshair";
@@ -1670,6 +1672,8 @@ function desactivarModoMedicion() {
     if (btn) {
         btn.style.background = "#1e293b";
         btn.style.color = "#38bdf8";
+        const spanText = btn.querySelector(".btn-nav-text");
+        if (spanText) spanText.innerText = "Medir";
     }
     if (card) card.style.display = "none";
     if (container) container.style.cursor = "grab";
@@ -1701,7 +1705,7 @@ function procesarClickMedicion(intersectPoint) {
 
     measurePoints.push(intersectPoint.clone());
 
-    // Crear marcador esférico visible siempre en primer plano
+    // Marcador esférico visible siempre al frente
     const sphereGeo = new THREE.SphereGeometry(0.18, 16, 16);
     const sphereMat = new THREE.MeshBasicMaterial({ 
         color: (measurePoints.length === 1) ? 0x38bdf8 : 0x10b981, 
@@ -1726,7 +1730,7 @@ function procesarClickMedicion(intersectPoint) {
         const p1 = measurePoints[0];
         const p2 = measurePoints[1];
 
-        // Crear línea 3D conectora en primer plano
+        // Línea conectora 3D en primer plano
         const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
         const lineMat = new THREE.LineBasicMaterial({ 
             color: 0x10b981, 
@@ -1829,7 +1833,7 @@ function onIfcModelClick(event) {
 
     raycaster.setFromCamera(mousePointer, ifcCamera);
     
-    // Filtrar solo las mallas válidas del edificio
+    // Filtrar solo las mallas válidas del modelo
     const mallasValidas = ifcMeshesList.filter(m => m.visible);
     const intersects = raycaster.intersectObjects(mallasValidas, false);
 
