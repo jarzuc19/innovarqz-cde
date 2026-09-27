@@ -1316,7 +1316,7 @@ async function desplegarModalIFC(driveUrl, titulo) {
     ifcCont.style.display = "block";
     if (loading) {
         loading.style.display = "block";
-        loading.innerHTML = `<div style="margin-bottom:6px;">⏳ Inicializando motor WebAssembly 3D...</div><small style="color:#94a3b8;">(Procesando geometría IFC)</small>`;
+        loading.innerHTML = `<div style="margin-bottom:6px;">⏳ Inicializando y procesando modelo IFC...</div><small style="color:#94a3b8;">(Optimizando geometría 3D)</small>`;
     }
 
     modal.style.display = "flex";
@@ -1486,10 +1486,9 @@ function applyActiveTransform() {
 }
 
 // ==============================================================================
-// MOTOR BIM OPEN SOURCE 3D PARA IFC (WEB-IFC + THREE.JS ROBUSTO)
+// MOTOR BIM OPEN SOURCE 3D PARA IFC (WEB-IFC + THREE.JS ROBUSTO CON PROXY CORS)
 // ==============================================================================
 async function obtenerConstructorIfcAPI() {
-    // 1. Detección global directa (Script UMD)
     if (window.WebIFC && window.WebIFC.IfcAPI) {
         return window.WebIFC.IfcAPI;
     }
@@ -1497,14 +1496,13 @@ async function obtenerConstructorIfcAPI() {
         return window.IfcAPI;
     }
 
-    // 2. Fallback por importación dinámica ESM si no estuviera en window
     try {
         const modulo = await import("https://cdn.jsdelivr.net/npm/web-ifc@0.0.44/web-ifc-api.js");
         if (modulo && modulo.IfcAPI) {
             return modulo.IfcAPI;
         }
     } catch (e) {
-        console.warn("No se pudo cargar WebIFC vía ESM dynamic import:", e);
+        console.warn("Fallback dinámico ESM no disponible:", e);
     }
 
     throw new Error("No se pudo cargar la librería WebIFC en el navegador.");
@@ -1552,7 +1550,7 @@ async function inicializarVisorIFC(fileUrl, container) {
     }
     animate();
 
-    // Obtener e inicializar la API de WebIFC con el binario WASM
+    // 1. Inicializar motor WebAssembly WebIFC
     const IfcAPIClass = await obtenerConstructorIfcAPI();
     if (!ifcApiInstance) {
         ifcApiInstance = new IfcAPIClass();
@@ -1560,22 +1558,39 @@ async function inicializarVisorIFC(fileUrl, container) {
         await ifcApiInstance.Init();
     }
 
-    // Preparar URL para descarga binaria directa de Google Drive
-    let downloadUrl = fileUrl;
-    if (fileUrl.includes("drive.google.com")) {
-        const match = fileUrl.match(/[-\w]{25,}/);
-        if (match) {
-            downloadUrl = `https://drive.google.com/uc?export=download&id=${match[0]}`;
-        }
+    // 2. Extraer ID de archivo en Drive
+    let fileId = "";
+    const match = fileUrl.match(/[-\w]{25,}/);
+    if (match) fileId = match[0];
+
+    // 3. Descarga de bytes mediante Apps Script para evitar restricciones CORS
+    const payload = {
+        accion: "OBTENER_BYTES_IFC",
+        file_id: fileId,
+        drive_url: fileUrl
+    };
+
+    const response = await fetch(WEBHOOK_APPS_SCRIPT, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+    if (data.status !== "success" || !data.base64) {
+        throw new Error(data.message || "No se pudo obtener el contenido del modelo desde el servidor.");
     }
 
-    const response = await fetch(downloadUrl);
-    if (!response.ok) throw new Error("No se pudo obtener el archivo binario del modelo desde el servidor.");
+    // 4. Convertir Base64 a Uint8Array binario nativo
+    const binaryString = atob(data.base64);
+    const bytesLength = binaryString.length;
+    const bytesArray = new Uint8Array(bytesLength);
+    for (let i = 0; i < bytesLength; i++) {
+        bytesArray[i] = binaryString.charCodeAt(i);
+    }
 
-    const buffer = await response.arrayBuffer();
-    const data = new Uint8Array(buffer);
-
-    const modelID = ifcApiInstance.OpenModel(data);
+    // 5. Cargar geometría con WebIFC y generar mallas en Three.js
+    const modelID = ifcApiInstance.OpenModel(bytesArray);
     const ifcGroup = new THREE.Group();
 
     ifcApiInstance.StreamAllMeshes(modelID, (flatMesh) => {
@@ -1621,6 +1636,7 @@ async function inicializarVisorIFC(fileUrl, container) {
 
     ifcApiInstance.CloseModel(modelID);
 
+    // 6. Centrar modelo y ajustar encuadre automático de cámara
     const box = new THREE.Box3().setFromObject(ifcGroup);
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
