@@ -28,7 +28,7 @@ let ifcRenderer = null;
 let ifcCamera = null;
 let ifcControls = null;
 let ifcAnimationId = null;
-let ifcApi = null;
+let ifcApiInstance = null;
 
 // ESTADO DE ZOOM Y PANEO UNIVERSAL (IMÁGENES Y PDF)
 let activeZoomScale = 1;
@@ -1182,13 +1182,11 @@ async function openViewerModal(driveUrl, nombreArchivo) {
 
     // 1. CASO VIDEOS (.MP4, .WEBM, .MOV)
     if (["mp4", "webm", "mov"].includes(ext)) {
-        // En Móvil (< 600px): Abre en ventana externa limpia con auto-ocultamiento nativo
         if (esMovilPequeno) {
             window.open(targetDirectUrl, "_blank");
             return;
         }
 
-        // En Tablet y PC (>= 600px): Abre en modal al 100% natural sin botones gigantes
         registrarAperturaModalEnHistorial("viewerModal");
         desplegarModalIframe(targetDirectUrl, nombreArchivo, false);
         return;
@@ -1210,7 +1208,6 @@ async function openViewerModal(driveUrl, nombreArchivo) {
 
     // 4. CASO DOCUMENTOS Y PLANOS PDF / HTML
     registrarAperturaModalEnHistorial("viewerModal");
-    // Si es móvil pequeño (< 600px), activa controles flotantes de zoom verticales; en Tablet/PC usa lupas de Drive
     desplegarModalIframe(targetDirectUrl, nombreArchivo, esMovilPequeno);
 }
 
@@ -1306,7 +1303,7 @@ async function desplegarModalIFC(driveUrl, titulo) {
     const zoomControls = document.getElementById("viewerFloatingZoomControls");
 
     if (!modal) return;
-    title.innerText = `Previsualizando: ${titulo}`;
+    title.innerText = `Previsualizando BIM 3D: ${titulo}`;
 
     if (scalerWrapper) scalerWrapper.style.display = "none";
     if (frame) frame.src = "about:blank";
@@ -1317,7 +1314,10 @@ async function desplegarModalIFC(driveUrl, titulo) {
     activeZoomTarget = null;
 
     ifcCont.style.display = "block";
-    if (loading) loading.style.display = "block";
+    if (loading) {
+        loading.style.display = "block";
+        loading.innerHTML = `<div style="margin-bottom:6px;">⏳ Inicializando motor WebAssembly 3D...</div><small style="color:#94a3b8;">(Procesando geometría IFC)</small>`;
+    }
 
     modal.style.display = "flex";
     modal.classList.remove("modal-hidden");
@@ -1387,7 +1387,6 @@ function setupUniversalZoomInteractions() {
     const dragOverlay = document.getElementById("dragCaptureOverlay");
     if (!container || !dragOverlay) return;
 
-    // Rueda del ratón en PC
     container.addEventListener("wheel", (e) => {
         if (activeZoomTarget === "IMAGE" || activeZoomTarget === "PDF") {
             e.preventDefault();
@@ -1396,7 +1395,6 @@ function setupUniversalZoomInteractions() {
         }
     }, { passive: false });
 
-    // Paneo con ratón en PC
     dragOverlay.addEventListener("mousedown", (e) => {
         if (activeZoomScale <= 1) return;
         isPanningActive = true;
@@ -1413,7 +1411,6 @@ function setupUniversalZoomInteractions() {
 
     window.addEventListener("mouseup", () => { isPanningActive = false; });
 
-    // Paneo táctil 360° en Móvil sobre la capa activa
     dragOverlay.addEventListener("touchstart", (e) => {
         if (e.touches.length === 1 && activeZoomScale > 1) {
             isPanningActive = true;
@@ -1454,7 +1451,6 @@ function zoomActiveElement(delta) {
     activeZoomScale = Math.min(Math.max(1, activeZoomScale + delta), 4.5);
     
     const dragOverlay = document.getElementById("dragCaptureOverlay");
-    // Activa la capa de paneo solo cuando hay zoom (> 1) para capturar el dedo libremente
     if (dragOverlay) {
         dragOverlay.style.display = (activeZoomScale > 1) ? "block" : "none";
     }
@@ -1490,8 +1486,30 @@ function applyActiveTransform() {
 }
 
 // ==============================================================================
-// MOTOR OPEN SOURCE 3D PARA IFC (WEB-IFC + THREE.JS)
+// MOTOR BIM OPEN SOURCE 3D PARA IFC (WEB-IFC + THREE.JS ROBUSTO)
 // ==============================================================================
+async function obtenerConstructorIfcAPI() {
+    // 1. Detección global directa (Script UMD)
+    if (window.WebIFC && window.WebIFC.IfcAPI) {
+        return window.WebIFC.IfcAPI;
+    }
+    if (window.IfcAPI) {
+        return window.IfcAPI;
+    }
+
+    // 2. Fallback por importación dinámica ESM si no estuviera en window
+    try {
+        const modulo = await import("https://cdn.jsdelivr.net/npm/web-ifc@0.0.44/web-ifc-api.js");
+        if (modulo && modulo.IfcAPI) {
+            return modulo.IfcAPI;
+        }
+    } catch (e) {
+        console.warn("No se pudo cargar WebIFC vía ESM dynamic import:", e);
+    }
+
+    throw new Error("No se pudo cargar la librería WebIFC en el navegador.");
+}
+
 async function inicializarVisorIFC(fileUrl, container) {
     container.innerHTML = "";
 
@@ -1506,7 +1524,7 @@ async function inicializarVisorIFC(fileUrl, container) {
 
     ifcRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     ifcRenderer.setSize(width, height);
-    ifcRenderer.setPixelRatio(window.devicePixelRatio);
+    ifcRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(ifcRenderer.domElement);
 
     ifcControls = new THREE.OrbitControls(ifcCamera, ifcRenderer.domElement);
@@ -1516,11 +1534,11 @@ async function inicializarVisorIFC(fileUrl, container) {
     const lightAmbient = new THREE.AmbientLight(0xffffff, 0.7);
     ifcScene.add(lightAmbient);
 
-    const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.6);
+    const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.65);
     dirLight1.position.set(25, 40, 20);
     ifcScene.add(dirLight1);
 
-    const dirLight2 = new THREE.DirectionalLight(0xd97706, 0.25);
+    const dirLight2 = new THREE.DirectionalLight(0xd97706, 0.3);
     dirLight2.position.set(-25, -20, -20);
     ifcScene.add(dirLight2);
 
@@ -1534,12 +1552,15 @@ async function inicializarVisorIFC(fileUrl, container) {
     }
     animate();
 
-    if (!ifcApi) {
-        ifcApi = new WebIFC.IfcAPI();
-        ifcApi.SetWasmPath("https://unpkg.com/web-ifc@0.0.44/");
-        await ifcApi.Init();
+    // Obtener e inicializar la API de WebIFC con el binario WASM
+    const IfcAPIClass = await obtenerConstructorIfcAPI();
+    if (!ifcApiInstance) {
+        ifcApiInstance = new IfcAPIClass();
+        ifcApiInstance.SetWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.44/");
+        await ifcApiInstance.Init();
     }
 
+    // Preparar URL para descarga binaria directa de Google Drive
     let downloadUrl = fileUrl;
     if (fileUrl.includes("drive.google.com")) {
         const match = fileUrl.match(/[-\w]{25,}/);
@@ -1549,22 +1570,22 @@ async function inicializarVisorIFC(fileUrl, container) {
     }
 
     const response = await fetch(downloadUrl);
-    if (!response.ok) throw new Error("No se pudo obtener el archivo binario del modelo.");
+    if (!response.ok) throw new Error("No se pudo obtener el archivo binario del modelo desde el servidor.");
 
     const buffer = await response.arrayBuffer();
     const data = new Uint8Array(buffer);
 
-    const modelID = ifcApi.OpenModel(data);
+    const modelID = ifcApiInstance.OpenModel(data);
     const ifcGroup = new THREE.Group();
 
-    ifcApi.StreamAllMeshes(modelID, (flatMesh) => {
+    ifcApiInstance.StreamAllMeshes(modelID, (flatMesh) => {
         const placedGeometries = flatMesh.geometries;
         for (let i = 0; i < placedGeometries.size(); i++) {
             const placedGeometry = placedGeometries.get(i);
-            const meshGeometry = ifcApi.GetGeometry(modelID, placedGeometry.geometryExpressID);
+            const meshGeometry = ifcApiInstance.GetGeometry(modelID, placedGeometry.geometryExpressID);
 
-            const verts = ifcApi.GetVertexArray(meshGeometry.GetVertexData(), meshGeometry.GetVertexDataSize());
-            const indices = ifcApi.GetIndexArray(meshGeometry.GetIndexData(), meshGeometry.GetIndexDataSize());
+            const verts = ifcApiInstance.GetVertexArray(meshGeometry.GetVertexData(), meshGeometry.GetVertexDataSize());
+            const indices = ifcApiInstance.GetIndexArray(meshGeometry.GetIndexData(), meshGeometry.GetIndexDataSize());
 
             if (verts.length === 0 || indices.length === 0) continue;
 
@@ -1598,7 +1619,7 @@ async function inicializarVisorIFC(fileUrl, container) {
         }
     });
 
-    ifcApi.CloseModel(modelID);
+    ifcApiInstance.CloseModel(modelID);
 
     const box = new THREE.Box3().setFromObject(ifcGroup);
     const center = box.getCenter(new THREE.Vector3());
