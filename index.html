@@ -201,29 +201,51 @@
         </div>
     </div>
 
-    <!-- MODAL DE VISOR UNIVERSAL (DOCUMENTOS, VIDEOS E IFC 3D) -->
+    <!-- MODAL DE VISOR UNIVERSAL (DOCUMENTOS, IMÁGENES CON ZOOM, VIDEOS COMPACTOS E IFC 3D) -->
     <div id="viewerModal" class="modal-hidden">
-        <div class="modal-content card" style="max-width: 950px; width: 92%; height: 85vh; display: flex; flex-direction: column; padding: 1rem; position: relative;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #334155; padding-bottom: 8px;">
+        <div class="modal-content card viewer-modal-layout">
+            <div class="viewer-modal-header">
                 <h4 id="viewerTitle" style="color: var(--accent-copper); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 85%;">Previsualización de Entregable</h4>
-                <button onclick="closeViewerModal()" class="btn-secondary" style="background: #ef4444; border: none; color: #fff; padding: 4px 10px; font-weight: bold; cursor: pointer;">✕</button>
+                <button onclick="closeViewerModal()" class="btn-secondary btn-close-modal">✕</button>
             </div>
             
-            <div id="viewerContainer" style="flex: 1; width: 100%; background: #000; border-radius: 6px; overflow: hidden; position: relative; display: flex; align-items: center; justify-content: center;">
+            <div id="viewerContainer" class="viewer-display-area">
                 
-                <!-- 1. Visor de Documentos/PDF/Imágenes -->
-                <iframe id="modalViewerFrame" src="" frameborder="0" style="width: 100%; height: 100%; border: none; display: none;"></iframe>
+                <!-- 1. Visor de Documentos/PDF -->
+                <iframe id="modalViewerFrame" src="" frameborder="0" class="viewer-item" style="display: none;"></iframe>
 
-                <!-- 2. Visor Nativo de Videos -->
-                <video id="modalVideoPlayer" controls autoplay style="max-width: 100%; max-height: 100%; display: none; outline: none; background: #000;"></video>
+                <!-- 2. Visor de Imágenes con Zoom y Paneo interactivo -->
+                <div id="imageViewerWrapper" class="viewer-item image-zoom-wrapper" style="display: none;">
+                    <img id="modalImageViewer" src="" alt="Previsualización Render / Imagen" draggable="false">
+                    <div class="image-zoom-controls">
+                        <button type="button" onclick="zoomImage(0.25)" title="Acercar">+</button>
+                        <button type="button" onclick="zoomImage(-0.25)" title="Alejar">−</button>
+                        <button type="button" onclick="resetImageZoom()" title="Restablecer vista">↺</button>
+                    </div>
+                </div>
 
-                <!-- 3. Visor BIM 3D (IFC) -->
-                <div id="modalIfcContainer" style="width: 100%; height: 100%; display: none; position: relative; cursor: grab;"></div>
+                <!-- 3. Visor de Videos con Controles Personalizados que se Auto-ocultan -->
+                <div id="videoViewerWrapper" class="viewer-item video-player-container" style="display: none;">
+                    <video id="modalVideoPlayer" playsinline preload="metadata"></video>
+                    
+                    <!-- Barra de controles personalizada -->
+                    <div id="videoCustomControls" class="video-custom-controls">
+                        <button type="button" id="btnVideoPlayPause" class="video-ctrl-btn">▶</button>
+                        <span id="videoCurrentTime" class="video-time-text">0:00</span>
+                        <input type="range" id="videoProgressBar" class="video-progress" min="0" max="100" value="0" step="0.1">
+                        <span id="videoDuration" class="video-time-text">0:00</span>
+                        <button type="button" id="btnVideoMute" class="video-ctrl-btn">🔊</button>
+                        <button type="button" id="btnVideoFullscreen" class="video-ctrl-btn">⛶</button>
+                    </div>
+                </div>
+
+                <!-- 4. Visor BIM 3D (IFC) -->
+                <div id="modalIfcContainer" class="viewer-item" style="display: none; cursor: grab;"></div>
 
                 <!-- Indicador de Carga 3D / Multimedia -->
-                <div id="viewerLoadingIndicator" style="display: none; position: absolute; color: #38bdf8; font-size: 0.9rem; font-weight: bold; background: rgba(15, 23, 42, 0.85); padding: 12px 20px; border-radius: 8px; border: 1px solid #334155; text-align: center;">
-                    <div style="margin-bottom: 6px;">⏳ Cargando y procesando geometría BIM...</div>
-                    <small style="color: #94a3b8; font-weight: normal;">(Esto puede tardar unos segundos según el tamaño del modelo)</small>
+                <div id="viewerLoadingIndicator" class="viewer-loading-banner" style="display: none;">
+                    <div style="margin-bottom: 6px;">⏳ Cargando y procesando entregable...</div>
+                    <small style="color: #94a3b8; font-weight: normal;">(Espere un momento mientras se optimiza la vista)</small>
                 </div>
             </div>
         </div>
