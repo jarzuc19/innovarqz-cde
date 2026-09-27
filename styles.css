@@ -176,7 +176,7 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
     position: fixed;
     top: 0; left: 0;
     width: 100vw; height: 100vh;
-    background: rgba(0, 0, 0, 0.75);
+    background: rgba(0, 0, 0, 0.85);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -190,10 +190,232 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
 }
 
 /* ==============================================================================
+   VISOR MULTIMODAL AVANZADO (IFRAME, ZOOM IMAGEN, VIDEO CUSTOM, IFC 3D)
+   ============================================================================== */
+.viewer-modal-layout {
+    max-width: 980px;
+    width: 94%;
+    height: 88vh;
+    display: flex;
+    flex-direction: column;
+    padding: 1rem;
+    position: relative;
+}
+
+.viewer-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 6px;
+}
+
+.btn-close-modal {
+    background: #ef4444;
+    border: none;
+    color: #fff;
+    padding: 4px 12px;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 6px;
+}
+
+.viewer-display-area {
+    flex: 1;
+    width: 100%;
+    background: #000;
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.viewer-item {
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+/* 1. Visor de Imágenes con Zoom y Pan */
+.image-zoom-wrapper {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    cursor: grab;
+}
+
+.image-zoom-wrapper:active {
+    cursor: grabbing;
+}
+
+.image-zoom-wrapper img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    transform-origin: center center;
+    transition: transform 0.05s ease-out;
+    pointer-events: none;
+}
+
+.image-zoom-controls {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    display: flex;
+    gap: 8px;
+    background: rgba(15, 23, 42, 0.85);
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    z-index: 10;
+}
+
+.image-zoom-controls button {
+    background: #1e293b;
+    border: 1px solid #475569;
+    color: #fff;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.image-zoom-controls button:hover {
+    background: var(--accent-copper);
+    border-color: var(--accent-copper);
+}
+
+/* 2. Reproductor de Video Personalizado */
+.video-player-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+}
+
+.video-player-container video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.video-player-container.hide-cursor {
+    cursor: none;
+}
+
+.video-custom-controls {
+    position: absolute;
+    bottom: 12px;
+    left: 14px;
+    right: 14px;
+    background: rgba(15, 23, 42, 0.88);
+    border: 1px solid rgba(51, 65, 85, 0.8);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 14px;
+    z-index: 20;
+    transition: opacity 0.35s ease, transform 0.35s ease;
+    backdrop-filter: blur(4px);
+}
+
+.video-custom-controls.hidden-controls {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(8px);
+}
+
+.video-ctrl-btn {
+    background: transparent;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    font-size: 0.95rem;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s;
+}
+
+.video-ctrl-btn:hover {
+    color: var(--accent-copper);
+}
+
+.video-time-text {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    min-width: 32px;
+}
+
+.video-progress {
+    flex: 1;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    border-radius: 2px;
+    background: #334155;
+    outline: none;
+    cursor: pointer;
+    transition: height 0.15s;
+}
+
+.video-progress:hover {
+    height: 6px;
+}
+
+.video-progress::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--accent-copper);
+    cursor: pointer;
+}
+
+.video-progress::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--accent-copper);
+    cursor: pointer;
+    border: none;
+}
+
+/* Banner de Carga */
+.viewer-loading-banner {
+    position: absolute;
+    color: var(--accent-blue);
+    font-size: 0.9rem;
+    font-weight: bold;
+    background: rgba(15, 23, 42, 0.9);
+    padding: 12px 22px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    text-align: center;
+    z-index: 30;
+}
+
+/* ==============================================================================
    RESPONSIVIDAD Y OPTIMIZACIÓN TÁCTIL (PANTALLAS <= 900px)
    ============================================================================== */
 @media (max-width: 900px) {
-    /* 1. Liberar el scroll vertical de la ventana */
     body {
         height: auto !important;
         min-height: 100vh;
@@ -218,7 +440,6 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
         padding: 0.8rem;
     }
 
-    /* 2. Transformar el layout de 2 columnas en una sola columna apilada */
     .cde-split-layout {
         flex-direction: column !important;
         height: auto !important;
@@ -233,7 +454,6 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
         height: auto !important;
     }
 
-    /* 3. Controles superiores y botones en móvil */
     .controls-bar {
         flex-direction: column !important;
         align-items: stretch !important;
@@ -249,7 +469,7 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
 
     .control-group select {
         width: 100%;
-        min-height: 42px; /* Ergonomía táctil */
+        min-height: 42px;
     }
 
     .action-buttons-group {
@@ -264,7 +484,6 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
         min-height: 42px;
     }
 
-    /* 4. Pestañas y subcarpetas con desplazamiento horizontal táctil */
     .tabs {
         display: flex !important;
         overflow-x: auto !important;
@@ -294,7 +513,6 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
         min-height: 36px;
     }
 
-    /* 5. Tabla responsiva sin compresión de datos */
     .table-card {
         overflow-x: auto !important;
         -webkit-overflow-scrolling: touch;
@@ -303,14 +521,13 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
     }
 
     #filesTable {
-        min-width: 620px; /* Garantiza lectura limpia de las 5 columnas */
+        min-width: 620px;
     }
 
     #filesTable th, #filesTable td {
         padding: 10px 8px;
     }
 
-    /* 6. Paneles de Monitoreo (Hilo y Bitácora) en móvil */
     .monitoring-panel {
         height: auto !important;
         max-height: 360px;
@@ -320,17 +537,37 @@ th { background: #0f172a; color: var(--text-muted); font-size: 0.8rem; }
         max-height: 280px;
     }
 
-    /* 7. Modales adaptados a la pantalla del móvil */
     .modal-overlay {
-        padding: 1rem;
+        padding: 0.8rem;
         align-items: center;
     }
 
     .modal-content {
         width: 100% !important;
         max-width: 100% !important;
-        max-height: 90vh;
+        max-height: 92vh;
         overflow-y: auto !important;
         padding: 1rem !important;
+    }
+
+    .viewer-modal-layout {
+        height: 85vh !important;
+        padding: 0.8rem !important;
+    }
+
+    .video-custom-controls {
+        left: 8px;
+        right: 8px;
+        bottom: 8px;
+        padding: 5px 8px;
+        gap: 6px;
+    }
+
+    .video-ctrl-btn {
+        font-size: 0.85rem;
+    }
+
+    .video-time-text {
+        font-size: 0.68rem;
     }
 }
