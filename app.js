@@ -1435,6 +1435,11 @@ async function inicializarVisorIFC(fileUrl, container) {
     desactivarModoCaminar();
     cerrarPanelNivelesIFC();
 
+    // 1. Bloqueo estricto del menú contextual en el visor 3D para evitar interferencias con el clic derecho
+    container.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+    });
+
     const width = container.clientWidth || 800;
     const height = container.clientHeight || 550;
 
@@ -1493,6 +1498,7 @@ async function inicializarVisorIFC(fileUrl, container) {
             walkLastMousePos.x = e.clientX;
             walkLastMousePos.y = e.clientY;
 
+            // Sensibilidad de mirada ergonómica
             walkYaw -= deltaX * 0.0035;
             walkPitch -= deltaY * 0.0035;
             walkPitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, walkPitch));
@@ -1508,6 +1514,7 @@ async function inicializarVisorIFC(fileUrl, container) {
 
         const deltaX = Math.abs(e.clientX - pointerDownPos.x);
         const deltaY = Math.abs(e.clientY - pointerDownPos.y);
+        // Procesar clic si no hubo arrastre
         if (deltaX < 6 && deltaY < 6) {
             if (isPickSlabModeActive || !isWalkModeActive) {
                 onIfcModelClick(e);
@@ -1655,7 +1662,7 @@ async function inicializarVisorIFC(fileUrl, container) {
 }
 
 // ==============================================================================
-// GESTIÓN DEL ÁRBOL DE NIVELES BIM (PARAMÉTRICO ROBUSTO)
+// GESTIÓN DEL ÁRBOL DE NIVELES BIM (PARAMÉTRICO ROBUSTO Y NORMALIZADO EN METROS)
 // ==============================================================================
 function extraerNivelesDelModeloIFC() {
     ifcBuildingStoreys = [];
@@ -1665,7 +1672,6 @@ function extraerNivelesDelModeloIFC() {
     const offsetGroupY = (ifcModelBounds && ifcModelBounds.offsetY) ? ifcModelBounds.offsetY : 0;
 
     try {
-        // Código de tipo oficial de IfcBuildingStorey en la especificación Web-IFC
         const TYPE_BUILDING_STOREY = (window.WebIFC && window.WebIFC.IFCBUILDINGSTOREY) 
             ? window.WebIFC.IFCBUILDINGSTOREY 
             : 3124254112;
@@ -1676,7 +1682,6 @@ function extraerNivelesDelModeloIFC() {
             const id = storeyIDs.get(i);
             const storey = ifcApiInstance.GetLine(currentLoadedModelID, id);
             
-            // Extraer nombre real asignado en el software de autoría
             let nombre = `Nivel ${i + 1}`;
             if (storey.Name && storey.Name.value !== undefined) {
                 nombre = String(storey.Name.value);
@@ -1684,7 +1689,6 @@ function extraerNivelesDelModeloIFC() {
                 nombre = String(storey.LongName.value);
             }
 
-            // Extraer cota real nativa del IFC (Elevation)
             let elevacionNativa = 0;
             if (storey.Elevation && storey.Elevation.value !== undefined) {
                 elevacionNativa = parseFloat(storey.Elevation.value);
@@ -1693,9 +1697,7 @@ function extraerNivelesDelModeloIFC() {
             listaNivelesRaw.push({
                 id: id,
                 nombre: nombre,
-                cotaNativa: elevacionNativa,
-                // Cota exacta en la escena: Cota IFC original + traslación vertical de centrado
-                cotaEscena: elevacionNativa + offsetGroupY
+                cotaNativa: elevacionNativa
             });
         }
     } catch (e) {
@@ -1703,9 +1705,26 @@ function extraerNivelesDelModeloIFC() {
     }
 
     if (listaNivelesRaw.length > 0) {
-        // Ordenar ascendentemente por cota nativa (ej. -1.50, 0.00, +2.89, +5.27...)
         listaNivelesRaw.sort((a, b) => a.cotaNativa - b.cotaNativa);
-        ifcBuildingStoreys = listaNivelesRaw;
+
+        // 2. DETECCIÓN PARAMÉTRICA UNIVERSAL DE ESCALA (MILÍMETROS vs METROS)
+        let factorEscala = 1.0;
+        const cotaMaximaAbsoluta = Math.max(...listaNivelesRaw.map(n => Math.abs(n.cotaNativa)));
+        if (cotaMaximaAbsoluta > 100.0) {
+            // El modelo fue exportado con unidades milimétricas (ej: 2890, -1500)
+            factorEscala = 0.001;
+        }
+
+        ifcBuildingStoreys = listaNivelesRaw.map(lvl => {
+            const cotaMetros = lvl.cotaNativa * factorEscala;
+            return {
+                id: lvl.id,
+                nombre: lvl.nombre,
+                cotaNativa: cotaMetros,
+                // Cota exacta en la escena: Cota en metros + traslación vertical de centrado
+                cotaEscena: cotaMetros + offsetGroupY
+            };
+        });
     } else {
         // Fallback paramétrico puro si el IFC fue exportado sin jerarquía espacial
         const totalAltura = ifcModelBounds.size.y || 10;
@@ -1825,7 +1844,7 @@ function caminarEnNivel(cotaLosaEscena) {
     cerrarPanelNivelesIFC();
     desactivarSeleccionLosa();
 
-    // Intentar buscar losa física en el centro interior (X=0, Z=0.5)
+    // Buscar losa física en el centro interior (X=0, Z=0.5)
     const cotaFisicaLosa = detectarAlturaRealLosa(0, cotaLosaEscena, 0.5);
 
     iniciarModoCaminarEnCoordenadas(0, cotaFisicaLosa, 0.5);
