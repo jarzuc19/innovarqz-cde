@@ -15,8 +15,66 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
-    <!-- REGLA AISLADA EXCLUSIVA PARA EL VISOR 3D EN MÓVILES (< 600px) -->
+    <!-- ESTILOS AISLADOS EXCLUSIVOS PARA EL VISOR 3D Y MODO CAMINAR -->
     <style>
+        /* Controles táctiles de caminata (Touch D-Pad) */
+        .walk-touch-container {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            z-index: 25;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .walk-touch-row {
+            display: flex;
+            gap: 8px;
+        }
+        .walk-btn-dir {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: rgba(15, 23, 42, 0.82);
+            border: 1px solid rgba(56, 189, 248, 0.5);
+            color: #38bdf8;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: none;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        .walk-btn-dir:active {
+            background: rgba(56, 189, 248, 0.4);
+            color: #fff;
+            transform: scale(0.92);
+        }
+
+        /* Indicador flotante de controles para PC */
+        .walk-pc-hint {
+            position: absolute;
+            top: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 25;
+            background: rgba(15, 23, 42, 0.88);
+            border: 1px solid #10b981;
+            color: #e2e8f0;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.72rem;
+            display: none;
+            pointer-events: none;
+            backdrop-filter: blur(4px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
+
+        /* REGLA RESPONSIVA AISLADA PARA MÓVILES (< 600px) */
         @media (max-width: 600px) {
             #ifcNavToolbar {
                 top: 8px !important;
@@ -49,6 +107,15 @@
                 top: 8px !important;
                 left: 8px !important;
                 max-width: calc(100vw - 50px) !important;
+            }
+            .walk-touch-container {
+                bottom: 12px !important;
+                left: 12px !important;
+            }
+            .walk-btn-dir {
+                width: 40px !important;
+                height: 40px !important;
+                font-size: 1rem !important;
             }
         }
     </style>
@@ -248,6 +315,19 @@
 
                 <!-- 3. Visor BIM 3D (IFC) -->
                 <div id="modalIfcContainer" class="viewer-item" style="display: none; position: relative; width: 100%; height: 100%; overflow: hidden; cursor: grab;">
+                    <!-- Indicador flotante modo caminar para PC -->
+                    <div id="walkPcHint" class="walk-pc-hint">🚶 <strong>Modo Caminar:</strong> Usa <strong>W, A, S, D</strong> para moverte y arrastra el ratón para mirar.</div>
+
+                    <!-- Joystick táctil virtual para Móviles y Tablets -->
+                    <div id="walkTouchContainer" class="walk-touch-container">
+                        <button type="button" class="walk-btn-dir" id="btnWalkForward">▲</button>
+                        <div class="walk-touch-row">
+                            <button type="button" class="walk-btn-dir" id="btnWalkLeft">◄</button>
+                            <button type="button" class="walk-btn-dir" id="btnWalkBackward">▼</button>
+                            <button type="button" class="walk-btn-dir" id="btnWalkRight">►</button>
+                        </div>
+                    </div>
+
                     <!-- Botonera de Orientación y Vistas -->
                     <div id="ifcNavToolbar" style="position: absolute; top: 12px; right: 12px; z-index: 20; display: flex; flex-direction: column; gap: 5px; background: rgba(15, 23, 42, 0.88); padding: 7px; border-radius: 8px; backdrop-filter: blur(6px); border: 1px solid rgba(255, 255, 255, 0.15); box-shadow: 0 4px 14px rgba(0,0,0,0.4);">
                         <button type="button" onclick="cambiarVistaIFC('ISO')" title="Vista Isométrica 3D" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">🧭 <span class="btn-nav-text">Iso</span></button>
@@ -263,6 +343,7 @@
                         <button type="button" id="btnToggleEdges" onclick="alternarAristasIFC()" title="Mostrar u Ocultar Líneas de Arista" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #cbd5e1; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">🖋️ <span class="btn-nav-text">Líneas</span></button>
                         <button type="button" id="btnToggleSectionBox" onclick="alternarPanelCorteIFC()" title="Caja de Sección y Cortes 3D" style="padding: 5px 8px; font-size: 0.72rem; background: #0284c7; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">✂️ <span class="btn-nav-text">Corte</span></button>
                         <button type="button" id="btnToggleMeasure" onclick="alternarModoMedicionIFC()" title="Medición de Distancias Punto a Punto" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #38bdf8; border: 1px solid #38bdf8; border-radius: 4px; cursor: pointer; font-weight: bold;">📏 <span class="btn-nav-text">Medir</span></button>
+                        <button type="button" id="btnToggleWalk" onclick="alternarModoCaminarIFC()" title="Recorrer y caminar dentro del edificio" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #10b981; border: 1px solid #10b981; border-radius: 4px; cursor: pointer; font-weight: bold;">🚶 <span class="btn-nav-text">Caminar</span></button>
                     </div>
 
                     <!-- Panel Flotante de Herramienta de Sección / Corte (Clipping) -->
