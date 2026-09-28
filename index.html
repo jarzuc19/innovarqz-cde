@@ -15,10 +15,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
-    <!-- ESTILOS AISLADOS EXCLUSIVOS PARA EL VISOR 3D Y MODO CAMINAR -->
+    <!-- ESTILOS AISLADOS EXCLUSIVOS PARA EL VISOR 3D, NIVELES Y MODO CAMINAR -->
     <style>
-        /* Bloqueo estricto de selección de texto en la barra de herramientas del visor */
-        #ifcNavToolbar {
+        /* Bloqueo estricto de selección de texto en la botonera flotante */
+        #ifcNavToolbar, #ifcNavToolbar * {
             user-select: none !important;
             -webkit-user-select: none !important;
             -webkit-touch-callout: none !important;
@@ -26,10 +26,58 @@
             -ms-user-select: none !important;
         }
 
-        #ifcNavToolbar button {
-            user-select: none !important;
-            -webkit-user-select: none !important;
-            -webkit-touch-callout: none !important;
+        /* Panel flotante de árbol de niveles IFC */
+        #ifcLevelsCard {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            z-index: 25;
+            background: rgba(15, 23, 42, 0.95);
+            padding: 10px 14px;
+            border-radius: 8px;
+            backdrop-filter: blur(8px);
+            border: 1px solid #10b981;
+            color: #fff;
+            max-width: 320px;
+            width: calc(100vw - 40px);
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+            display: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .ifc-levels-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 220px;
+            overflow-y: auto;
+            margin-top: 8px;
+        }
+
+        .ifc-level-item {
+            background: rgba(30, 41, 59, 0.85);
+            border: 1px solid #334155;
+            padding: 6px 8px;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.75rem;
+        }
+
+        .ifc-level-actions {
+            display: flex;
+            gap: 4px;
+        }
+
+        .btn-level-act {
+            border: none;
+            padding: 3px 6px;
+            border-radius: 4px;
+            font-size: 0.68rem;
+            cursor: pointer;
+            font-weight: bold;
         }
 
         /* Controles táctiles de caminata (Touch D-Pad) */
@@ -122,7 +170,7 @@
                 max-width: calc(100vw - 16px) !important;
                 padding: 8px 10px !important;
             }
-            #ifcPropertyCard {
+            #ifcPropertyCard, #ifcLevelsCard {
                 top: 8px !important;
                 left: 8px !important;
                 max-width: calc(100vw - 50px) !important;
@@ -329,149 +377,4 @@
 
                 <!-- 2. Visor de Imágenes -->
                 <div id="imageViewerWrapper" class="viewer-item image-zoom-wrapper" style="display: none;">
-                    <img id="modalImageViewer" src="" alt="Previsualización Render / Imagen" draggable="false">
-                </div>
-
-                <!-- 3. Visor BIM 3D (IFC) -->
-                <div id="modalIfcContainer" class="viewer-item" style="display: none; position: relative; width: 100%; height: 100%; overflow: hidden; cursor: grab;">
-                    <!-- Indicador flotante modo caminar para PC -->
-                    <div id="walkPcHint" class="walk-pc-hint">🚶 <strong>Modo Caminar:</strong> Usa <strong>W, A, S, D</strong> para desplazarte y arrastra el ratón para mirar.</div>
-
-                    <!-- Joystick táctil virtual para Móviles y Tablets -->
-                    <div id="walkTouchContainer" class="walk-touch-container">
-                        <button type="button" class="walk-btn-dir" id="btnWalkForward">▲</button>
-                        <div class="walk-touch-row">
-                            <button type="button" class="walk-btn-dir" id="btnWalkLeft">◄</button>
-                            <button type="button" class="walk-btn-dir" id="btnWalkBackward">▼</button>
-                            <button type="button" class="walk-btn-dir" id="btnWalkRight">►</button>
-                        </div>
-                    </div>
-
-                    <!-- Botonera de Orientación y Vistas (Con user-select bloqueado) -->
-                    <div id="ifcNavToolbar" style="position: absolute; top: 12px; right: 12px; z-index: 20; display: flex; flex-direction: column; gap: 5px; background: rgba(15, 23, 42, 0.88); padding: 7px; border-radius: 8px; backdrop-filter: blur(6px); border: 1px solid rgba(255, 255, 255, 0.15); box-shadow: 0 4px 14px rgba(0,0,0,0.4);">
-                        <button type="button" onclick="cambiarVistaIFC('ISO')" title="Vista Isométrica 3D" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">🧭 <span class="btn-nav-text">Iso</span></button>
-                        <button type="button" onclick="cambiarVistaIFC('FRONTAL')" title="Fachada Frontal" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">🏢 <span class="btn-nav-text">Frontal</span></button>
-                        <button type="button" onclick="cambiarVistaIFC('POSTERIOR')" title="Fachada Posterior" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">🏠 <span class="btn-nav-text">Posterior</span></button>
-                        <button type="button" onclick="cambiarVistaIFC('LATERAL_IZQ')" title="Costado Izquierdo" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">📐 <span class="btn-nav-text">Izq</span></button>
-                        <button type="button" onclick="cambiarVistaIFC('LATERAL_DER')" title="Costado Derecho" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">📐 <span class="btn-nav-text">Der</span></button>
-                        <button type="button" onclick="cambiarVistaIFC('PLANTA')" title="Vista Aérea / Cubierta" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">🗺️ <span class="btn-nav-text">Planta</span></button>
-                        <button type="button" onclick="cambiarVistaIFC('INFERIOR')" title="Vista Inferior" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">⬇️ <span class="btn-nav-text">Inferior</span></button>
-                        <div style="height: 1px; background: rgba(255, 255, 255, 0.2); margin: 2px 0;"></div>
-                        <button type="button" onclick="ajustarVistaModeloIFC()" title="Ajustar y Centrar Modelo" style="padding: 5px 8px; font-size: 0.72rem; background: var(--accent-copper, #d97706); color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">🎯 <span class="btn-nav-text">Centrar</span></button>
-                        <button type="button" onclick="alternarCuadriculaIFC()" title="Mostrar u Ocultar Rejilla" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #cbd5e1; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">▦ <span class="btn-nav-text">Rejilla</span></button>
-                        <button type="button" id="btnToggleEdges" onclick="alternarAristasIFC()" title="Mostrar u Ocultar Líneas de Arista" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #cbd5e1; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">🖋️ <span class="btn-nav-text">Líneas</span></button>
-                        <button type="button" id="btnToggleSectionBox" onclick="alternarPanelCorteIFC()" title="Caja de Sección y Cortes 3D" style="padding: 5px 8px; font-size: 0.72rem; background: #0284c7; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">✂️ <span class="btn-nav-text">Corte</span></button>
-                        <button type="button" id="btnToggleMeasure" onclick="alternarModoMedicionIFC()" title="Medición de Distancias Punto a Punto" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #38bdf8; border: 1px solid #38bdf8; border-radius: 4px; cursor: pointer; font-weight: bold;">📏 <span class="btn-nav-text">Medir</span></button>
-                        <button type="button" id="btnToggleWalk" onclick="alternarModoCaminarIFC()" title="Recorrer y caminar dentro del edificio" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #10b981; border: 1px solid #10b981; border-radius: 4px; cursor: pointer; font-weight: bold;">🚶 <span class="btn-nav-text">Caminar</span></button>
-                    </div>
-
-                    <!-- Panel Flotante de Herramienta de Sección / Corte (Clipping) -->
-                    <div id="ifcSectionToolPanel" style="position: absolute; bottom: 12px; left: 12px; z-index: 20; display: none; background: rgba(15, 23, 42, 0.95); padding: 10px 14px; border-radius: 8px; backdrop-filter: blur(6px); border: 1px solid #38bdf8; color: #fff; box-shadow: 0 4px 14px rgba(0,0,0,0.4); min-width: 250px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                            <strong style="font-size: 0.75rem; color: #38bdf8;">✂️ Caja de Sección / Cortes</strong>
-                            <button type="button" onclick="alternarPanelCorteIFC()" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 0.85rem;">✕</button>
-                        </div>
-                        <div style="display: flex; gap: 6px; margin-bottom: 8px; font-size: 0.72rem;">
-                            <label><input type="radio" name="clipAxis" value="Y" checked onchange="configurarPlanoCorte()"> Nivel (Y)</label>
-                            <label><input type="radio" name="clipAxis" value="X" onchange="configurarPlanoCorte()"> Transv. (X)</label>
-                            <label><input type="radio" name="clipAxis" value="Z" onchange="configurarPlanoCorte()"> Long. (Z)</label>
-                        </div>
-                        <input type="range" id="clipSlider" min="0" max="100" value="100" style="width: 100%; cursor: pointer;" oninput="actualizarPosicionCorte(this.value)">
-                        <div style="display: flex; justify-content: space-between; font-size: 0.68rem; color: #94a3b8; margin-top: 4px;">
-                            <span id="clipMinVal">Base</span>
-                            <button type="button" onclick="invertirPlanoCorte()" style="background: #334155; border: none; color: #cbd5e1; border-radius: 3px; padding: 2px 6px; cursor: pointer;">Invertir Lado</button>
-                            <span id="clipMaxVal">Techo</span>
-                        </div>
-                    </div>
-
-                    <!-- Panel Flotante de Resultados de Medición 3D -->
-                    <div id="ifcMeasureCard" style="position: absolute; bottom: 12px; right: 12px; z-index: 20; display: none; background: rgba(15, 23, 42, 0.95); padding: 10px 14px; border-radius: 8px; backdrop-filter: blur(6px); border: 1px solid #38bdf8; color: #fff; box-shadow: 0 4px 14px rgba(0,0,0,0.4); min-width: 230px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 4px; margin-bottom: 6px;">
-                            <strong style="font-size: 0.75rem; color: #38bdf8;">📏 Herramienta de Medición</strong>
-                            <button type="button" onclick="alternarModoMedicionIFC()" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 0.85rem;">✕</button>
-                        </div>
-                        <div id="ifcMeasureStatus" style="font-size: 0.72rem; color: #fbbf24; margin-bottom: 4px;">Haz clic en el Punto A...</div>
-                        <div id="ifcMeasureData" style="font-size: 0.75rem; display: none; line-height: 1.4;">
-                            <div><strong>Distancia Real:</strong> <span id="measureDistReal" style="color: #10b981; font-weight: bold;">0.00 m</span></div>
-                            <div><strong>Δ Altura (Y):</strong> <span id="measureDistY">0.00 m</span></div>
-                            <div><strong>Δ Planta (XZ):</strong> <span id="measureDistXZ">0.00 m</span></div>
-                        </div>
-                        <div style="margin-top: 8px; text-align: right;">
-                            <button type="button" onclick="limpiarMedicionIFC()" style="background: #334155; border: none; color: #cbd5e1; border-radius: 4px; padding: 3px 8px; font-size: 0.68rem; cursor: pointer;">Reiniciar Puntos</button>
-                        </div>
-                    </div>
-
-                    <!-- Tarjeta Informativa de Propiedades BIM al Seleccionar -->
-                    <div id="ifcPropertyCard" style="position: absolute; top: 12px; left: 12px; z-index: 20; display: none; background: rgba(15, 23, 42, 0.95); padding: 10px 14px; border-radius: 8px; backdrop-filter: blur(6px); border: 1px solid var(--accent-copper); color: #fff; max-width: 280px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
-                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 4px; margin-bottom: 6px;">
-                            <strong id="ifcPropTitle" style="font-size: 0.75rem; color: var(--accent-copper);">Elemento BIM</strong>
-                            <button type="button" onclick="cerrarCardPropiedadesIFC()" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 0.85rem;">✕</button>
-                        </div>
-                        <div id="ifcPropContent" style="font-size: 0.72rem; color: #cbd5e1; max-height: 160px; overflow-y: auto;"></div>
-                    </div>
-                </div>
-
-                <!-- 4. Overlay de Arrastre -->
-                <div id="dragCaptureOverlay" class="drag-capture-overlay" style="display: none;"></div>
-
-                <!-- 5. Controles Flotantes de Zoom Universal -->
-                <div id="viewerFloatingZoomControls" class="viewer-floating-zoom" style="display: none;">
-                    <button type="button" onclick="zoomActiveElement(0.25)" title="Acercar">+</button>
-                    <button type="button" onclick="zoomActiveElement(-0.25)" title="Alejar">−</button>
-                    <button type="button" onclick="resetActiveZoom()" title="Restablecer">↺</button>
-                </div>
-
-                <!-- Indicador de Carga -->
-                <div id="viewerLoadingIndicator" class="viewer-loading-banner" style="display: none;">
-                    <div style="margin-bottom: 6px;">⏳ Cargando entregable...</div>
-                    <small style="color: #94a3b8; font-weight: normal;">(Espere un momento)</small>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL NUEVO PROYECTO -->
-    <div id="projectModal" class="modal-hidden">
-        <div class="modal-content card">
-            <h3>Crear Nuevo Proyecto en CDE</h3>
-            <form id="createProjectForm">
-                <label><small>Código Autogenerado:</small></label>
-                <input type="text" id="codigoProj" required readonly>
-
-                <label><small>Cliente:</small></label>
-                <input type="text" id="clienteProj" placeholder="Cliente (Ej: AlcaldiaPasto)" required>
-
-                <label><small>Ubicación:</small></label>
-                <select id="ubicacionSelect" required>
-                    <option value="">-- Seleccionar Ubicación --</option>
-                    <option value="Pasto">Pasto</option>
-                    <option value="Ricaurte">Ricaurte</option>
-                    <option value="Tumaco">Tumaco</option>
-                    <option value="Ipiales">Ipiales</option>
-                    <option value="Mallama">Mallama</option>
-                    <option value="OTRO">Otro...</option>
-                </select>
-                <input type="text" id="ubicacionOtherInput" placeholder="Escriba la ubicación" style="display:none; margin-top:5px;">
-
-                <label><small>Tipo de Obra:</small></label>
-                <select id="tipoSelect" required>
-                    <option value="">-- Seleccionar Tipo --</option>
-                    <option value="EdificioResidencial">Edificio Residencial</option>
-                    <option value="InfraestructuraVial">Infraestructura Vial</option>
-                    <option value="EquipamientoEducativo">Equipamiento Educativo</option>
-                    <option value="Remodelacion">Remodelación</option>
-                    <option value="OTRO">Otro...</option>
-                </select>
-                <input type="text" id="tipoOtherInput" placeholder="Escriba el tipo de obra" style="display:none; margin-top:5px;">
-
-                <div class="modal-actions" style="margin-top:15px;">
-                    <button type="button" class="btn-secondary" onclick="closeProjectModal()">Cancelar</button>
-                    <button type="submit" class="btn-primary">Crear en Drive y CDE</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <script src="app.js"></script>
-</body>
-</html>
+                    <img id="modalImageViewer" src="" alt="Previsualización Render / Imagen" draggable="f
