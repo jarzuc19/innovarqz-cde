@@ -34,7 +34,7 @@ let ifcAnimationId = null;
 let ifcApiInstance = null;
 let ifcGridHelper = null;
 let ifcCurrentGroup = null;
-let ifcModelBounds = { center: new THREE.Vector3(), size: new THREE.Vector3(), maxDim: 30 };
+let ifcModelBounds = { center: new THREE.Vector3(), size: new THREE.Vector3(), maxDim: 30, offsetY: 0 };
 let currentLoadedModelID = null;
 
 // ÁRBOL DE NIVELES BIM
@@ -1493,7 +1493,6 @@ async function inicializarVisorIFC(fileUrl, container) {
             walkLastMousePos.x = e.clientX;
             walkLastMousePos.y = e.clientY;
 
-            // Sensibilidad de mirada ergonómica
             walkYaw -= deltaX * 0.0035;
             walkPitch -= deltaY * 0.0035;
             walkPitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, walkPitch));
@@ -1509,7 +1508,6 @@ async function inicializarVisorIFC(fileUrl, container) {
 
         const deltaX = Math.abs(e.clientX - pointerDownPos.x);
         const deltaY = Math.abs(e.clientY - pointerDownPos.y);
-        // Procesar clic si no hubo arrastre
         if (deltaX < 6 && deltaY < 6) {
             if (isPickSlabModeActive || !isWalkModeActive) {
                 onIfcModelClick(e);
@@ -1647,7 +1645,7 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcModelBounds.center.set(0, size.y / 2, 0);
     ifcModelBounds.size.copy(size);
     ifcModelBounds.maxDim = Math.max(size.x, size.y, size.z);
-    ifcModelBounds.offsetY = offsetGroupY; // Guardar el desfase vertical exacto
+    ifcModelBounds.offsetY = offsetGroupY;
 
     extraerNivelesDelModeloIFC();
     configurarEscuchadoresVisorDiferidos();
@@ -1657,7 +1655,7 @@ async function inicializarVisorIFC(fileUrl, container) {
 }
 
 // ==============================================================================
-// GESTIÓN DEL ÁRBOL DE NIVELES BIM (PARAMÉTRICO UNIVERSAL)
+// GESTIÓN DEL ÁRBOL DE NIVELES BIM (PARAMÉTRICO ROBUSTO)
 // ==============================================================================
 function extraerNivelesDelModeloIFC() {
     ifcBuildingStoreys = [];
@@ -1667,39 +1665,49 @@ function extraerNivelesDelModeloIFC() {
     const offsetGroupY = (ifcModelBounds && ifcModelBounds.offsetY) ? ifcModelBounds.offsetY : 0;
 
     try {
-        if (window.WebIFC && window.WebIFC.IFCBUILDINGSTOREY) {
-            const storeyIDs = ifcApiInstance.GetLineIDsWithType(currentLoadedModelID, window.WebIFC.IFCBUILDINGSTOREY);
-            for (let i = 0; i < storeyIDs.size(); i++) {
-                const id = storeyIDs.get(i);
-                const storey = ifcApiInstance.GetLine(currentLoadedModelID, id);
-                let nombre = storey.Name ? storey.Name.value : `Nivel ${i + 1}`;
-                let elevacionNativa = (storey.Elevation && storey.Elevation.value !== undefined) 
-                    ? parseFloat(storey.Elevation.value) 
-                    : 0;
+        // Código de tipo oficial de IfcBuildingStorey en la especificación Web-IFC
+        const TYPE_BUILDING_STOREY = (window.WebIFC && window.WebIFC.IFCBUILDINGSTOREY) 
+            ? window.WebIFC.IFCBUILDINGSTOREY 
+            : 3124254112;
 
-                listaNivelesRaw.push({
-                    id: id,
-                    nombre: nombre,
-                    cotaNativa: elevacionNativa,
-                    // Cota real en el espacio 3D de Three.js (Cota IFC + Desfase vertical de centrado)
-                    cotaEscena: elevacionNativa + offsetGroupY
-                });
+        const storeyIDs = ifcApiInstance.GetLineIDsWithType(currentLoadedModelID, TYPE_BUILDING_STOREY);
+        
+        for (let i = 0; i < storeyIDs.size(); i++) {
+            const id = storeyIDs.get(i);
+            const storey = ifcApiInstance.GetLine(currentLoadedModelID, id);
+            
+            // Extraer nombre real asignado en el software de autoría
+            let nombre = `Nivel ${i + 1}`;
+            if (storey.Name && storey.Name.value !== undefined) {
+                nombre = String(storey.Name.value);
+            } else if (storey.LongName && storey.LongName.value !== undefined) {
+                nombre = String(storey.LongName.value);
             }
+
+            // Extraer cota real nativa del IFC (Elevation)
+            let elevacionNativa = 0;
+            if (storey.Elevation && storey.Elevation.value !== undefined) {
+                elevacionNativa = parseFloat(storey.Elevation.value);
+            }
+
+            listaNivelesRaw.push({
+                id: id,
+                nombre: nombre,
+                cotaNativa: elevacionNativa,
+                // Cota exacta en la escena: Cota IFC original + traslación vertical de centrado
+                cotaEscena: elevacionNativa + offsetGroupY
+            });
         }
     } catch (e) {
-        console.warn("Lectura paramétrica de IfcBuildingStorey omitida por fallback:", e);
+        console.warn("Consulta directa de IfcBuildingStorey con constante numérica falló:", e);
     }
 
     if (listaNivelesRaw.length > 0) {
+        // Ordenar ascendentemente por cota nativa (ej. -1.50, 0.00, +2.89, +5.27...)
         listaNivelesRaw.sort((a, b) => a.cotaNativa - b.cotaNativa);
-        ifcBuildingStoreys = listaNivelesRaw.map(lvl => ({
-            id: lvl.id,
-            nombre: lvl.nombre,
-            cotaNativa: lvl.cotaNativa,
-            cotaEscena: lvl.cotaEscena
-        }));
+        ifcBuildingStoreys = listaNivelesRaw;
     } else {
-        // Fallback paramétrico puro si el IFC no define pisos
+        // Fallback paramétrico puro si el IFC fue exportado sin jerarquía espacial
         const totalAltura = ifcModelBounds.size.y || 10;
         const pisosEstimados = Math.max(1, Math.round(totalAltura / 2.80));
         const pasoPiso = totalAltura / pisosEstimados;
@@ -1797,16 +1805,16 @@ function cortarEnNivel(cotaLosaEscena) {
 function detectarAlturaRealLosa(x, cotaAproximadaY, z) {
     if (!ifcScene) return cotaAproximadaY;
 
-    // Lanzar un rayo vertical descendente desde 2m por encima de la cota estimada
-    const origenRayo = new THREE.Vector3(x, cotaAproximadaY + 2.0, z);
+    // Lanzar un rayo vertical descendente desde 2.5m por encima de la cota de planta
+    const origenRayo = new THREE.Vector3(x, cotaAproximadaY + 2.5, z);
     const direccionAbajo = new THREE.Vector3(0, -1, 0);
-    const rayoVertical = new THREE.Raycaster(origenRayo, direccionAbajo, 0, 8.0);
+    const rayoVertical = new THREE.Raycaster(origenRayo, direccionAbajo, 0, 10.0);
 
     const mallasValidas = ifcMeshesList.filter(m => m.visible);
     const intersecciones = rayoVertical.intersectObjects(mallasValidas, false);
 
     if (intersecciones.length > 0) {
-        // Devuelve la cota Y exacta de la cara superior de la losa donde impacta el rayo
+        // Devuelve la cota Y exacta de la cara superior de la losa física
         return intersecciones[0].point.y;
     }
 
@@ -1823,7 +1831,7 @@ function caminarEnNivel(cotaLosaEscena) {
     iniciarModoCaminarEnCoordenadas(0, cotaFisicaLosa, 0.5);
 }
 
-// Disparador del botón de la barra lateral: permite escoger la losa en pantalla
+// Activador del botón Caminar en la botonera lateral para seleccionar losa directamente
 function activarSeleccionLosaCaminar() {
     desactivarModoMedicion();
     cerrarCardPropiedadesIFC();
@@ -1873,7 +1881,7 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
 
     if (ifcControls) ifcControls.enabled = false;
 
-    // Altura de ojo humana exacta: +1.65 m sobre la cara superior de la losa
+    // Altura de ojo ergonómica: exactamente +1.65 m sobre la cara superior del forjado
     const alturaOjoHumano = yLosa + 1.65;
     ifcCamera.position.set(x, alturaOjoHumano, z);
 
@@ -2283,7 +2291,7 @@ function onIfcModelClick(event) {
 
         if (!hit) return;
 
-        // 1. MODO SELECCIÓN DE LOSA / FORJADO DIRECTO PARA CAMINAR
+        // 1. MODO SELECCIÓN DIRECTA DE LOSA / FORJADO PARA CAMINAR
         if (isPickSlabModeActive) {
             iniciarModoCaminarEnCoordenadas(hit.point.x, hit.point.y, hit.point.z);
             return;
