@@ -55,9 +55,9 @@ let isMeasureToolActive = false;
 let measurePoints = [];
 const measureVisualObjects = [];
 
-// HERRAMIENTA DE RECORRIDO EN PRIMERA PERSONA (WALK MODE)
+// HERRAMIENTA DE RECORRIDO EN PRIMERA PERSONA (WALK MODE CON SUBIDA DE ESCALERAS)
 let isWalkModeActive = false;
-let isPickSlabModeActive = false; // Modo para seleccionar losa directamente en pantalla
+let isPickSlabModeActive = false;
 const walkMovement = { forward: false, backward: false, left: false, right: false };
 const walkClock = new THREE.Clock();
 const walkSpeed = 3.6; // metros por segundo
@@ -66,13 +66,17 @@ let walkYaw = 0;
 let walkIsDraggingLook = false;
 let walkLastMousePos = { x: 0, y: 0 };
 let walkListenersConfigured = false;
+const MAX_STEP_HEIGHT = 0.25; // 25 cm tolerancia de escalón / rampa
+
+// BANDEJA DE CAPTURAS 3D (OPCIÓN A - CARRITO DE INSPECCIÓN)
+const capturasBandeja = []; // Almacena dataURL Base64 de las fotos tomadas
 
 // INTERACCIÓN Y SELECCIÓN DE PROPIEDADES BIM
 let raycaster = null;
 let mousePointer = null;
 let highlightedMesh = null;
 let originalMaterial = null;
-let lastClickedMesh = null; // Guardar referencia para ocultar por menú contextual
+let lastClickedMesh = null;
 const ifcMeshesList = [];
 
 // GESTIÓN DE PUNTERO TÁCTIL Y RATÓN (COMPATIBILIDAD MÓVIL/TABLET/PC)
@@ -113,6 +117,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const revisorForm = document.getElementById("revisorInstructionForm");
     if (revisorForm) revisorForm.addEventListener("submit", handleRevisorInstructionSubmit);
+
+    const capturaForm = document.getElementById("formCapturaConsolidada");
+    if (capturaForm) capturaForm.addEventListener("submit", handleEnviarCapturasAlCDE);
 
     const isoNameInput = document.getElementById("isoNameInput");
     if (isoNameInput) isoNameInput.addEventListener("input", actualizarPistaSubcarpetaModal);
@@ -173,6 +180,12 @@ function cerrarCualquierModalAbierto(triggerHistoryBack = true) {
     const vModal = document.getElementById("viewerModal");
     if (vModal && (vModal.style.display === "flex" || vModal.classList.contains("modal-overlay"))) {
         closeViewerModal(false);
+        seCerro = true;
+    }
+
+    const cModal = document.getElementById("capturaConsolidadaModal");
+    if (cModal && (cModal.style.display === "flex" || cModal.classList.contains("modal-overlay"))) {
+        cerrarModalCapturasConsolidadas(false);
         seCerro = true;
     }
 
@@ -448,7 +461,7 @@ function aplicarRestriccionPestanasVisuales() {
 }
 
 // ==============================================================================
-// HILO DE NOTAS TÉCNICAS
+// HILO DE NOTAS TÉCNICAS (CON SOPORTE DE IMAGEN Y REPORTE 3D)
 // ==============================================================================
 async function evaluarNotasTecnicasActivas() {
     const threadContainer = document.getElementById("interactionThreadContainer");
@@ -506,13 +519,34 @@ async function evaluarNotasTecnicasActivas() {
         let mensajeCompleto = n.drive_file_url || "";
         let partesMensaje = mensajeCompleto.split(" | Detalle: ");
         let asunto = partesMensaje[0] || mensajeCompleto;
-        let detalle = partesMensaje[1] || "";
+        let detalleConEnlaces = partesMensaje[1] || "";
+
+        // Extraer enlaces a imágenes o informes si existen en el detalle
+        let enlaceReporte = null;
+        let enlaceImagen = null;
+        if (detalleConEnlaces.includes(" | Reporte: ")) {
+            let splitRep = detalleConEnlaces.split(" | Reporte: ");
+            detalleConEnlaces = splitRep[0];
+            enlaceReporte = splitRep[1];
+        } else if (detalleConEnlaces.includes(" | Imagen: ")) {
+            let splitImg = detalleConEnlaces.split(" | Imagen: ");
+            detalleConEnlaces = splitImg[0];
+            enlaceImagen = splitImg[1];
+        }
+
+        let botonesEvidencia = "";
+        if (enlaceReporte) {
+            botonesEvidencia = `<button type="button" class="btn-secondary" style="font-size:0.68rem; padding:2px 8px; margin-top:4px; border-color:#38bdf8; color:#38bdf8;" onclick="openViewerModal('${enlaceReporte}', 'Reporte_Observacion_3D.pdf')">📑 Ver Informe PDF</button>`;
+        } else if (enlaceImagen) {
+            botonesEvidencia = `<button type="button" class="btn-secondary" style="font-size:0.68rem; padding:2px 8px; margin-top:4px; border-color:#10b981; color:#10b981;" onclick="openViewerModal('${enlaceImagen}', 'Evidencia_Captura_3D.png')">🖼️ Ver Evidencia 3D</button>`;
+        }
 
         html += `
             <div style="background: rgba(15, 23, 42, 0.6); padding: 8px 10px; border-radius: 6px; margin-bottom: 6px; border-left: 3px solid ${colorTexto};">
                 <strong style="color: ${colorTexto}; font-size: 0.82rem;">${icono}</strong> 
                 <span style="font-size: 0.85rem; color: #fff; font-weight: bold;">${asunto}</span>
-                ${detalle ? `<div style="font-size: 0.78rem; color: #cbd5e1; margin-top: 2px;">${detalle}</div>` : ''}
+                ${detalleConEnlaces ? `<div style="font-size: 0.78rem; color: #cbd5e1; margin-top: 2px;">${detalleConEnlaces}</div>` : ''}
+                ${botonesEvidencia}
                 <div style="text-align: right;"><small style="color: var(--text-muted); font-size: 0.7rem;">${n.version}</small></div>
             </div>
         `;
@@ -1469,7 +1503,7 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcControls.mouseButtons = {
         LEFT: THREE.MOUSE.NONE,
         MIDDLE: THREE.MOUSE.PAN,
-        RIGHT: THREE.MOUSE.NONE // Desactivado para que el clic derecho abra el menú contextual BIM
+        RIGHT: THREE.MOUSE.NONE
     };
 
     const hemiLight = new THREE.HemisphereLight(0xffffff, 0xcfd8dc, 0.85);
@@ -1712,7 +1746,6 @@ async function inicializarVisorIFC(fileUrl, container) {
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
 
-    // Desplazamiento vertical matemático exacto
     const offsetGroupY = -(center.y - (size.y / 2));
     ifcCurrentGroup.position.x -= center.x;
     ifcCurrentGroup.position.y += offsetGroupY;
@@ -1740,7 +1773,6 @@ function desplegarMenuContextualIFC(event) {
     const container = document.getElementById("modalIfcContainer");
     if (!menu || !container) return;
 
-    // Detectar si el clic derecho ocurrió sobre algún elemento específico
     const rect = ifcRenderer.domElement.getBoundingClientRect();
     mousePointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     mousePointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -1758,7 +1790,6 @@ function desplegarMenuContextualIFC(event) {
         if (btnOcultar) btnOcultar.style.display = "none";
     }
 
-    // Posicionar dentro del contenedor del visor
     const contRect = container.getBoundingClientRect();
     let posX = event.clientX - contRect.left;
     let posY = event.clientY - contRect.top;
@@ -1776,23 +1807,6 @@ function ocultarMenuContextualIFC() {
     if (menu) menu.style.display = "none";
 }
 
-function ejecutarCapturaPantallaIFC() {
-    ocultarMenuContextualIFC();
-    if (!ifcRenderer || !ifcScene || !ifcCamera) return;
-
-    // Renderizar cuadro limpio
-    ifcRenderer.render(ifcScene, ifcCamera);
-
-    const dataUrl = ifcRenderer.domElement.toDataURL("image/png");
-    const a = document.createElement("a");
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    a.href = dataUrl;
-    a.download = `Captura_${activeProjectCode || 'BIM'}_${timestamp}.png`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-}
-
 function ocultarElementoSeleccionadoIFC() {
     ocultarMenuContextualIFC();
     if (lastClickedMesh) {
@@ -1806,6 +1820,279 @@ function restablecerVisibilidadIFC() {
     ifcMeshesList.forEach(mesh => {
         if (mesh) mesh.visible = true;
     });
+}
+
+// ==============================================================================
+// BANDEJA DE CAPTURAS TEMPORALES (OPCIÓN A - CARRITO DE INSPECCIÓN 3D)
+// ==============================================================================
+function agregarCapturaABandejaIFC() {
+    ocultarMenuContextualIFC();
+    if (!ifcRenderer || !ifcScene || !ifcCamera) return;
+
+    ifcRenderer.render(ifcScene, ifcCamera);
+    const dataUrl = ifcRenderer.domElement.toDataURL("image/png");
+
+    capturasBandeja.push(dataUrl);
+    actualizarBotonBandejaCapturas();
+
+    // Efecto sutil de confirmación visual
+    const btn = document.getElementById("btnBandejaCapturas");
+    if (btn) {
+        btn.style.transform = "scale(1.15)";
+        setTimeout(() => { btn.style.transform = "scale(1)"; }, 200);
+    }
+}
+
+function actualizarBotonBandejaCapturas() {
+    const btn = document.getElementById("btnBandejaCapturas");
+    const countSpan = document.getElementById("trayCounter");
+    if (!btn) return;
+
+    if (capturasBandeja.length > 0) {
+        btn.style.display = "flex";
+        if (countSpan) countSpan.innerText = capturasBandeja.length;
+    } else {
+        btn.style.display = "none";
+    }
+}
+
+function abrirModalCapturasConsolidadas() {
+    if (capturasBandeja.length === 0) return;
+    registrarAperturaModalEnHistorial("capturaConsolidadaModal");
+
+    const modal = document.getElementById("capturaConsolidadaModal");
+    const container = document.getElementById("galeriaThumbsContainer");
+    const countLabel = document.getElementById("capturasCountLabel");
+    const checkSubsanacion = document.getElementById("checkSubsanacionGroup");
+
+    if (countLabel) countLabel.innerText = capturasBandeja.length;
+
+    // Si el usuario es modelador, mostrar casilla para registrar como subsanación
+    if (checkSubsanacion && currentUser) {
+        const esMod = currentUser.cargo.includes("MODELADOR") || currentUser.cargo.includes("SUPER_ADMIN");
+        checkSubsanacion.style.display = esMod ? "block" : "none";
+    }
+
+    renderizarMiniaturasBandeja();
+
+    if (modal) {
+        modal.style.display = "flex";
+        modal.classList.remove("modal-hidden");
+        modal.classList.add("modal-overlay");
+    }
+}
+
+function renderizarMiniaturasBandeja() {
+    const container = document.getElementById("galeriaThumbsContainer");
+    const countLabel = document.getElementById("capturasCountLabel");
+    if (!container) return;
+
+    container.innerHTML = "";
+    if (countLabel) countLabel.innerText = capturasBandeja.length;
+
+    capturasBandeja.forEach((dataUrl, idx) => {
+        const item = document.createElement("div");
+        item.className = "captura-thumb-item";
+        item.innerHTML = `
+            <img src="${dataUrl}" alt="Captura ${idx + 1}">
+            <button type="button" class="btn-delete-thumb" onclick="eliminarCapturaDeBandeja(${idx})">✕</button>
+        `;
+        container.appendChild(item);
+    });
+}
+
+function eliminarCapturaDeBandeja(index) {
+    capturasBandeja.splice(index, 1);
+    actualizarBotonBandejaCapturas();
+    renderizarMiniaturasBandeja();
+
+    if (capturasBandeja.length === 0) {
+        cerrarModalCapturasConsolidadas();
+    }
+}
+
+function cerrarModalCapturasConsolidadas(triggerHistory = true) {
+    const modal = document.getElementById("capturaConsolidadaModal");
+    if (modal) {
+        modal.style.display = "none";
+        modal.classList.remove("modal-overlay");
+        modal.classList.add("modal-hidden");
+    }
+    if (triggerHistory && window.history.state && window.history.state.modalOpen) {
+        window.history.back();
+    }
+}
+
+// Guardado en equipo local con cuadro de diálogo ("Guardar como...")
+async function guardarCapturasEnPCLocal() {
+    if (capturasBandeja.length === 0) return;
+
+    for (let i = 0; i < capturasBandeja.length; i++) {
+        const dataUrl = capturasBandeja[i];
+        const numSec = (i + 1 < 10) ? `0${i + 1}` : `${i + 1}`;
+        const defaultName = `Captura_${activeProjectCode || 'BIM'}_${numSec}.png`;
+
+        const blob = await (await fetch(dataUrl)).blob();
+
+        if (window.showSaveFilePicker) {
+            try {
+                const handle = await window.showSaveFilePicker({
+                    suggestedName: defaultName,
+                    types: [{
+                        description: 'Imagen PNG',
+                        accept: { 'image/png': ['.png'] },
+                    }],
+                });
+                const writable = await handle.createWritable();
+                await writable.write(blob);
+                await writable.close();
+            } catch (err) {
+                if (err.name !== 'AbortError') descargarBlobTradicional(blob, defaultName);
+            }
+        } else {
+            descargarBlobTradicional(blob, defaultName);
+        }
+    }
+}
+
+function descargarBlobTradicional(blob, fileName) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// Envío y Publicación de la observación / reporte compilado hacia Google Drive + Supabase
+async function handleEnviarCapturasAlCDE(e) {
+    e.preventDefault();
+    if (capturasBandeja.length === 0) return;
+
+    const asunto = document.getElementById("capturaAsuntoInput").value.trim();
+    const detalle = document.getElementById("capturaDetalleInput").value.trim();
+    const esSubsanacion = document.getElementById("checkEsSubsanacion")?.checked || false;
+    const btnSubmit = document.getElementById("btnEnviarCapturasCDE");
+
+    if (!asunto || !detalle) {
+        alert("⚠️ Por favor ingrese asunto y detalle de la observación.");
+        return;
+    }
+
+    btnSubmit.disabled = true;
+    btnSubmit.innerText = "Publicando e indexando en CDE...";
+
+    try {
+        let pdfReporteBase64 = null;
+
+        // Si son 2 o más capturas, compilar un Informe Técnico formal en PDF
+        if (capturasBandeja.length > 1) {
+            pdfReporteBase64 = await compilarInformePDFCapturas(asunto, detalle, capturasBandeja);
+        }
+
+        const base64CleanArray = capturasBandeja.map(url => url.split(',')[1]);
+
+        const payload = {
+            accion: "REGISTRAR_OBSERVACION_CAPTURAS",
+            proyecto_id: activeProjectId,
+            codigo_proyecto: activeProjectCode,
+            rol_usuario: currentUser.cargo,
+            asunto: asunto,
+            detalle: detalle,
+            capturas: base64CleanArray,
+            es_subsanacion: esSubsanacion,
+            pdf_reporte_base64: pdfReporteBase64
+        };
+
+        const res = await fetch(WEBHOOK_APPS_SCRIPT, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+
+        if (data.status === "success") {
+            alert("✅ ¡Observación y evidencias 3D integradas exitosamente al CDE!");
+            capturasBandeja.length = 0;
+            actualizarBotonBandejaCapturas();
+            cerrarModalCapturasConsolidadas();
+            evaluarNotasTecnicasActivas();
+            cargarTimelineActividad();
+            loadFiles();
+        } else {
+            alert("⚠️ " + data.message);
+        }
+    } catch (err) {
+        alert("Error de comunicación: " + err.message);
+    } finally {
+        btnSubmit.disabled = false;
+        btnSubmit.innerText = "🚀 Publicar en CDE";
+    }
+}
+
+// Compilador PDF de Ficha Técnica / Informe con fotos ordenadas
+async function compilarInformePDFCapturas(asunto, detalle, capturasArray) {
+    if (!window.PDFLib) {
+        await new Promise(resolve => {
+            const script = document.createElement("script");
+            script.src = "https://unpkg.com/pdf-lib/dist/pdf-lib.min.js";
+            script.onload = resolve;
+            document.head.appendChild(script);
+        });
+    }
+
+    const { PDFDocument, rgb, StandardFonts } = window.PDFLib;
+    const pdfDoc = await PDFDocument.create();
+    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+    const page = pdfDoc.addPage([612, 792]);
+    const { width, height } = page.getSize();
+
+    // Encabezado InnovArqZ
+    page.drawText("InnovArqZ SOLUCIONES INTEGRALES S.A.S.", { x: 50, y: height - 50, size: 14, font: fontBold, color: rgb(0.06, 0.09, 0.16) });
+    page.drawText("INFORME DE OBSERVACIONES Y EVIDENCIAS BIM 3D (ISO 19650)", { x: 50, y: height - 68, size: 9, font: fontBold, color: rgb(0.85, 0.47, 0.02) });
+
+    page.drawLine({ start: { x: 50, y: height - 76 }, end: { x: width - 50, y: height - 76 }, thickness: 1.5, color: rgb(0.85, 0.47, 0.02) });
+
+    page.drawText(`Proyecto: ${activeProjectCode || 'PRY-GENERAL'}`, { x: 50, y: height - 95, size: 8.5, font: fontBold });
+    page.drawText(`Emitido por: ${currentUser.nombre_completo} (${currentUser.cargo})`, { x: 50, y: height - 108, size: 8.5, font: fontRegular });
+    page.drawText(`Fecha: ${new Date().toLocaleString()}`, { x: 50, y: height - 121, size: 8.5, font: fontRegular });
+
+    page.drawText("ASUNTO:", { x: 50, y: height - 142, size: 9, font: fontBold });
+    page.drawText(asunto, { x: 105, y: height - 142, size: 9, font: fontRegular });
+
+    page.drawText("DESCRIPCIÓN TÉCNICA:", { x: 50, y: height - 160, size: 9, font: fontBold });
+    page.drawText(detalle, { x: 50, y: height - 175, size: 8.5, font: fontRegular, maxWidth: 512, lineHeight: 12 });
+
+    // Insertar imágenes en cuadrícula ordenada
+    let imgY = height - 250;
+    for (let i = 0; i < Math.min(capturasArray.length, 4); i++) {
+        const imgBytes = UtilitiesBase64ToUint8(capturasArray[i].split(',')[1]);
+        const embeddedImg = await pdfDoc.embedPng(imgBytes);
+
+        const imgWidth = 240;
+        const imgHeight = 145;
+        const posX = (i % 2 === 0) ? 50 : 310;
+        if (i === 2) imgY -= 170;
+
+        page.drawImage(embeddedImg, { x: posX, y: imgY - imgHeight, width: imgWidth, height: imgHeight });
+        page.drawText(`Evidencia 3D #${i + 1}`, { x: posX, y: imgY - imgHeight - 12, size: 8, font: fontBold, color: rgb(0.2, 0.2, 0.2) });
+    }
+
+    return await pdfDoc.saveAsBase64({ dataUri: false });
+}
+
+function UtilitiesBase64ToUint8(base64) {
+    const binary = atob(base64);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
 }
 
 // ==============================================================================
@@ -1854,7 +2141,6 @@ function extraerNivelesDelModeloIFC() {
     if (listaNivelesRaw.length > 0) {
         listaNivelesRaw.sort((a, b) => a.cotaNativa - b.cotaNativa);
 
-        // DETECCIÓN PARAMÉTRICA UNIVERSAL DE ESCALA (MILÍMETROS vs METROS)
         let factorEscala = 1.0;
         const cotaMaximaAbsoluta = Math.max(...listaNivelesRaw.map(n => Math.abs(n.cotaNativa)));
         if (cotaMaximaAbsoluta > 100.0) {
@@ -1962,7 +2248,7 @@ function cortarEnNivel(cotaLosaEscena) {
 }
 
 // ==============================================================================
-// DETECCIÓN FÍSICA DE FORJADO / LOSA Y MODO CAMINAR
+// DETECCIÓN FÍSICA DE FORJADO / ESCALERAS Y FÍSICA PEATONAL
 // ==============================================================================
 function detectarAlturaRealLosa(x, cotaAproximadaY, z) {
     if (!ifcScene) return cotaAproximadaY;
@@ -2093,7 +2379,7 @@ function desactivarModoCaminar() {
 
     if (ifcControls) {
         ifcControls.enabled = true;
-        ifcControls.enableZoom = true; // Restaurar zoom de rueda al salir de caminata
+        ifcControls.enableZoom = true;
         const forward = new THREE.Vector3(0, 0, -1).applyEuler(ifcCamera.rotation);
         ifcControls.target.copy(ifcCamera.position).add(forward.multiplyScalar(5));
         ifcControls.update();
@@ -2108,6 +2394,7 @@ function aplicarRotacionCaminar() {
     ifcCamera.quaternion.setFromEuler(euler);
 }
 
+// ACTUALIZACIÓN DE FÍSICA: DETECCIÓN CONTINUA DE PELDAÑOS Y RAMPAS (ESCALERAS)
 function actualizarFisicaCaminar(delta) {
     if (!isWalkModeActive || !ifcCamera) return;
 
@@ -2122,8 +2409,38 @@ function actualizarFisicaCaminar(delta) {
 
     if (moveVector.lengthSq() > 0) {
         moveVector.normalize();
-        const step = moveVector.multiplyScalar(walkSpeed * delta);
-        ifcCamera.position.add(step);
+        const pasoDistancia = walkSpeed * delta;
+        const siguientePos = ifcCamera.position.clone().add(moveVector.clone().multiplyScalar(pasoDistancia));
+
+        // Lanzar rayo vertical hacia abajo desde la posición objetivo a nivel de cabeza (+0.5m)
+        const origenRayo = new THREE.Vector3(siguientePos.x, ifcCamera.position.y + 0.5, siguientePos.z);
+        const rayoPiso = new THREE.Raycaster(origenRayo, new THREE.Vector3(0, -1, 0), 0, 4.0);
+
+        const mallasValidas = ifcMeshesList.filter(m => m.visible);
+        const hits = rayoPiso.intersectObjects(mallasValidas, false);
+
+        if (hits.length > 0) {
+            const cotaSueloObjetivo = hits[0].point.y;
+            const cotaOjoActual = ifcCamera.position.y;
+            const cotaSueloActual = cotaOjoActual - 1.65;
+            const deltaAltura = cotaSueloObjetivo - cotaSueloActual;
+
+            // Si sube un peldaño o rampa transitable (hasta 25 cm) o desciende
+            if (deltaAltura <= MAX_STEP_HEIGHT && deltaAltura >= -1.2) {
+                // Desplazamiento horizontal permitido
+                ifcCamera.position.x = siguientePos.x;
+                ifcCamera.position.z = siguientePos.z;
+
+                // Suavizado vertical exacto sobre el peldaño manteniendo altura de ojo +1.65 m
+                const cotaOjoDeseada = cotaSueloObjetivo + 1.65;
+                ifcCamera.position.y += (cotaOjoDeseada - ifcCamera.position.y) * Math.min(1.0, delta * 12.0);
+            }
+            // Si deltaAltura > 0.25 m es un muro o antepecho: se bloquea el avance frontal
+        } else {
+            // No hay suelo debajo (vacío): se permite avance horizontal manteniendo cota
+            ifcCamera.position.x = siguientePos.x;
+            ifcCamera.position.z = siguientePos.z;
+        }
     }
 }
 
