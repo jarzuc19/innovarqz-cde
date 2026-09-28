@@ -37,7 +37,7 @@ let ifcCurrentGroup = null;
 let ifcModelBounds = { center: new THREE.Vector3(), size: new THREE.Vector3(), maxDim: 30 };
 let currentLoadedModelID = null;
 
-// ÁRBOL DE NIVELES BIM (IFCBUILDINGSTOREY)
+// ÁRBOL DE NIVELES BIM
 let ifcBuildingStoreys = [];
 
 // GESTIÓN DE PLANOS DE CORTE / SECCIONES (CLIPPING PLANES)
@@ -72,7 +72,7 @@ let highlightedMesh = null;
 let originalMaterial = null;
 const ifcMeshesList = [];
 
-// GESTIÓN DE PUNTERO TÁCTIL Y RATÓN (COMPATIBILIDAD MÓVIL/TABLET/PC)
+// GESTIÓN DE PUNTERO TÁCTIL Y RATÓN
 let pointerDownPos = { x: 0, y: 0 };
 
 // ESTADO DE ZOOM Y PANEO UNIVERSAL (IMÁGENES Y PDF)
@@ -279,7 +279,7 @@ function actualizarPistaSubcarpetaModal() {
 }
 
 // ==============================================================================
-// AUTENTICACIÓN
+// AUTENTICACIÓN ORIGINAL (RESTAURADA EXACTA)
 // ==============================================================================
 async function handleLogin(e) {
     e.preventDefault();
@@ -1661,28 +1661,28 @@ async function inicializarVisorIFC(fileUrl, container) {
 }
 
 // ==============================================================================
-// GESTIÓN DEL ÁRBOL DE NIVELES BIM (IFCBUILDINGSTOREY)
+// GESTIÓN DEL ÁRBOL DE NIVELES BIM (IFCBUILDINGSTOREY CON TRY-CATCH SEGURO)
 // ==============================================================================
 function extraerNivelesDelModeloIFC() {
     ifcBuildingStoreys = [];
     if (!ifcApiInstance || currentLoadedModelID === null) return;
 
     try {
-        const IFCBUILDINGSTOREY = 3124254112; // Constante Web-IFC para IfcBuildingStorey
-        const storeyIDs = ifcApiInstance.GetLineIDsWithType(currentLoadedModelID, IFCBUILDINGSTOREY);
-        
-        for (let i = 0; i < storeyIDs.size(); i++) {
-            const id = storeyIDs.get(i);
-            const storey = ifcApiInstance.GetLine(currentLoadedModelID, id);
-            let nombre = storey.Name ? storey.Name.value : `Nivel ${i + 1}`;
-            let elevacion = storey.Elevation ? parseFloat(storey.Elevation.value) : (i * 2.80);
-            ifcBuildingStoreys.push({ id, nombre, elevacion });
+        if (window.WebIFC && window.WebIFC.IFCBUILDINGSTOREY) {
+            const storeyIDs = ifcApiInstance.GetLineIDsWithType(currentLoadedModelID, window.WebIFC.IFCBUILDINGSTOREY);
+            for (let i = 0; i < storeyIDs.size(); i++) {
+                const id = storeyIDs.get(i);
+                const storey = ifcApiInstance.GetLine(currentLoadedModelID, id);
+                let nombre = storey.Name ? storey.Name.value : `Nivel ${i + 1}`;
+                let elevacion = storey.Elevation ? parseFloat(storey.Elevation.value) : (i * 2.80);
+                ifcBuildingStoreys.push({ id, nombre, elevacion });
+            }
         }
     } catch (e) {
-        console.warn("No fue posible leer IfcBuildingStorey directamente, generando estimación espacial:", e);
+        console.warn("Lectura de IfcBuildingStorey omitida por fallback:", e);
     }
 
-    // Si el IFC no declaró niveles estandarizados, se genera estimación proporcional
+    // Estimación segura de pisos si no se detectan en el encabezado
     if (ifcBuildingStoreys.length === 0) {
         const totalAltura = ifcModelBounds.size.y || 10;
         const pisosEstimados = Math.max(1, Math.round(totalAltura / 2.80));
@@ -1695,7 +1695,6 @@ function extraerNivelesDelModeloIFC() {
         }
     }
 
-    // Ordenar de abajo hacia arriba
     ifcBuildingStoreys.sort((a, b) => a.elevacion - b.elevacion);
     renderizarListaNivelesIFC();
 }
@@ -1710,7 +1709,7 @@ function renderizarListaNivelesIFC() {
     }
 
     let html = "";
-    ifcBuildingStoreys.forEach((lvl, idx) => {
+    ifcBuildingStoreys.forEach((lvl) => {
         const elevStr = lvl.elevacion >= 0 ? `+${lvl.elevacion.toFixed(2)}` : `${lvl.elevacion.toFixed(2)}`;
         html += `
             <div class="ifc-level-item">
@@ -1752,7 +1751,6 @@ function cerrarPanelNivelesIFC() {
 function cortarEnNivel(elevacionPiso) {
     if (!ifcClippingPlane) return;
 
-    // Activar el corte en Y (Nivel)
     isSectionToolActive = true;
     const panel = document.getElementById("ifcSectionToolPanel");
     const btn = document.getElementById("btnToggleSectionBox");
@@ -1765,11 +1763,9 @@ function cortarEnNivel(elevacionPiso) {
     ifcClipInverted = false;
     ifcClippingPlane.normal.set(0, -1, 0);
 
-    // Ubicar el plano a 1.20m por encima de la losa del nivel
     const cotaCorte = elevacionPiso + 1.20;
     ifcClippingPlane.constant = cotaCorte;
 
-    // Sincronizar control deslizante
     const max = ifcModelBounds.size.y || 20;
     const pct = Math.min(100, Math.max(0, (cotaCorte / max) * 100));
     const slider = document.getElementById("clipSlider");
@@ -1781,7 +1777,6 @@ function caminarEnNivel(elevacionPiso) {
     if (!isWalkModeActive) {
         alternarModoCaminarIFC(elevacionPiso);
     } else {
-        // Si ya está activo, reubicar directamente a la nueva cota
         const cotaOjo = elevacionPiso + 1.65;
         ifcCamera.position.set(0, cotaOjo, 0.5);
     }
@@ -1855,13 +1850,11 @@ function alternarModoCaminarIFC(cotaSueloManual = null) {
     const esDispositivoTactil = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 992);
 
     if (isWalkModeActive) {
-        // Desactivar mediciones y paneles para no saturar la vista
         desactivarModoMedicion();
         cerrarCardPropiedadesIFC();
 
         if (ifcControls) ifcControls.enabled = false;
 
-        // Teletransporte al interior del piso seleccionado o a la planta baja
         let cotaBase = 0;
         if (cotaSueloManual !== null) {
             cotaBase = cotaSueloManual;
@@ -1872,11 +1865,8 @@ function alternarModoCaminarIFC(cotaSueloManual = null) {
         }
 
         const alturaOjoHumano = cotaBase + 1.65;
-        
-        // Ubicamos la cámara adentro (centro de la planta)
         ifcCamera.position.set(0, alturaOjoHumano, 0.5);
 
-        // Orientar la mirada hacia el interior del edificio
         walkYaw = Math.PI;
         walkPitch = 0;
         aplicarRotacionCaminar();
@@ -2077,7 +2067,6 @@ function procesarClickMedicion(intersectPoint) {
 
     measurePoints.push(intersectPoint.clone());
 
-    // Marcador esférico visible siempre en primer plano
     const sphereGeo = new THREE.SphereGeometry(0.2, 16, 16);
     const sphereMat = new THREE.MeshBasicMaterial({ 
         color: (measurePoints.length === 1) ? 0x38bdf8 : 0x10b981, 
@@ -2102,7 +2091,6 @@ function procesarClickMedicion(intersectPoint) {
         const p1 = measurePoints[0];
         const p2 = measurePoints[1];
 
-        // Línea conectora 3D en primer plano
         const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
         const lineMat = new THREE.LineBasicMaterial({ 
             color: 0x10b981, 
@@ -2115,7 +2103,6 @@ function procesarClickMedicion(intersectPoint) {
         ifcScene.add(lineObj);
         measureVisualObjects.push(lineObj);
 
-        // Cálculos métricos
         const distReal = p1.distanceTo(p2);
         const distY = Math.abs(p2.y - p1.y);
         const distXZ = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.z - p1.z, 2));
@@ -2205,7 +2192,6 @@ function onIfcModelClick(event) {
 
     raycaster.setFromCamera(mousePointer, ifcCamera);
     
-    // Filtrar solo las mallas válidas del modelo
     const mallasValidas = ifcMeshesList.filter(m => m.visible);
     const intersects = raycaster.intersectObjects(mallasValidas, false);
 
@@ -2226,13 +2212,11 @@ function onIfcModelClick(event) {
 
         if (!hit) return;
 
-        // MODO MEDICIÓN ACTIVO
         if (isMeasureToolActive) {
             procesarClickMedicion(hit.point);
             return;
         }
 
-        // MODO INSPECCIÓN DE PROPIEDADES
         resaltarElementoIFC(hit.object);
         mostrarPropiedadesElementoIFC(hit.object.userData);
     }
