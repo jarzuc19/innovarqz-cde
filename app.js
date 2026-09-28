@@ -1238,6 +1238,9 @@ function desplegarModalIframe(url, titulo, mostrarZoomControls) {
     }, 40);
 }
 
+/**
+ * VISOR DE IMÁGENES ACTUALIZADO (CONSULTA BINARIA DRIVE API SIN BLOQUEO 403)
+ */
 function desplegarModalImagen(driveUrl, titulo) {
     const modal = document.getElementById("viewerModal");
     const scalerWrapper = document.getElementById("iframeScalerWrapper");
@@ -1263,10 +1266,11 @@ function desplegarModalImagen(driveUrl, titulo) {
     imgWrapper.style.display = "flex";
     if (zoomControls) zoomControls.style.display = "flex";
 
+    // Extraer ID del archivo en Google Drive y consultar endpoint con GOOGLE_DRIVE_API_KEY
     let imgDirectUrl = driveUrl;
-    if (driveUrl.includes("drive.google.com")) {
-        const match = driveUrl.match(/[-\w]{25,}/);
-        if (match) imgDirectUrl = `https://drive.google.com/uc?export=view&id=${match[0]}`;
+    const match = driveUrl.match(/[-\w]{25,}/);
+    if (match) {
+        imgDirectUrl = `https://www.googleapis.com/drive/v3/files/${match[0]}?alt=media&key=${GOOGLE_DRIVE_API_KEY}`;
     }
     imgElement.src = imgDirectUrl;
 
