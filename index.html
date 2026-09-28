@@ -396,7 +396,7 @@
                 <div id="modalIfcContainer" class="viewer-item" style="display: none; position: relative; width: 100%; height: 100%; overflow: hidden; cursor: grab;">
                     <!-- Indicador flotante modo caminar con botón de salida -->
                     <div id="walkPcHint" class="walk-pc-hint">
-                        <span>🚶 <strong>Modo Caminar:</strong> Usa <strong>W, A, S, D</strong> para moverte y arrastra para mirar</span>
+                        <span id="walkStatusLabel">🚶 <strong>Modo Caminar:</strong> Usa <strong>W, A, S, D</strong> para moverte y arrastra para mirar</span>
                         <button type="button" class="btn-exit-walk" onclick="desactivarModoCaminar()">✕ Salir</button>
                     </div>
 
@@ -422,7 +422,7 @@
                         </div>
                     </div>
 
-                    <!-- Botonera de Orientación y Vistas (Limpia y sin duplicados) -->
+                    <!-- Botonera de Orientación y Vistas -->
                     <div id="ifcNavToolbar" style="position: absolute; top: 12px; right: 12px; z-index: 20; display: flex; flex-direction: column; gap: 5px; background: rgba(15, 23, 42, 0.88); padding: 7px; border-radius: 8px; backdrop-filter: blur(6px); border: 1px solid rgba(255, 255, 255, 0.15); box-shadow: 0 4px 14px rgba(0,0,0,0.4);">
                         <button type="button" onclick="cambiarVistaIFC('ISO')" title="Vista Isométrica 3D" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">🧭 <span class="btn-nav-text">Iso</span></button>
                         <button type="button" onclick="cambiarVistaIFC('FRONTAL')" title="Fachada Frontal" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">🏢 <span class="btn-nav-text">Frontal</span></button>
@@ -438,6 +438,7 @@
                         <button type="button" id="btnToggleEdges" onclick="alternarAristasIFC()" title="Mostrar u Ocultar Líneas de Arista" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #cbd5e1; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">🖋️ <span class="btn-nav-text">Líneas</span></button>
                         <button type="button" id="btnToggleSectionBox" onclick="alternarPanelCorteIFC()" title="Caja de Sección y Cortes 3D" style="padding: 5px 8px; font-size: 0.72rem; background: #0284c7; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">✂️ <span class="btn-nav-text">Corte</span></button>
                         <button type="button" id="btnToggleMeasure" onclick="alternarModoMedicionIFC()" title="Medición de Distancias Punto a Punto" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #38bdf8; border: 1px solid #38bdf8; border-radius: 4px; cursor: pointer; font-weight: bold;">📏 <span class="btn-nav-text">Medir</span></button>
+                        <button type="button" id="btnToggleWalk" onclick="activarSeleccionLosaCaminar()" title="Caminar sobre losa o forjado específico" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #10b981; border: 1px solid #10b981; border-radius: 4px; cursor: pointer; font-weight: bold;">🚶 <span class="btn-nav-text">Caminar</span></button>
                     </div>
 
                     <!-- Panel Flotante de Herramienta de Sección / Corte (Clipping) -->
