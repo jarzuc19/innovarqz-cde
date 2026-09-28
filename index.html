@@ -15,7 +15,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
-    <!-- ESTILOS AISLADOS EXCLUSIVOS PARA EL VISOR 3D, NIVELES Y MODO CAMINAR -->
+    <!-- ESTILOS AISLADOS EXCLUSIVOS PARA EL VISOR 3D, NIVELES, MENÚ CONTEXTUAL Y MODO CAMINAR -->
     <style>
         /* Bloqueo estricto de selección de texto en la botonera flotante */
         #ifcNavToolbar, #ifcNavToolbar * {
@@ -78,6 +78,45 @@
             font-size: 0.68rem;
             cursor: pointer;
             font-weight: bold;
+        }
+
+        /* Menú Contextual Flotante de Clic Derecho (Exclusivo BIM) */
+        #ifcContextMenu {
+            position: absolute;
+            z-index: 50;
+            background: rgba(15, 23, 42, 0.96);
+            border: 1px solid #38bdf8;
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px);
+            display: none;
+            flex-direction: column;
+            min-width: 190px;
+            padding: 4px 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .ifc-context-item {
+            padding: 8px 14px;
+            font-size: 0.76rem;
+            color: #e2e8f0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.15s, color 0.15s;
+        }
+
+        .ifc-context-item:hover {
+            background: rgba(56, 189, 248, 0.15);
+            color: #38bdf8;
+        }
+
+        .ifc-context-separator {
+            height: 1px;
+            background: #334155;
+            margin: 3px 0;
         }
 
         /* Controles táctiles de caminata (Touch D-Pad) */
@@ -393,10 +432,19 @@
                 </div>
 
                 <!-- 3. Visor BIM 3D (IFC) -->
-                <div id="modalIfcContainer" class="viewer-item" style="display: none; position: relative; width: 100%; height: 100%; overflow: hidden; cursor: grab;">
+                <div id="modalIfcContainer" class="viewer-item" style="display: none; position: relative; width: 100%; height: 100%; overflow: hidden; cursor: default;">
+                    <!-- Menú Contextual Personalizado BIM -->
+                    <div id="ifcContextMenu">
+                        <div class="ifc-context-item" onclick="ejecutarCapturaPantallaIFC()">📸 Tomar Captura de Pantalla</div>
+                        <div class="ifc-context-item" onclick="ajustarVistaModeloIFC()">🎯 Encuadrar Todo (Zoom Extensión)</div>
+                        <div class="ifc-context-separator"></div>
+                        <div class="ifc-context-item" id="menuOcultarElemento" onclick="ocultarElementoSeleccionadoIFC()">👁️ Ocultar Elemento</div>
+                        <div class="ifc-context-item" onclick="restablecerVisibilidadIFC()">🔄 Mostrar Todo</div>
+                    </div>
+
                     <!-- Indicador flotante modo caminar con botón de salida -->
                     <div id="walkPcHint" class="walk-pc-hint">
-                        <span id="walkStatusLabel">🚶 <strong>Modo Caminar:</strong> Usa <strong>W, A, S, D</strong> para moverte y arrastra para mirar</span>
+                        <span id="walkStatusLabel">🚶 <strong>Modo Caminar:</strong> Usa <strong>W, A, S, D</strong> para moverte y arrastra el ratón para mirar</span>
                         <button type="button" class="btn-exit-walk" onclick="desactivarModoCaminar()">✕ Salir</button>
                     </div>
 
