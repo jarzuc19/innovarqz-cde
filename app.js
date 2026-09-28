@@ -52,6 +52,16 @@ let isMeasureToolActive = false;
 let measurePoints = [];
 const measureVisualObjects = [];
 
+// HERRAMIENTA DE RECORRIDO EN PRIMERA PERSONA (MODO CAMINAR)
+let isWalkModeActive = false;
+const walkMovement = { forward: false, backward: false, left: false, right: false };
+const walkClock = new THREE.Clock();
+const walkSpeed = 3.6; // metros por segundo
+let walkPitch = 0;
+let walkYaw = 0;
+let walkIsDraggingLook = false;
+let walkLastMousePos = { x: 0, y: 0 };
+
 // INTERACCIÓN Y SELECCIÓN DE PROPIEDADES BIM
 let raycaster = null;
 let mousePointer = null;
@@ -107,6 +117,8 @@ document.addEventListener("DOMContentLoaded", () => {
     setupDropdownWithOther("ubicacionSelect", "ubicacionOtherInput");
     setupDropdownWithOther("tipoSelect", "tipoOtherInput");
     setupUniversalZoomInteractions();
+    setupWalkKeyboardListeners();
+    setupWalkTouchListeners();
 
     window.addEventListener("keydown", (e) => {
         if (e.key === "Escape") cerrarCualquierModalAbierto();
@@ -1264,6 +1276,7 @@ function closeViewerModal(triggerHistory = true) {
     resetActiveZoom();
     cerrarCardPropiedadesIFC();
     desactivarModoMedicion();
+    desactivarModoCaminar();
 
     if (ifcAnimationId) {
         cancelAnimationFrame(ifcAnimationId);
@@ -1414,6 +1427,7 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcMeshesList.length = 0;
     ifcEdgesList.length = 0;
     limpiarMedicionIFC();
+    desactivarModoCaminar();
 
     const width = container.clientWidth || 800;
     const height = container.clientHeight || 550;
@@ -1460,22 +1474,56 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcRenderer.domElement.addEventListener('pointerdown', (e) => {
         pointerDownPos.x = e.clientX;
         pointerDownPos.y = e.clientY;
+
+        if (isWalkModeActive) {
+            walkIsDraggingLook = true;
+            walkLastMousePos.x = e.clientX;
+            walkLastMousePos.y = e.clientY;
+        }
     });
 
-    ifcRenderer.domElement.addEventListener('pointerup', (e) => {
+    window.addEventListener('pointermove', (e) => {
+        if (isWalkModeActive && walkIsDraggingLook) {
+            const deltaX = e.clientX - walkLastMousePos.x;
+            const deltaY = e.clientY - walkLastMousePos.y;
+            walkLastMousePos.x = e.clientX;
+            walkLastMousePos.y = e.clientY;
+
+            walkYaw -= deltaX * 0.0035;
+            walkPitch -= deltaY * 0.0035;
+            walkPitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, walkPitch));
+
+            aplicarRotacionCaminar();
+        }
+    });
+
+    window.addEventListener('pointerup', (e) => {
+        if (isWalkModeActive) {
+            walkIsDraggingLook = false;
+        }
+
         const deltaX = Math.abs(e.clientX - pointerDownPos.x);
         const deltaY = Math.abs(e.clientY - pointerDownPos.y);
         // Si el desplazamiento es mínimo (menor a 6px), se procesa como toque/clic
-        if (deltaX < 6 && deltaY < 6) {
+        if (deltaX < 6 && deltaY < 6 && !isWalkModeActive) {
             onIfcModelClick(e);
         }
     });
 
     function animate() {
         ifcAnimationId = requestAnimationFrame(animate);
-        if (ifcControls) ifcControls.update();
-        if (ifcRenderer && ifcScene && ifcCamera) ifcRenderer.render(ifcScene, ifcCamera);
+
+        if (isWalkModeActive) {
+            actualizarFisicaCaminar(walkClock.getDelta());
+        } else if (ifcControls) {
+            ifcControls.update();
+        }
+
+        if (ifcRenderer && ifcScene && ifcCamera) {
+            ifcRenderer.render(ifcScene, ifcCamera);
+        }
     }
+    walkClock.start();
     animate();
 
     // 1. Motor WebIFC v0.0.78 de That Open Company
@@ -1607,6 +1655,7 @@ async function inicializarVisorIFC(fileUrl, container) {
 // ==============================================================================
 function ajustarVistaModeloIFC() {
     if (!ifcCamera || !ifcControls) return;
+    desactivarModoCaminar();
     const d = ifcModelBounds.maxDim || 25;
     ifcCamera.position.set(d * 1.3, d * 1.0, d * 1.3);
     ifcControls.target.copy(ifcModelBounds.center);
@@ -1615,6 +1664,7 @@ function ajustarVistaModeloIFC() {
 
 function cambiarVistaIFC(tipo) {
     if (!ifcCamera || !ifcControls) return;
+    desactivarModoCaminar();
     const d = ifcModelBounds.maxDim || 25;
     const cy = ifcModelBounds.center.y;
 
@@ -1655,6 +1705,160 @@ function alternarAristasIFC() {
 }
 
 // ==============================================================================
+// HERRAMIENTA DE RECORRIDO EN PRIMERA PERSONA (WALK MODE)
+// ==============================================================================
+function alternarModoCaminarIFC() {
+    isWalkModeActive = !isWalkModeActive;
+    const btn = document.getElementById("btnToggleWalk");
+    const pcHint = document.getElementById("walkPcHint");
+    const touchDpad = document.getElementById("walkTouchContainer");
+    const container = document.getElementById("modalIfcContainer");
+    const esDispositivoTactil = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 992);
+
+    if (isWalkModeActive) {
+        // Desactivar mediciones y paneles para no saturar
+        desactivarModoMedicion();
+        cerrarCardPropiedadesIFC();
+
+        if (ifcControls) ifcControls.enabled = false;
+
+        // Situar cámara a escala peatonal (1.65m sobre la base)
+        const nivelSuelo = ifcModelBounds.center.y - (ifcModelBounds.size.y / 2);
+        const alturaOjo = Math.max(1.65, nivelSuelo + 1.65);
+        ifcCamera.position.set(0, alturaOjo, (ifcModelBounds.size.z / 2) + 2.0);
+
+        // Inicializar ángulos de mirada apuntando al centro
+        walkYaw = Math.PI;
+        walkPitch = 0;
+        aplicarRotacionCaminar();
+
+        if (btn) {
+            btn.style.background = "#10b981";
+            btn.style.color = "#fff";
+            const spanText = btn.querySelector(".btn-nav-text");
+            if (spanText) spanText.innerText = "Caminando...";
+        }
+
+        if (container) container.style.cursor = "move";
+
+        if (esDispositivoTactil) {
+            if (touchDpad) touchDpad.style.display = "flex";
+            if (pcHint) pcHint.style.display = "none";
+        } else {
+            if (pcHint) pcHint.style.display = "block";
+            if (touchDpad) touchDpad.style.display = "none";
+        }
+    } else {
+        desactivarModoCaminar();
+    }
+}
+
+function desactivarModoCaminar() {
+    isWalkModeActive = false;
+    walkMovement.forward = false;
+    walkMovement.backward = false;
+    walkMovement.left = false;
+    walkMovement.right = false;
+
+    const btn = document.getElementById("btnToggleWalk");
+    const pcHint = document.getElementById("walkPcHint");
+    const touchDpad = document.getElementById("walkTouchContainer");
+    const container = document.getElementById("modalIfcContainer");
+
+    if (btn) {
+        btn.style.background = "#1e293b";
+        btn.style.color = "#10b981";
+        const spanText = btn.querySelector(".btn-nav-text");
+        if (spanText) spanText.innerText = "Caminar";
+    }
+
+    if (pcHint) pcHint.style.display = "none";
+    if (touchDpad) touchDpad.style.display = "none";
+    if (container) container.style.cursor = "grab";
+
+    if (ifcControls) {
+        ifcControls.enabled = true;
+        // Enfocar a donde quedó mirando la cámara
+        const forward = new THREE.Vector3(0, 0, -1).applyEuler(ifcCamera.rotation);
+        ifcControls.target.copy(ifcCamera.position).add(forward.multiplyScalar(4));
+        ifcControls.update();
+    }
+}
+
+function aplicarRotacionCaminar() {
+    if (!ifcCamera) return;
+    const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+    euler.x = walkPitch;
+    euler.y = walkYaw;
+    ifcCamera.quaternion.setFromEuler(euler);
+}
+
+function actualizarFisicaCaminar(delta) {
+    if (!isWalkModeActive || !ifcCamera) return;
+
+    const moveVector = new THREE.Vector3();
+    const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), walkYaw);
+    const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), walkYaw);
+
+    if (walkMovement.forward) moveVector.add(forward);
+    if (walkMovement.backward) moveVector.sub(forward);
+    if (walkMovement.left) moveVector.sub(right);
+    if (walkMovement.right) moveVector.add(right);
+
+    if (moveVector.lengthSq() > 0) {
+        moveVector.normalize();
+        const step = moveVector.multiplyScalar(walkSpeed * delta);
+        ifcCamera.position.add(step);
+    }
+}
+
+function setupWalkKeyboardListeners() {
+    window.addEventListener('keydown', (e) => {
+        if (!isWalkModeActive) return;
+        const key = e.key.toLowerCase();
+        if (key === 'w' || key === 'arrowup') walkMovement.forward = true;
+        if (key === 's' || key === 'arrowdown') walkMovement.backward = true;
+        if (key === 'a' || key === 'arrowleft') walkMovement.left = true;
+        if (key === 'd' || key === 'arrowright') walkMovement.right = true;
+    });
+
+    window.addEventListener('keyup', (e) => {
+        if (!isWalkModeActive) return;
+        const key = e.key.toLowerCase();
+        if (key === 'w' || key === 'arrowup') walkMovement.forward = false;
+        if (key === 's' || key === 'arrowdown') walkMovement.backward = false;
+        if (key === 'a' || key === 'arrowleft') walkMovement.left = false;
+        if (key === 'd' || key === 'arrowright') walkMovement.right = false;
+    });
+}
+
+function setupWalkTouchListeners() {
+    const bindBtn = (id, direction) => {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+
+        const startMove = (e) => {
+            e.preventDefault();
+            walkMovement[direction] = true;
+        };
+        const endMove = (e) => {
+            e.preventDefault();
+            walkMovement[direction] = false;
+        };
+
+        btn.addEventListener('pointerdown', startMove);
+        btn.addEventListener('pointerup', endMove);
+        btn.addEventListener('pointercancel', endMove);
+        btn.addEventListener('pointerleave', endMove);
+    };
+
+    bindBtn('btnWalkForward', 'forward');
+    bindBtn('btnWalkBackward', 'backward');
+    bindBtn('btnWalkLeft', 'left');
+    bindBtn('btnWalkRight', 'right');
+}
+
+// ==============================================================================
 // HERRAMIENTA DE MEDICIÓN 3D PUNTO A PUNTO (TOUCH & MOUSE COMPATIBLE)
 // ==============================================================================
 function alternarModoMedicionIFC() {
@@ -1664,6 +1868,7 @@ function alternarModoMedicionIFC() {
     const container = document.getElementById("modalIfcContainer");
 
     if (isMeasureToolActive) {
+        desactivarModoCaminar();
         if (btn) {
             btn.style.background = "#0284c7";
             btn.style.color = "#fff";
@@ -1692,7 +1897,7 @@ function desactivarModoMedicion() {
         if (spanText) spanText.innerText = "Medir";
     }
     if (card) card.style.display = "none";
-    if (container) container.style.cursor = "grab";
+    if (container && !isWalkModeActive) container.style.cursor = "grab";
     limpiarMedicionIFC();
 }
 
