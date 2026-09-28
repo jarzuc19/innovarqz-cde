@@ -37,9 +37,6 @@ let ifcCurrentGroup = null;
 let ifcModelBounds = { center: new THREE.Vector3(), size: new THREE.Vector3(), maxDim: 30 };
 let currentLoadedModelID = null;
 
-// ÁRBOL DE NIVELES BIM
-let ifcBuildingStoreys = [];
-
 // GESTIÓN DE PLANOS DE CORTE / SECCIONES (CLIPPING PLANES)
 let ifcClippingPlane = null;
 let ifcClipInverted = false;
@@ -59,7 +56,7 @@ const measureVisualObjects = [];
 let isWalkModeActive = false;
 const walkMovement = { forward: false, backward: false, left: false, right: false };
 const walkClock = new THREE.Clock();
-const walkSpeed = 3.6;
+const walkSpeed = 3.6; // metros por segundo
 let walkPitch = 0;
 let walkYaw = 0;
 let walkIsDraggingLook = false;
@@ -72,7 +69,7 @@ let highlightedMesh = null;
 let originalMaterial = null;
 const ifcMeshesList = [];
 
-// GESTIÓN DE PUNTERO TÁCTIL Y RATÓN
+// GESTIÓN DE PUNTERO TÁCTIL Y RATÓN (COMPATIBILIDAD MÓVIL/TABLET/PC)
 let pointerDownPos = { x: 0, y: 0 };
 
 // ESTADO DE ZOOM Y PANEO UNIVERSAL (IMÁGENES Y PDF)
@@ -120,6 +117,8 @@ document.addEventListener("DOMContentLoaded", () => {
     setupDropdownWithOther("ubicacionSelect", "ubicacionOtherInput");
     setupDropdownWithOther("tipoSelect", "tipoOtherInput");
     setupUniversalZoomInteractions();
+    setupWalkKeyboardListeners();
+    setupWalkTouchListeners();
 
     window.addEventListener("keydown", (e) => {
         if (e.key === "Escape") cerrarCualquierModalAbierto();
@@ -277,7 +276,7 @@ function actualizarPistaSubcarpetaModal() {
 }
 
 // ==============================================================================
-// AUTENTICACIÓN DIRECTA (CORREO COMO IDENTIFICADOR)
+// AUTENTICACIÓN
 // ==============================================================================
 async function handleLogin(e) {
     e.preventDefault();
@@ -291,24 +290,24 @@ async function handleLogin(e) {
     }
 
     try {
-        const { data: usuarios, error } = await supabaseClient
+        const { data: user, error } = await supabaseClient
             .from("usuarios")
             .select("*")
-            .ilike("email", email);
+            .eq("email", email)
+            .single();
 
-        if (error || !usuarios || usuarios.length === 0) {
+        if (error || !user) {
             alert("Usuario no registrado en la base de datos del CDE o error de conexión.");
             console.error("Error Login Supabase:", error);
             return;
         }
 
-        const user = usuarios[0];
         currentUser = user;
 
         const userInfo = document.getElementById("userInfo");
         if (userInfo) {
             userInfo.innerHTML = `
-                <strong>${user.nombre_completo || user.email}</strong><br>
+                <strong>${user.nombre_completo}</strong><br>
                 <small style="color: var(--accent-copper);">${user.cargo || 'SuperAdmin'}</small>
             `;
         }
@@ -1278,7 +1277,6 @@ function closeViewerModal(triggerHistory = true) {
     cerrarCardPropiedadesIFC();
     desactivarModoMedicion();
     desactivarModoCaminar();
-    cerrarPanelNivelesIFC();
 
     if (ifcAnimationId) {
         cancelAnimationFrame(ifcAnimationId);
@@ -1428,10 +1426,8 @@ async function inicializarVisorIFC(fileUrl, container) {
     }
     ifcMeshesList.length = 0;
     ifcEdgesList.length = 0;
-    ifcBuildingStoreys = [];
     limpiarMedicionIFC();
     desactivarModoCaminar();
-    cerrarPanelNivelesIFC();
 
     const width = container.clientWidth || 800;
     const height = container.clientHeight || 550;
@@ -1453,6 +1449,7 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcControls.enableDamping = true;
     ifcControls.dampingFactor = 0.08;
 
+    // Iluminación Técnica BIM
     const hemiLight = new THREE.HemisphereLight(0xffffff, 0xcfd8dc, 0.85);
     hemiLight.position.set(0, 60, 0);
     ifcScene.add(hemiLight);
@@ -1469,10 +1466,11 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcGridHelper.position.y = -0.01;
     ifcScene.add(ifcGridHelper);
 
+    // Inicializar Raycaster
     raycaster = new THREE.Raycaster();
     mousePointer = new THREE.Vector2();
 
-    // REGISTRO UNIFICADO DE PUNTERO
+    // REGISTRO UNIFICADO DE PUNTERO (MÓVIL, TABLET Y PC)
     ifcRenderer.domElement.addEventListener('pointerdown', (e) => {
         pointerDownPos.x = e.clientX;
         pointerDownPos.y = e.clientY;
@@ -1491,6 +1489,7 @@ async function inicializarVisorIFC(fileUrl, container) {
             walkLastMousePos.x = e.clientX;
             walkLastMousePos.y = e.clientY;
 
+            // Sensibilidad de mirada ergonómica
             walkYaw -= deltaX * 0.0035;
             walkPitch -= deltaY * 0.0035;
             walkPitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, walkPitch));
@@ -1506,6 +1505,7 @@ async function inicializarVisorIFC(fileUrl, container) {
 
         const deltaX = Math.abs(e.clientX - pointerDownPos.x);
         const deltaY = Math.abs(e.clientY - pointerDownPos.y);
+        // Si el desplazamiento es mínimo (menor a 6px), se procesa como toque/clic
         if (deltaX < 6 && deltaY < 6 && !isWalkModeActive) {
             onIfcModelClick(e);
         }
@@ -1527,6 +1527,7 @@ async function inicializarVisorIFC(fileUrl, container) {
     walkClock.start();
     animate();
 
+    // 1. Motor WebIFC v0.0.78 de That Open Company
     const IfcAPIClass = await obtenerConstructorIfcAPI();
     if (!ifcApiInstance) {
         ifcApiInstance = new IfcAPIClass();
@@ -1534,11 +1535,13 @@ async function inicializarVisorIFC(fileUrl, container) {
         await ifcApiInstance.Init();
     }
 
+    // 2. Extraer ID del archivo en Drive
     let fileId = "";
     const match = fileUrl.match(/[-\w]{25,}/);
     if (match) fileId = match[0];
     if (!fileId) throw new Error("No se pudo detectar el ID del archivo en Google Drive.");
 
+    // 3. Descarga Directa Binaria con Google Drive API Key
     const directApiUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${GOOGLE_DRIVE_API_KEY}`;
     const response = await fetch(directApiUrl);
     if (!response.ok) {
@@ -1549,6 +1552,7 @@ async function inicializarVisorIFC(fileUrl, container) {
     const buffer = await response.arrayBuffer();
     const bytesArray = new Uint8Array(buffer);
 
+    // 4. Apertura con configuración avanzada de That Open Company
     const modelSettings = {
         COORDINATE_TO_ORIGIN: true,
         USE_FAST_BOOLS: true
@@ -1557,8 +1561,10 @@ async function inicializarVisorIFC(fileUrl, container) {
     currentLoadedModelID = ifcApiInstance.OpenModel(bytesArray, modelSettings);
     ifcCurrentGroup = new THREE.Group();
 
+    // Inicializar plano de corte en Y
     ifcClippingPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 100);
 
+    // Material de aristas técnicas: vinculado al plano de corte para desaparecer en la sección
     const edgeLineMaterial = new THREE.LineBasicMaterial({
         color: 0x334155,
         transparent: true,
@@ -1566,6 +1572,7 @@ async function inicializarVisorIFC(fileUrl, container) {
         clippingPlanes: [ifcClippingPlane]
     });
 
+    // 5. Procesamiento de mallas con aristas y planos de corte activos
     ifcApiInstance.StreamAllMeshes(currentLoadedModelID, (flatMesh) => {
         const placedGeometries = flatMesh.geometries;
         for (let i = 0; i < placedGeometries.size(); i++) {
@@ -1625,6 +1632,7 @@ async function inicializarVisorIFC(fileUrl, container) {
         }
     });
 
+    // 6. Centrado y caja de encuadre
     const box = new THREE.Box3().setFromObject(ifcCurrentGroup);
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
@@ -1639,131 +1647,8 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcModelBounds.size.copy(size);
     ifcModelBounds.maxDim = Math.max(size.x, size.y, size.z);
 
-    extraerNivelesDelModeloIFC();
     configurarPlanoCorte();
     ajustarVistaModeloIFC();
-    setupWalkTouchListeners();
-}
-
-// ==============================================================================
-// GESTIÓN DEL ÁRBOL DE NIVELES BIM
-// ==============================================================================
-function extraerNivelesDelModeloIFC() {
-    ifcBuildingStoreys = [];
-    if (!ifcApiInstance || currentLoadedModelID === null) return;
-
-    try {
-        if (window.WebIFC && window.WebIFC.IFCBUILDINGSTOREY) {
-            const storeyIDs = ifcApiInstance.GetLineIDsWithType(currentLoadedModelID, window.WebIFC.IFCBUILDINGSTOREY);
-            for (let i = 0; i < storeyIDs.size(); i++) {
-                const id = storeyIDs.get(i);
-                const storey = ifcApiInstance.GetLine(currentLoadedModelID, id);
-                let nombre = storey.Name ? storey.Name.value : `Nivel ${i + 1}`;
-                let elevacion = storey.Elevation ? parseFloat(storey.Elevation.value) : (i * 2.80);
-                ifcBuildingStoreys.push({ id, nombre, elevacion });
-            }
-        }
-    } catch (e) {
-        console.warn("Lectura de IfcBuildingStorey omitida por fallback:", e);
-    }
-
-    if (ifcBuildingStoreys.length === 0) {
-        const totalAltura = ifcModelBounds.size.y || 10;
-        const pisosEstimados = Math.max(1, Math.round(totalAltura / 2.80));
-        for (let p = 0; p < pisosEstimados; p++) {
-            ifcBuildingStoreys.push({
-                id: p,
-                nombre: (p === 0) ? "Planta Baja (Nivel 1)" : `Piso ${p + 1}`,
-                elevacion: p * 2.80
-            });
-        }
-    }
-
-    ifcBuildingStoreys.sort((a, b) => a.elevacion - b.elevacion);
-    renderizarListaNivelesIFC();
-}
-
-function renderizarListaNivelesIFC() {
-    const listCont = document.getElementById("ifcLevelsList");
-    if (!listCont) return;
-
-    if (ifcBuildingStoreys.length === 0) {
-        listCont.innerHTML = `<small style="color:#94a3b8;">No se detectaron niveles definidos en el IFC.</small>`;
-        return;
-    }
-
-    let html = "";
-    ifcBuildingStoreys.forEach((lvl) => {
-        const elevStr = lvl.elevacion >= 0 ? `+${lvl.elevacion.toFixed(2)}` : `${lvl.elevacion.toFixed(2)}`;
-        html += `
-            <div class="ifc-level-item">
-                <div>
-                    <strong>${lvl.nombre}</strong><br>
-                    <small style="color: #38bdf8;">Cota: ${elevStr} m</small>
-                </div>
-                <div class="ifc-level-actions">
-                    <button type="button" class="btn-level-act" style="background: #0284c7; color:#fff;" onclick="cortarEnNivel(${lvl.elevacion})" title="Cortar sección en este piso">✂️ Cortar</button>
-                    <button type="button" class="btn-level-act" style="background: #10b981; color:#fff;" onclick="caminarEnNivel(${lvl.elevacion})" title="Entrar a caminar en este piso">🚶 Entrar</button>
-                </div>
-            </div>
-        `;
-    });
-    listCont.innerHTML = html;
-}
-
-function alternarPanelNivelesIFC() {
-    const panel = document.getElementById("ifcLevelsCard");
-    const btn = document.getElementById("btnToggleLevels");
-    if (!panel) return;
-
-    const visible = panel.style.display === "block";
-    panel.style.display = visible ? "none" : "block";
-    if (btn) btn.style.background = visible ? "#1e293b" : "#10b981";
-    if (btn) btn.style.color = visible ? "#10b981" : "#fff";
-}
-
-function cerrarPanelNivelesIFC() {
-    const panel = document.getElementById("ifcLevelsCard");
-    const btn = document.getElementById("btnToggleLevels");
-    if (panel) panel.style.display = "none";
-    if (btn) {
-        btn.style.background = "#1e293b";
-        btn.style.color = "#10b981";
-    }
-}
-
-function cortarEnNivel(elevacionPiso) {
-    if (!ifcClippingPlane) return;
-
-    isSectionToolActive = true;
-    const panel = document.getElementById("ifcSectionToolPanel");
-    const btn = document.getElementById("btnToggleSectionBox");
-    if (panel) panel.style.display = "block";
-    if (btn) btn.style.background = "#10b981";
-
-    const radios = document.getElementsByName("clipAxis");
-    radios.forEach(r => { if (r.value === 'Y') r.checked = true; });
-    ifcClipAxis = 'Y';
-    ifcClipInverted = false;
-    ifcClippingPlane.normal.set(0, -1, 0);
-
-    const cotaCorte = elevacionPiso + 1.20;
-    ifcClippingPlane.constant = cotaCorte;
-
-    const max = ifcModelBounds.size.y || 20;
-    const pct = Math.min(100, Math.max(0, (cotaCorte / max) * 100));
-    const slider = document.getElementById("clipSlider");
-    if (slider) slider.value = pct;
-}
-
-function caminarEnNivel(elevacionPiso) {
-    cerrarPanelNivelesIFC();
-    if (!isWalkModeActive) {
-        alternarModoCaminarIFC(elevacionPiso);
-    } else {
-        const cotaOjo = elevacionPiso + 1.65;
-        ifcCamera.position.set(0, cotaOjo, 0.5);
-    }
 }
 
 // ==============================================================================
@@ -1772,7 +1657,6 @@ function caminarEnNivel(elevacionPiso) {
 function ajustarVistaModeloIFC() {
     if (!ifcCamera || !ifcControls) return;
     desactivarModoCaminar();
-    cerrarPanelNivelesIFC();
     const d = ifcModelBounds.maxDim || 25;
     ifcCamera.position.set(d * 1.3, d * 1.0, d * 1.3);
     ifcControls.target.copy(ifcModelBounds.center);
@@ -1782,7 +1666,6 @@ function ajustarVistaModeloIFC() {
 function cambiarVistaIFC(tipo) {
     if (!ifcCamera || !ifcControls) return;
     desactivarModoCaminar();
-    cerrarPanelNivelesIFC();
     const d = ifcModelBounds.maxDim || 25;
     const cy = ifcModelBounds.center.y;
 
@@ -1823,9 +1706,9 @@ function alternarAristasIFC() {
 }
 
 // ==============================================================================
-// HERRAMIENTA DE RECORRIDO EN PRIMERA PERSONA (WALK MODE)
+// HERRAMIENTA DE RECORRIDO EN PRIMERA PERSONA (WALK MODE CORREGIDA)
 // ==============================================================================
-function alternarModoCaminarIFC(cotaSueloManual = null) {
+function alternarModoCaminarIFC() {
     isWalkModeActive = !isWalkModeActive;
     const btn = document.getElementById("btnToggleWalk");
     const pcHint = document.getElementById("walkPcHint");
@@ -1834,23 +1717,21 @@ function alternarModoCaminarIFC(cotaSueloManual = null) {
     const esDispositivoTactil = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 992);
 
     if (isWalkModeActive) {
+        // Desactivar mediciones y paneles para no saturar la vista
         desactivarModoMedicion();
         cerrarCardPropiedadesIFC();
 
         if (ifcControls) ifcControls.enabled = false;
 
-        let cotaBase = 0;
-        if (cotaSueloManual !== null) {
-            cotaBase = cotaSueloManual;
-        } else if (ifcBuildingStoreys.length > 0) {
-            cotaBase = ifcBuildingStoreys[0].elevacion;
-        } else {
-            cotaBase = Math.max(0, ifcModelBounds.center.y - (ifcModelBounds.size.y / 2));
-        }
-
-        const alturaOjoHumano = cotaBase + 1.65;
+        // Teletransporte al interior del edificio:
+        // Se ubica en el centro de planta (0, 0) y a 1.65m sobre el piso base
+        const nivelPisoBase = Math.max(0, ifcModelBounds.center.y - (ifcModelBounds.size.y / 2));
+        const alturaOjoHumano = nivelPisoBase + 1.65;
+        
+        // Ubicamos la cámara adentro (ligeramente corrida hacia el acceso interior)
         ifcCamera.position.set(0, alturaOjoHumano, 0.5);
 
+        // Orientar la mirada hacia el interior del edificio (rumbo norte/profundidad)
         walkYaw = Math.PI;
         walkPitch = 0;
         aplicarRotacionCaminar();
@@ -1983,7 +1864,7 @@ function setupWalkTouchListeners() {
 }
 
 // ==============================================================================
-// HERRAMIENTA DE MEDICIÓN 3D PUNTO A PUNTO
+// HERRAMIENTA DE MEDICIÓN 3D PUNTO A PUNTO (TOUCH & MOUSE COMPATIBLE)
 // ==============================================================================
 function alternarModoMedicionIFC() {
     isMeasureToolActive = !isMeasureToolActive;
@@ -1993,7 +1874,6 @@ function alternarModoMedicionIFC() {
 
     if (isMeasureToolActive) {
         desactivarModoCaminar();
-        cerrarPanelNivelesIFC();
         if (btn) {
             btn.style.background = "#0284c7";
             btn.style.color = "#fff";
@@ -2051,6 +1931,7 @@ function procesarClickMedicion(intersectPoint) {
 
     measurePoints.push(intersectPoint.clone());
 
+    // Marcador esférico visible siempre en primer plano
     const sphereGeo = new THREE.SphereGeometry(0.2, 16, 16);
     const sphereMat = new THREE.MeshBasicMaterial({ 
         color: (measurePoints.length === 1) ? 0x38bdf8 : 0x10b981, 
@@ -2075,6 +1956,7 @@ function procesarClickMedicion(intersectPoint) {
         const p1 = measurePoints[0];
         const p2 = measurePoints[1];
 
+        // Línea conectora 3D en primer plano
         const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
         const lineMat = new THREE.LineBasicMaterial({ 
             color: 0x10b981, 
@@ -2087,6 +1969,7 @@ function procesarClickMedicion(intersectPoint) {
         ifcScene.add(lineObj);
         measureVisualObjects.push(lineObj);
 
+        // Cálculos métricos
         const distReal = p1.distanceTo(p2);
         const distY = Math.abs(p2.y - p1.y);
         const distXZ = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.z - p1.z, 2));
@@ -2176,6 +2059,7 @@ function onIfcModelClick(event) {
 
     raycaster.setFromCamera(mousePointer, ifcCamera);
     
+    // Filtrar solo las mallas válidas del modelo
     const mallasValidas = ifcMeshesList.filter(m => m.visible);
     const intersects = raycaster.intersectObjects(mallasValidas, false);
 
@@ -2196,11 +2080,13 @@ function onIfcModelClick(event) {
 
         if (!hit) return;
 
+        // MODO MEDICIÓN ACTIVO
         if (isMeasureToolActive) {
             procesarClickMedicion(hit.point);
             return;
         }
 
+        // MODO INSPECCIÓN DE PROPIEDADES
         resaltarElementoIFC(hit.object);
         mostrarPropiedadesElementoIFC(hit.object.userData);
     }
@@ -2266,7 +2152,7 @@ function cerrarCardPropiedadesIFC() {
 }
 
 // ==============================================================================
-// RENDERIZADO DE ENTREGABLES
+// RENDERIZADO DE ENTREGABLES CON EXCLUSIÓN DE EVENTOS DE AUDITORÍA
 // ==============================================================================
 async function loadFiles() {
     const tbody = document.getElementById("filesTableBody");
