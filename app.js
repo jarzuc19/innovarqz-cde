@@ -57,6 +57,7 @@ const measureVisualObjects = [];
 
 // HERRAMIENTA DE RECORRIDO EN PRIMERA PERSONA (WALK MODE)
 let isWalkModeActive = false;
+let isPickSlabModeActive = false; // Modo para seleccionar losa directamente en pantalla
 const walkMovement = { forward: false, backward: false, left: false, right: false };
 const walkClock = new THREE.Clock();
 const walkSpeed = 3.6; // metros por segundo
@@ -1478,7 +1479,7 @@ async function inicializarVisorIFC(fileUrl, container) {
         pointerDownPos.x = e.clientX;
         pointerDownPos.y = e.clientY;
 
-        if (isWalkModeActive) {
+        if (isWalkModeActive && !isPickSlabModeActive) {
             walkIsDraggingLook = true;
             walkLastMousePos.x = e.clientX;
             walkLastMousePos.y = e.clientY;
@@ -1486,7 +1487,7 @@ async function inicializarVisorIFC(fileUrl, container) {
     });
 
     window.addEventListener('pointermove', (e) => {
-        if (isWalkModeActive && walkIsDraggingLook) {
+        if (isWalkModeActive && walkIsDraggingLook && !isPickSlabModeActive) {
             const deltaX = e.clientX - walkLastMousePos.x;
             const deltaY = e.clientY - walkLastMousePos.y;
             walkLastMousePos.x = e.clientX;
@@ -1508,15 +1509,18 @@ async function inicializarVisorIFC(fileUrl, container) {
 
         const deltaX = Math.abs(e.clientX - pointerDownPos.x);
         const deltaY = Math.abs(e.clientY - pointerDownPos.y);
-        if (deltaX < 6 && deltaY < 6 && !isWalkModeActive) {
-            onIfcModelClick(e);
+        // Procesar clic si no hubo arrastre
+        if (deltaX < 6 && deltaY < 6) {
+            if (isPickSlabModeActive || !isWalkModeActive) {
+                onIfcModelClick(e);
+            }
         }
     });
 
     function animate() {
         ifcAnimationId = requestAnimationFrame(animate);
 
-        if (isWalkModeActive) {
+        if (isWalkModeActive && !isPickSlabModeActive) {
             actualizarFisicaCaminar(walkClock.getDelta());
         } else if (ifcControls) {
             ifcControls.update();
@@ -1627,12 +1631,15 @@ async function inicializarVisorIFC(fileUrl, container) {
         }
     });
 
+    // Centrado de la geometría del edificio en la escena de Three.js
     const box = new THREE.Box3().setFromObject(ifcCurrentGroup);
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
 
+    // Desplazamiento vertical matemático exacto
+    const offsetGroupY = -(center.y - (size.y / 2));
     ifcCurrentGroup.position.x -= center.x;
-    ifcCurrentGroup.position.y -= center.y - (size.y / 2);
+    ifcCurrentGroup.position.y += offsetGroupY;
     ifcCurrentGroup.position.z -= center.z;
 
     ifcScene.add(ifcCurrentGroup);
@@ -1640,6 +1647,7 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcModelBounds.center.set(0, size.y / 2, 0);
     ifcModelBounds.size.copy(size);
     ifcModelBounds.maxDim = Math.max(size.x, size.y, size.z);
+    ifcModelBounds.offsetY = offsetGroupY; // Guardar el desfase vertical exacto
 
     extraerNivelesDelModeloIFC();
     configurarEscuchadoresVisorDiferidos();
@@ -1649,13 +1657,14 @@ async function inicializarVisorIFC(fileUrl, container) {
 }
 
 // ==============================================================================
-// GESTIÓN DEL ÁRBOL DE NIVELES BIM (CALIBRADO AL MODELO EN ESCENA)
+// GESTIÓN DEL ÁRBOL DE NIVELES BIM (PARAMÉTRICO UNIVERSAL)
 // ==============================================================================
 function extraerNivelesDelModeloIFC() {
     ifcBuildingStoreys = [];
     if (!ifcApiInstance || currentLoadedModelID === null) return;
 
     const listaNivelesRaw = [];
+    const offsetGroupY = (ifcModelBounds && ifcModelBounds.offsetY) ? ifcModelBounds.offsetY : 0;
 
     try {
         if (window.WebIFC && window.WebIFC.IFCBUILDINGSTOREY) {
@@ -1664,27 +1673,33 @@ function extraerNivelesDelModeloIFC() {
                 const id = storeyIDs.get(i);
                 const storey = ifcApiInstance.GetLine(currentLoadedModelID, id);
                 let nombre = storey.Name ? storey.Name.value : `Nivel ${i + 1}`;
-                let elevacion = storey.Elevation ? parseFloat(storey.Elevation.value) : 0;
-                listaNivelesRaw.push({ id, nombre, elevacionOriginal: elevacion });
+                let elevacionNativa = (storey.Elevation && storey.Elevation.value !== undefined) 
+                    ? parseFloat(storey.Elevation.value) 
+                    : 0;
+
+                listaNivelesRaw.push({
+                    id: id,
+                    nombre: nombre,
+                    cotaNativa: elevacionNativa,
+                    // Cota real en el espacio 3D de Three.js (Cota IFC + Desfase vertical de centrado)
+                    cotaEscena: elevacionNativa + offsetGroupY
+                });
             }
         }
     } catch (e) {
-        console.warn("Lectura directa de IfcBuildingStorey omitida por fallback:", e);
+        console.warn("Lectura paramétrica de IfcBuildingStorey omitida por fallback:", e);
     }
 
     if (listaNivelesRaw.length > 0) {
-        // Ordenar por elevación original para identificar la base real del proyecto
-        listaNivelesRaw.sort((a, b) => a.elevacionOriginal - b.elevacionOriginal);
-        const elevacionBaseProyecto = listaNivelesRaw[0].elevacionOriginal;
-
-        // Normalizar para que el primer piso arranque exactamente en Y = 0 (sobre la losa en Three.js)
+        listaNivelesRaw.sort((a, b) => a.cotaNativa - b.cotaNativa);
         ifcBuildingStoreys = listaNivelesRaw.map(lvl => ({
             id: lvl.id,
             nombre: lvl.nombre,
-            elevacion: lvl.elevacionOriginal - elevacionBaseProyecto
+            cotaNativa: lvl.cotaNativa,
+            cotaEscena: lvl.cotaEscena
         }));
     } else {
-        // Fallback inteligente: dividir la altura geométrica real de la caja envolvente
+        // Fallback paramétrico puro si el IFC no define pisos
         const totalAltura = ifcModelBounds.size.y || 10;
         const pisosEstimados = Math.max(1, Math.round(totalAltura / 2.80));
         const pasoPiso = totalAltura / pisosEstimados;
@@ -1692,13 +1707,13 @@ function extraerNivelesDelModeloIFC() {
         for (let p = 0; p < pisosEstimados; p++) {
             ifcBuildingStoreys.push({
                 id: p,
-                nombre: (p === 0) ? "Planta Baja (Nivel 1)" : `Piso ${p + 1}`,
-                elevacion: p * pasoPiso
+                nombre: (p === 0) ? "Nivel 1" : `Piso ${p + 1}`,
+                cotaNativa: p * pasoPiso,
+                cotaEscena: p * pasoPiso
             });
         }
     }
 
-    ifcBuildingStoreys.sort((a, b) => a.elevacion - b.elevacion);
     renderizarListaNivelesIFC();
 }
 
@@ -1713,16 +1728,16 @@ function renderizarListaNivelesIFC() {
 
     let html = "";
     ifcBuildingStoreys.forEach((lvl) => {
-        const elevStr = lvl.elevacion >= 0 ? `+${lvl.elevacion.toFixed(2)}` : `${lvl.elevacion.toFixed(2)}`;
+        const cotaDisplay = (lvl.cotaNativa >= 0) ? `+${lvl.cotaNativa.toFixed(2)}` : `${lvl.cotaNativa.toFixed(2)}`;
         html += `
             <div class="ifc-level-item">
                 <div>
                     <strong>${lvl.nombre}</strong><br>
-                    <small style="color: #38bdf8;">Cota de Losa: ${elevStr} m</small>
+                    <small style="color: #38bdf8;">Cota IFC: ${cotaDisplay} m</small>
                 </div>
                 <div class="ifc-level-actions">
-                    <button type="button" class="btn-level-act" style="background: #0284c7; color:#fff;" onclick="cortarEnNivel(${lvl.elevacion})" title="Cortar sección en este piso">✂️ Cortar</button>
-                    <button type="button" class="btn-level-act" style="background: #10b981; color:#fff;" onclick="caminarEnNivel(${lvl.elevacion})" title="Entrar a caminar sobre esta losa">🚶 Entrar</button>
+                    <button type="button" class="btn-level-act" style="background: #0284c7; color:#fff;" onclick="cortarEnNivel(${lvl.cotaEscena})" title="Cortar sección en este piso">✂️ Cortar</button>
+                    <button type="button" class="btn-level-act" style="background: #10b981; color:#fff;" onclick="caminarEnNivel(${lvl.cotaEscena})" title="Entrar a caminar en este piso">🚶 Entrar</button>
                 </div>
             </div>
         `;
@@ -1751,7 +1766,7 @@ function cerrarPanelNivelesIFC() {
     }
 }
 
-function cortarEnNivel(elevacionPiso) {
+function cortarEnNivel(cotaLosaEscena) {
     if (!ifcClippingPlane) return;
 
     isSectionToolActive = true;
@@ -1766,8 +1781,8 @@ function cortarEnNivel(elevacionPiso) {
     ifcClipInverted = false;
     ifcClippingPlane.normal.set(0, -1, 0);
 
-    // Corte a 1.20 m sobre la superficie de la losa seleccionada
-    const cotaCorte = elevacionPiso + 1.20;
+    // Corte a 1.20 m sobre la cota geométrica de la planta seleccionada
+    const cotaCorte = cotaLosaEscena + 1.20;
     ifcClippingPlane.constant = cotaCorte;
 
     const max = ifcModelBounds.size.y || 20;
@@ -1776,15 +1791,226 @@ function cortarEnNivel(elevacionPiso) {
     if (slider) slider.value = pct;
 }
 
-function caminarEnNivel(elevacionPiso) {
-    cerrarPanelNivelesIFC();
-    if (!isWalkModeActive) {
-        alternarModoCaminarIFC(elevacionPiso);
-    } else {
-        // Altura de ojo exacta a 1.65 m sobre la losa terminada
-        const cotaOjo = elevacionPiso + 1.65;
-        ifcCamera.position.set(0, cotaOjo, 0.5);
+// ==============================================================================
+// DETECCIÓN FÍSICA DE FORJADO / LOSA Y MODO CAMINAR
+// ==============================================================================
+function detectarAlturaRealLosa(x, cotaAproximadaY, z) {
+    if (!ifcScene) return cotaAproximadaY;
+
+    // Lanzar un rayo vertical descendente desde 2m por encima de la cota estimada
+    const origenRayo = new THREE.Vector3(x, cotaAproximadaY + 2.0, z);
+    const direccionAbajo = new THREE.Vector3(0, -1, 0);
+    const rayoVertical = new THREE.Raycaster(origenRayo, direccionAbajo, 0, 8.0);
+
+    const mallasValidas = ifcMeshesList.filter(m => m.visible);
+    const intersecciones = rayoVertical.intersectObjects(mallasValidas, false);
+
+    if (intersecciones.length > 0) {
+        // Devuelve la cota Y exacta de la cara superior de la losa donde impacta el rayo
+        return intersecciones[0].point.y;
     }
+
+    return cotaAproximadaY;
+}
+
+function caminarEnNivel(cotaLosaEscena) {
+    cerrarPanelNivelesIFC();
+    desactivarSeleccionLosa();
+
+    // Intentar buscar losa física en el centro interior (X=0, Z=0.5)
+    const cotaFisicaLosa = detectarAlturaRealLosa(0, cotaLosaEscena, 0.5);
+
+    iniciarModoCaminarEnCoordenadas(0, cotaFisicaLosa, 0.5);
+}
+
+// Disparador del botón de la barra lateral: permite escoger la losa en pantalla
+function activarSeleccionLosaCaminar() {
+    desactivarModoMedicion();
+    cerrarCardPropiedadesIFC();
+    cerrarPanelNivelesIFC();
+
+    isPickSlabModeActive = !isPickSlabModeActive;
+    const btn = document.getElementById("btnToggleWalk");
+    const container = document.getElementById("modalIfcContainer");
+    const pcHint = document.getElementById("walkPcHint");
+    const statusLabel = document.getElementById("walkStatusLabel");
+
+    if (isPickSlabModeActive) {
+        if (btn) {
+            btn.style.background = "#d97706";
+            btn.style.color = "#fff";
+        }
+        if (container) container.style.cursor = "pointer";
+
+        if (pcHint && statusLabel) {
+            statusLabel.innerHTML = "🎯 <strong>Haz clic sobre la losa o forjado</strong> donde deseas pararte...";
+            pcHint.style.display = "flex";
+        }
+    } else {
+        desactivarModoCaminar();
+    }
+}
+
+function desactivarSeleccionLosa() {
+    isPickSlabModeActive = false;
+    const btn = document.getElementById("btnToggleWalk");
+    if (btn && !isWalkModeActive) {
+        btn.style.background = "#1e293b";
+        btn.style.color = "#10b981";
+    }
+}
+
+function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
+    isWalkModeActive = true;
+    isPickSlabModeActive = false;
+
+    const btn = document.getElementById("btnToggleWalk");
+    const pcHint = document.getElementById("walkPcHint");
+    const statusLabel = document.getElementById("walkStatusLabel");
+    const touchDpad = document.getElementById("walkTouchContainer");
+    const container = document.getElementById("modalIfcContainer");
+    const esDispositivoTactil = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 992);
+
+    if (ifcControls) ifcControls.enabled = false;
+
+    // Altura de ojo humana exacta: +1.65 m sobre la cara superior de la losa
+    const alturaOjoHumano = yLosa + 1.65;
+    ifcCamera.position.set(x, alturaOjoHumano, z);
+
+    walkYaw = Math.PI;
+    walkPitch = 0;
+    aplicarRotacionCaminar();
+
+    if (btn) {
+        btn.style.background = "#10b981";
+        btn.style.color = "#fff";
+    }
+
+    if (container) container.style.cursor = "move";
+
+    if (statusLabel) {
+        statusLabel.innerHTML = "🚶 <strong>Modo Caminar:</strong> Usa <strong>W, A, S, D</strong> para moverte y arrastra para mirar";
+    }
+
+    if (esDispositivoTactil) {
+        if (touchDpad) touchDpad.style.display = "flex";
+        if (pcHint) pcHint.style.display = "none";
+    } else {
+        if (pcHint) pcHint.style.display = "flex";
+        if (touchDpad) touchDpad.style.display = "none";
+    }
+}
+
+function desactivarModoCaminar() {
+    isWalkModeActive = false;
+    isPickSlabModeActive = false;
+    walkMovement.forward = false;
+    walkMovement.backward = false;
+    walkMovement.left = false;
+    walkMovement.right = false;
+
+    const btn = document.getElementById("btnToggleWalk");
+    const pcHint = document.getElementById("walkPcHint");
+    const touchDpad = document.getElementById("walkTouchContainer");
+    const container = document.getElementById("modalIfcContainer");
+
+    if (btn) {
+        btn.style.background = "#1e293b";
+        btn.style.color = "#10b981";
+    }
+
+    if (pcHint) pcHint.style.display = "none";
+    if (touchDpad) touchDpad.style.display = "none";
+    if (container) container.style.cursor = "grab";
+
+    if (ifcControls) {
+        ifcControls.enabled = true;
+        const forward = new THREE.Vector3(0, 0, -1).applyEuler(ifcCamera.rotation);
+        ifcControls.target.copy(ifcCamera.position).add(forward.multiplyScalar(5));
+        ifcControls.update();
+    }
+}
+
+function aplicarRotacionCaminar() {
+    if (!ifcCamera) return;
+    const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+    euler.x = walkPitch;
+    euler.y = walkYaw;
+    ifcCamera.quaternion.setFromEuler(euler);
+}
+
+function actualizarFisicaCaminar(delta) {
+    if (!isWalkModeActive || !ifcCamera) return;
+
+    const moveVector = new THREE.Vector3();
+    const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), walkYaw);
+    const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), walkYaw);
+
+    if (walkMovement.forward) moveVector.add(forward);
+    if (walkMovement.backward) moveVector.sub(forward);
+    if (walkMovement.left) moveVector.sub(right);
+    if (walkMovement.right) moveVector.add(right);
+
+    if (moveVector.lengthSq() > 0) {
+        moveVector.normalize();
+        const step = moveVector.multiplyScalar(walkSpeed * delta);
+        ifcCamera.position.add(step);
+    }
+}
+
+function configurarEscuchadoresVisorDiferidos() {
+    if (walkListenersConfigured) return;
+    setupWalkKeyboardListeners();
+    setupWalkTouchListeners();
+    walkListenersConfigured = true;
+}
+
+function setupWalkKeyboardListeners() {
+    window.addEventListener('keydown', (e) => {
+        if (!isWalkModeActive || isPickSlabModeActive) return;
+        const key = e.key.toLowerCase();
+        if (key === 'w' || key === 'arrowup') walkMovement.forward = true;
+        if (key === 's' || key === 'arrowdown') walkMovement.backward = true;
+        if (key === 'a' || key === 'arrowleft') walkMovement.left = true;
+        if (key === 'd' || key === 'arrowright') walkMovement.right = true;
+    });
+
+    window.addEventListener('keyup', (e) => {
+        if (!isWalkModeActive || isPickSlabModeActive) return;
+        const key = e.key.toLowerCase();
+        if (key === 'w' || key === 'arrowup') walkMovement.forward = false;
+        if (key === 's' || key === 'arrowdown') walkMovement.backward = false;
+        if (key === 'a' || key === 'arrowleft') walkMovement.left = false;
+        if (key === 'd' || key === 'arrowright') walkMovement.right = false;
+    });
+}
+
+function setupWalkTouchListeners() {
+    const bindBtn = (id, direction) => {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+
+        const startMove = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            walkMovement[direction] = true;
+        };
+        const endMove = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            walkMovement[direction] = false;
+        };
+
+        btn.addEventListener('pointerdown', startMove);
+        btn.addEventListener('pointerup', endMove);
+        btn.addEventListener('pointercancel', endMove);
+        btn.addEventListener('pointerleave', endMove);
+    };
+
+    bindBtn('btnWalkForward', 'forward');
+    bindBtn('btnWalkBackward', 'backward');
+    bindBtn('btnWalkLeft', 'left');
+    bindBtn('btnWalkRight', 'right');
 }
 
 // ==============================================================================
@@ -1841,158 +2067,6 @@ function alternarAristasIFC() {
         btn.style.color = ifcEdgesVisible ? "#cbd5e1" : "#ef4444";
         btn.style.borderColor = ifcEdgesVisible ? "#475569" : "#ef4444";
     }
-}
-
-// ==============================================================================
-// HERRAMIENTA DE RECORRIDO EN PRIMERA PERSONA (WALK MODE CALIBRADA)
-// ==============================================================================
-function configurarEscuchadoresVisorDiferidos() {
-    if (walkListenersConfigured) return;
-    setupWalkKeyboardListeners();
-    setupWalkTouchListeners();
-    walkListenersConfigured = true;
-}
-
-function alternarModoCaminarIFC(cotaSueloManual = null) {
-    isWalkModeActive = !isWalkModeActive;
-    const pcHint = document.getElementById("walkPcHint");
-    const touchDpad = document.getElementById("walkTouchContainer");
-    const container = document.getElementById("modalIfcContainer");
-    const esDispositivoTactil = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 992);
-
-    if (isWalkModeActive) {
-        desactivarModoMedicion();
-        cerrarCardPropiedadesIFC();
-
-        if (ifcControls) ifcControls.enabled = false;
-
-        // Cota base calibrada a la losa del nivel
-        let cotaBase = 0;
-        if (cotaSueloManual !== null) {
-            cotaBase = cotaSueloManual;
-        } else if (ifcBuildingStoreys.length > 0) {
-            cotaBase = ifcBuildingStoreys[0].elevacion;
-        } else {
-            cotaBase = 0; // Apoyado en la base de la escena
-        }
-
-        const alturaOjoHumano = cotaBase + 1.65;
-        ifcCamera.position.set(0, alturaOjoHumano, 0.5);
-
-        walkYaw = Math.PI;
-        walkPitch = 0;
-        aplicarRotacionCaminar();
-
-        if (container) container.style.cursor = "move";
-
-        if (esDispositivoTactil) {
-            if (touchDpad) touchDpad.style.display = "flex";
-            if (pcHint) pcHint.style.display = "none";
-        } else {
-            if (pcHint) pcHint.style.display = "flex";
-            if (touchDpad) touchDpad.style.display = "none";
-        }
-    } else {
-        desactivarModoCaminar();
-    }
-}
-
-function desactivarModoCaminar() {
-    isWalkModeActive = false;
-    walkMovement.forward = false;
-    walkMovement.backward = false;
-    walkMovement.left = false;
-    walkMovement.right = false;
-
-    const pcHint = document.getElementById("walkPcHint");
-    const touchDpad = document.getElementById("walkTouchContainer");
-    const container = document.getElementById("modalIfcContainer");
-
-    if (pcHint) pcHint.style.display = "none";
-    if (touchDpad) touchDpad.style.display = "none";
-    if (container) container.style.cursor = "grab";
-
-    if (ifcControls) {
-        ifcControls.enabled = true;
-        const forward = new THREE.Vector3(0, 0, -1).applyEuler(ifcCamera.rotation);
-        ifcControls.target.copy(ifcCamera.position).add(forward.multiplyScalar(5));
-        ifcControls.update();
-    }
-}
-
-function aplicarRotacionCaminar() {
-    if (!ifcCamera) return;
-    const euler = new THREE.Euler(0, 0, 0, 'YXZ');
-    euler.x = walkPitch;
-    euler.y = walkYaw;
-    ifcCamera.quaternion.setFromEuler(euler);
-}
-
-function actualizarFisicaCaminar(delta) {
-    if (!isWalkModeActive || !ifcCamera) return;
-
-    const moveVector = new THREE.Vector3();
-    const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), walkYaw);
-    const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), walkYaw);
-
-    if (walkMovement.forward) moveVector.add(forward);
-    if (walkMovement.backward) moveVector.sub(forward);
-    if (walkMovement.left) moveVector.sub(right);
-    if (walkMovement.right) moveVector.add(right);
-
-    if (moveVector.lengthSq() > 0) {
-        moveVector.normalize();
-        const step = moveVector.multiplyScalar(walkSpeed * delta);
-        ifcCamera.position.add(step);
-    }
-}
-
-function setupWalkKeyboardListeners() {
-    window.addEventListener('keydown', (e) => {
-        if (!isWalkModeActive) return;
-        const key = e.key.toLowerCase();
-        if (key === 'w' || key === 'arrowup') walkMovement.forward = true;
-        if (key === 's' || key === 'arrowdown') walkMovement.backward = true;
-        if (key === 'a' || key === 'arrowleft') walkMovement.left = true;
-        if (key === 'd' || key === 'arrowright') walkMovement.right = true;
-    });
-
-    window.addEventListener('keyup', (e) => {
-        if (!isWalkModeActive) return;
-        const key = e.key.toLowerCase();
-        if (key === 'w' || key === 'arrowup') walkMovement.forward = false;
-        if (key === 's' || key === 'arrowdown') walkMovement.backward = false;
-        if (key === 'a' || key === 'arrowleft') walkMovement.left = false;
-        if (key === 'd' || key === 'arrowright') walkMovement.right = false;
-    });
-}
-
-function setupWalkTouchListeners() {
-    const bindBtn = (id, direction) => {
-        const btn = document.getElementById(id);
-        if (!btn) return;
-
-        const startMove = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            walkMovement[direction] = true;
-        };
-        const endMove = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            walkMovement[direction] = false;
-        };
-
-        btn.addEventListener('pointerdown', startMove);
-        btn.addEventListener('pointerup', endMove);
-        btn.addEventListener('pointercancel', endMove);
-        btn.addEventListener('pointerleave', endMove);
-    };
-
-    bindBtn('btnWalkForward', 'forward');
-    bindBtn('btnWalkBackward', 'backward');
-    bindBtn('btnWalkLeft', 'left');
-    bindBtn('btnWalkRight', 'right');
 }
 
 // ==============================================================================
@@ -2209,11 +2283,19 @@ function onIfcModelClick(event) {
 
         if (!hit) return;
 
+        // 1. MODO SELECCIÓN DE LOSA / FORJADO DIRECTO PARA CAMINAR
+        if (isPickSlabModeActive) {
+            iniciarModoCaminarEnCoordenadas(hit.point.x, hit.point.y, hit.point.z);
+            return;
+        }
+
+        // 2. MODO MEDICIÓN ACTIVO
         if (isMeasureToolActive) {
             procesarClickMedicion(hit.point);
             return;
         }
 
+        // 3. MODO INSPECCIÓN DE PROPIEDADES
         resaltarElementoIFC(hit.object);
         mostrarPropiedadesElementoIFC(hit.object.userData);
     }
