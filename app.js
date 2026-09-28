@@ -72,6 +72,7 @@ let raycaster = null;
 let mousePointer = null;
 let highlightedMesh = null;
 let originalMaterial = null;
+let lastClickedMesh = null; // Guardar referencia para ocultar por menú contextual
 const ifcMeshesList = [];
 
 // GESTIÓN DE PUNTERO TÁCTIL Y RATÓN (COMPATIBILIDAD MÓVIL/TABLET/PC)
@@ -124,7 +125,12 @@ document.addEventListener("DOMContentLoaded", () => {
     setupUniversalZoomInteractions();
 
     window.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") cerrarCualquierModalAbierto();
+        if (e.key === "Escape") {
+            ocultarMenuContextualIFC();
+            if (isMeasureToolActive) desactivarModoMedicion();
+            if (isWalkModeActive) desactivarModoCaminar();
+            cerrarCualquierModalAbierto();
+        }
     });
 
     window.addEventListener("popstate", () => {
@@ -1277,6 +1283,7 @@ function closeViewerModal(triggerHistory = true) {
     if (loading) loading.style.display = "none";
 
     resetActiveZoom();
+    ocultarMenuContextualIFC();
     cerrarCardPropiedadesIFC();
     desactivarModoMedicion();
     desactivarModoCaminar();
@@ -1431,14 +1438,11 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcMeshesList.length = 0;
     ifcEdgesList.length = 0;
     ifcBuildingStoreys = [];
+    lastClickedMesh = null;
     limpiarMedicionIFC();
     desactivarModoCaminar();
     cerrarPanelNivelesIFC();
-
-    // 1. Bloqueo estricto del menú contextual en el visor 3D para evitar interferencias con el clic derecho
-    container.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-    });
+    ocultarMenuContextualIFC();
 
     const width = container.clientWidth || 800;
     const height = container.clientHeight || 550;
@@ -1449,7 +1453,7 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcCamera = new THREE.PerspectiveCamera(45, width / height, 0.1, 3000);
     ifcCamera.position.set(35, 25, 35);
 
-    ifcRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    ifcRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true });
     ifcRenderer.setSize(width, height);
     ifcRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     ifcRenderer.outputEncoding = THREE.sRGBEncoding;
@@ -1461,11 +1465,11 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcControls.dampingFactor = 0.08;
 
     // Configuración estándar BIM:
-    // Clic Izquierdo -> Libre para selección / Clic Derecho -> Orbitar / Clic Central -> Paneo
+    // Clic Izquierdo -> Libre para selección / Clic Central -> Paneo
     ifcControls.mouseButtons = {
-        LEFT: THREE.MOUSE.NONE,    // Clic izquierdo reservado para seleccionar e inspeccionar elementos
-        MIDDLE: THREE.MOUSE.PAN,   // Rueda presionada para paneo
-        RIGHT: THREE.MOUSE.ROTATE  // Clic derecho para rotar libremente la cámara
+        LEFT: THREE.MOUSE.NONE,
+        MIDDLE: THREE.MOUSE.PAN,
+        RIGHT: THREE.MOUSE.NONE // Desactivado para que el clic derecho abra el menú contextual BIM
     };
 
     const hemiLight = new THREE.HemisphereLight(0xffffff, 0xcfd8dc, 0.85);
@@ -1487,12 +1491,71 @@ async function inicializarVisorIFC(fileUrl, container) {
     raycaster = new THREE.Raycaster();
     mousePointer = new THREE.Vector2();
 
+    // INTERCEPCIÓN DEL CLIC DERECHO -> MENÚ CONTEXTUAL PERSONALIZADO BIM
+    container.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        desplegarMenuContextualIFC(e);
+    });
+
+    // CERRAR MENÚ CONTEXTUAL SI SE HACE CLIC EN CUALQUIER OTRA PARTE
+    window.addEventListener('click', (e) => {
+        const menu = document.getElementById("ifcContextMenu");
+        if (menu && menu.style.display === "flex" && !menu.contains(e.target)) {
+            ocultarMenuContextualIFC();
+        }
+    });
+
+    // NAVEGACIÓN CON RUEDA PRESIONADA + SHIFT PARA ROTAR VISTA (ORBIT MANUAL)
+    let isMiddleShiftOrbit = false;
+    let lastMiddlePos = { x: 0, y: 0 };
+
+    window.addEventListener('mousedown', (e) => {
+        if (e.button === 1 && e.shiftKey && !isWalkModeActive) {
+            isMiddleShiftOrbit = true;
+            lastMiddlePos.x = e.clientX;
+            lastMiddlePos.y = e.clientY;
+            e.preventDefault();
+        }
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (isMiddleShiftOrbit && ifcControls && !isWalkModeActive) {
+            const deltaX = e.clientX - lastMiddlePos.x;
+            const deltaY = e.clientY - lastMiddlePos.y;
+            lastMiddlePos.x = e.clientX;
+            lastMiddlePos.y = e.clientY;
+
+            const rotateSpeed = 0.005;
+            const offset = ifcCamera.position.clone().sub(ifcControls.target);
+            let radius = offset.length();
+            let theta = Math.atan2(offset.x, offset.z);
+            let phi = Math.acos(Math.max(-1, Math.min(1, offset.y / radius)));
+
+            theta -= deltaX * rotateSpeed;
+            phi -= deltaY * rotateSpeed;
+            phi = Math.max(0.01, Math.min(Math.PI - 0.01, phi));
+
+            offset.x = radius * Math.sin(phi) * Math.sin(theta);
+            offset.y = radius * Math.cos(phi);
+            offset.z = radius * Math.sin(phi) * Math.cos(theta);
+
+            ifcCamera.position.copy(ifcControls.target).add(offset);
+            ifcCamera.lookAt(ifcControls.target);
+        }
+    });
+
+    window.addEventListener('mouseup', (e) => {
+        if (e.button === 1) isMiddleShiftOrbit = false;
+    });
+
     // REGISTRO UNIFICADO DE PUNTERO
     ifcRenderer.domElement.addEventListener('pointerdown', (e) => {
         pointerDownPos.x = e.clientX;
         pointerDownPos.y = e.clientY;
 
-        if (isWalkModeActive && !isPickSlabModeActive) {
+        // En modo caminar, arrastrar con clic izquierdo gira la mirada (cabeza)
+        if (isWalkModeActive && !isPickSlabModeActive && e.button === 0) {
             walkIsDraggingLook = true;
             walkLastMousePos.x = e.clientX;
             walkLastMousePos.y = e.clientY;
@@ -1506,7 +1569,6 @@ async function inicializarVisorIFC(fileUrl, container) {
             walkLastMousePos.x = e.clientX;
             walkLastMousePos.y = e.clientY;
 
-            // Sensibilidad de mirada ergonómica
             walkYaw -= deltaX * 0.0035;
             walkPitch -= deltaY * 0.0035;
             walkPitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, walkPitch));
@@ -1516,13 +1578,14 @@ async function inicializarVisorIFC(fileUrl, container) {
     });
 
     window.addEventListener('pointerup', (e) => {
-        if (isWalkModeActive) {
+        if (isWalkModeActive && e.button === 0) {
             walkIsDraggingLook = false;
         }
 
         const deltaX = Math.abs(e.clientX - pointerDownPos.x);
         const deltaY = Math.abs(e.clientY - pointerDownPos.y);
-        // Procesar selección únicamente si se presionó clic izquierdo sin arrastrar
+
+        // Procesar selección únicamente con clic izquierdo sin arrastre
         if (deltaX < 6 && deltaY < 6 && e.button === 0) {
             if (isPickSlabModeActive || !isWalkModeActive) {
                 onIfcModelClick(e);
@@ -1670,6 +1733,82 @@ async function inicializarVisorIFC(fileUrl, container) {
 }
 
 // ==============================================================================
+// GESTIÓN DEL MENÚ CONTEXTUAL BIM (CLIC DERECHO)
+// ==============================================================================
+function desplegarMenuContextualIFC(event) {
+    const menu = document.getElementById("ifcContextMenu");
+    const container = document.getElementById("modalIfcContainer");
+    if (!menu || !container) return;
+
+    // Detectar si el clic derecho ocurrió sobre algún elemento específico
+    const rect = ifcRenderer.domElement.getBoundingClientRect();
+    mousePointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mousePointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    raycaster.setFromCamera(mousePointer, ifcCamera);
+    const mallasValidas = ifcMeshesList.filter(m => m.visible);
+    const intersects = raycaster.intersectObjects(mallasValidas, false);
+
+    const btnOcultar = document.getElementById("menuOcultarElemento");
+    if (intersects.length > 0) {
+        lastClickedMesh = intersects[0].object;
+        if (btnOcultar) btnOcultar.style.display = "flex";
+    } else {
+        lastClickedMesh = null;
+        if (btnOcultar) btnOcultar.style.display = "none";
+    }
+
+    // Posicionar dentro del contenedor del visor
+    const contRect = container.getBoundingClientRect();
+    let posX = event.clientX - contRect.left;
+    let posY = event.clientY - contRect.top;
+
+    if (posX + 200 > contRect.width) posX = contRect.width - 205;
+    if (posY + 160 > contRect.height) posY = contRect.height - 165;
+
+    menu.style.left = `${posX}px`;
+    menu.style.top = `${posY}px`;
+    menu.style.display = "flex";
+}
+
+function ocultarMenuContextualIFC() {
+    const menu = document.getElementById("ifcContextMenu");
+    if (menu) menu.style.display = "none";
+}
+
+function ejecutarCapturaPantallaIFC() {
+    ocultarMenuContextualIFC();
+    if (!ifcRenderer || !ifcScene || !ifcCamera) return;
+
+    // Renderizar cuadro limpio
+    ifcRenderer.render(ifcScene, ifcCamera);
+
+    const dataUrl = ifcRenderer.domElement.toDataURL("image/png");
+    const a = document.createElement("a");
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    a.href = dataUrl;
+    a.download = `Captura_${activeProjectCode || 'BIM'}_${timestamp}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+function ocultarElementoSeleccionadoIFC() {
+    ocultarMenuContextualIFC();
+    if (lastClickedMesh) {
+        lastClickedMesh.visible = false;
+        cerrarCardPropiedadesIFC();
+    }
+}
+
+function restablecerVisibilidadIFC() {
+    ocultarMenuContextualIFC();
+    ifcMeshesList.forEach(mesh => {
+        if (mesh) mesh.visible = true;
+    });
+}
+
+// ==============================================================================
 // GESTIÓN DEL ÁRBOL DE NIVELES BIM (PARAMÉTRICO ROBUSTO Y NORMALIZADO EN METROS)
 // ==============================================================================
 function extraerNivelesDelModeloIFC() {
@@ -1715,11 +1854,10 @@ function extraerNivelesDelModeloIFC() {
     if (listaNivelesRaw.length > 0) {
         listaNivelesRaw.sort((a, b) => a.cotaNativa - b.cotaNativa);
 
-        // 2. DETECCIÓN PARAMÉTRICA UNIVERSAL DE ESCALA (MILÍMETROS vs METROS)
+        // DETECCIÓN PARAMÉTRICA UNIVERSAL DE ESCALA (MILÍMETROS vs METROS)
         let factorEscala = 1.0;
         const cotaMaximaAbsoluta = Math.max(...listaNivelesRaw.map(n => Math.abs(n.cotaNativa)));
         if (cotaMaximaAbsoluta > 100.0) {
-            // El modelo fue exportado con unidades milimétricas (ej: 2890, -1500)
             factorEscala = 0.001;
         }
 
@@ -1729,12 +1867,10 @@ function extraerNivelesDelModeloIFC() {
                 id: lvl.id,
                 nombre: lvl.nombre,
                 cotaNativa: cotaMetros,
-                // Cota exacta en la escena: Cota en metros + traslación vertical de centrado
                 cotaEscena: cotaMetros + offsetGroupY
             };
         });
     } else {
-        // Fallback paramétrico puro si el IFC fue exportado sin jerarquía espacial
         const totalAltura = ifcModelBounds.size.y || 10;
         const pisosEstimados = Math.max(1, Math.round(totalAltura / 2.80));
         const pasoPiso = totalAltura / pisosEstimados;
@@ -1816,7 +1952,6 @@ function cortarEnNivel(cotaLosaEscena) {
     ifcClipInverted = false;
     ifcClippingPlane.normal.set(0, -1, 0);
 
-    // Corte a 1.20 m sobre la cota geométrica de la planta seleccionada
     const cotaCorte = cotaLosaEscena + 1.20;
     ifcClippingPlane.constant = cotaCorte;
 
@@ -1832,7 +1967,6 @@ function cortarEnNivel(cotaLosaEscena) {
 function detectarAlturaRealLosa(x, cotaAproximadaY, z) {
     if (!ifcScene) return cotaAproximadaY;
 
-    // Lanzar un rayo vertical descendente desde 2.5m por encima de la cota de planta
     const origenRayo = new THREE.Vector3(x, cotaAproximadaY + 2.5, z);
     const direccionAbajo = new THREE.Vector3(0, -1, 0);
     const rayoVertical = new THREE.Raycaster(origenRayo, direccionAbajo, 0, 10.0);
@@ -1841,7 +1975,6 @@ function detectarAlturaRealLosa(x, cotaAproximadaY, z) {
     const intersecciones = rayoVertical.intersectObjects(mallasValidas, false);
 
     if (intersecciones.length > 0) {
-        // Devuelve la cota Y exacta de la cara superior de la losa física
         return intersecciones[0].point.y;
     }
 
@@ -1852,17 +1985,15 @@ function caminarEnNivel(cotaLosaEscena) {
     cerrarPanelNivelesIFC();
     desactivarSeleccionLosa();
 
-    // Buscar losa física en el centro interior (X=0, Z=0.5)
     const cotaFisicaLosa = detectarAlturaRealLosa(0, cotaLosaEscena, 0.5);
-
     iniciarModoCaminarEnCoordenadas(0, cotaFisicaLosa, 0.5);
 }
 
-// Activador del botón Caminar en la botonera lateral para seleccionar losa directamente
 function activarSeleccionLosaCaminar() {
     desactivarModoMedicion();
     cerrarCardPropiedadesIFC();
     cerrarPanelNivelesIFC();
+    ocultarMenuContextualIFC();
 
     isPickSlabModeActive = !isPickSlabModeActive;
     const btn = document.getElementById("btnToggleWalk");
@@ -1878,7 +2009,7 @@ function activarSeleccionLosaCaminar() {
         if (container) container.style.cursor = "pointer";
 
         if (pcHint && statusLabel) {
-            statusLabel.innerHTML = "🎯 <strong>Haz clic sobre la losa o forjado</strong> donde deseas pararte...";
+            statusLabel.innerHTML = "🎯 <strong>Haz clic con botón izquierdo sobre la losa o forjado</strong> donde deseas pararte...";
             pcHint.style.display = "flex";
         }
     } else {
@@ -1906,9 +2037,11 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
     const container = document.getElementById("modalIfcContainer");
     const esDispositivoTactil = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 992);
 
-    if (ifcControls) ifcControls.enabled = false;
+    if (ifcControls) {
+        ifcControls.enabled = false;
+        ifcControls.enableZoom = false; // Bloquear zoom de rueda en caminata
+    }
 
-    // Altura de ojo ergonómica: exactamente +1.65 m sobre la cara superior del forjado
     const alturaOjoHumano = yLosa + 1.65;
     ifcCamera.position.set(x, alturaOjoHumano, z);
 
@@ -1924,7 +2057,7 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
     if (container) container.style.cursor = "move";
 
     if (statusLabel) {
-        statusLabel.innerHTML = "🚶 <strong>Modo Caminar:</strong> Usa <strong>W, A, S, D</strong> para moverte y arrastra para mirar";
+        statusLabel.innerHTML = "🚶 <strong>Modo Caminar:</strong> Usa <strong>W, A, S, D</strong> para moverte y arrastra el ratón para mirar";
     }
 
     if (esDispositivoTactil) {
@@ -1956,10 +2089,11 @@ function desactivarModoCaminar() {
 
     if (pcHint) pcHint.style.display = "none";
     if (touchDpad) touchDpad.style.display = "none";
-    if (container) container.style.cursor = "grab";
+    if (container) container.style.cursor = "default";
 
     if (ifcControls) {
         ifcControls.enabled = true;
+        ifcControls.enableZoom = true; // Restaurar zoom de rueda al salir de caminata
         const forward = new THREE.Vector3(0, 0, -1).applyEuler(ifcCamera.rotation);
         ifcControls.target.copy(ifcCamera.position).add(forward.multiplyScalar(5));
         ifcControls.update();
@@ -2055,6 +2189,7 @@ function ajustarVistaModeloIFC() {
     if (!ifcCamera || !ifcControls) return;
     desactivarModoCaminar();
     cerrarPanelNivelesIFC();
+    ocultarMenuContextualIFC();
     const d = ifcModelBounds.maxDim || 25;
     ifcCamera.position.set(d * 1.3, d * 1.0, d * 1.3);
     ifcControls.target.copy(ifcModelBounds.center);
@@ -2065,6 +2200,7 @@ function cambiarVistaIFC(tipo) {
     if (!ifcCamera || !ifcControls) return;
     desactivarModoCaminar();
     cerrarPanelNivelesIFC();
+    ocultarMenuContextualIFC();
     const d = ifcModelBounds.maxDim || 25;
     const cy = ifcModelBounds.center.y;
 
@@ -2116,6 +2252,7 @@ function alternarModoMedicionIFC() {
     if (isMeasureToolActive) {
         desactivarModoCaminar();
         cerrarPanelNivelesIFC();
+        ocultarMenuContextualIFC();
         if (btn) {
             btn.style.background = "#0284c7";
             btn.style.color = "#fff";
@@ -2144,7 +2281,7 @@ function desactivarModoMedicion() {
         if (spanText) spanText.innerText = "Medir";
     }
     if (card) card.style.display = "none";
-    if (container && !isWalkModeActive) container.style.cursor = "grab";
+    if (container && !isWalkModeActive) container.style.cursor = "default";
     limpiarMedicionIFC();
 }
 
