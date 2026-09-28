@@ -17,61 +17,80 @@
 
     <!-- ESTILOS AISLADOS EXCLUSIVOS PARA EL VISOR 3D Y MODO CAMINAR -->
     <style>
+        /* Bloqueo estricto de selección de texto en la barra de herramientas del visor */
+        #ifcNavToolbar {
+            user-select: none !important;
+            -webkit-user-select: none !important;
+            -webkit-touch-callout: none !important;
+            -moz-user-select: none !important;
+            -ms-user-select: none !important;
+        }
+
+        #ifcNavToolbar button {
+            user-select: none !important;
+            -webkit-user-select: none !important;
+            -webkit-touch-callout: none !important;
+        }
+
         /* Controles táctiles de caminata (Touch D-Pad) */
         .walk-touch-container {
             position: absolute;
             bottom: 20px;
             left: 20px;
-            z-index: 25;
+            z-index: 30;
             display: none;
             flex-direction: column;
             align-items: center;
             gap: 6px;
             user-select: none;
             -webkit-user-select: none;
+            -webkit-touch-callout: none;
         }
         .walk-touch-row {
             display: flex;
             gap: 8px;
         }
         .walk-btn-dir {
-            width: 44px;
-            height: 44px;
+            width: 46px;
+            height: 46px;
             border-radius: 50%;
-            background: rgba(15, 23, 42, 0.82);
-            border: 1px solid rgba(56, 189, 248, 0.5);
+            background: rgba(15, 23, 42, 0.85);
+            border: 1.5px solid rgba(56, 189, 248, 0.6);
             color: #38bdf8;
-            font-size: 1.1rem;
+            font-size: 1.15rem;
             display: flex;
             align-items: center;
             justify-content: center;
             touch-action: none;
             cursor: pointer;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            user-select: none;
+            -webkit-user-select: none;
         }
         .walk-btn-dir:active {
-            background: rgba(56, 189, 248, 0.4);
+            background: rgba(56, 189, 248, 0.45);
             color: #fff;
             transform: scale(0.92);
         }
 
-        /* Indicador flotante de controles para PC */
+        /* Indicador flotante modo caminar para PC */
         .walk-pc-hint {
             position: absolute;
-            top: 12px;
+            top: 14px;
             left: 50%;
             transform: translateX(-50%);
             z-index: 25;
-            background: rgba(15, 23, 42, 0.88);
+            background: rgba(15, 23, 42, 0.9);
             border: 1px solid #10b981;
             color: #e2e8f0;
-            padding: 6px 14px;
+            padding: 6px 16px;
             border-radius: 20px;
-            font-size: 0.72rem;
+            font-size: 0.75rem;
             display: none;
             pointer-events: none;
             backdrop-filter: blur(4px);
             box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            white-space: nowrap;
         }
 
         /* REGLA RESPONSIVA AISLADA PARA MÓVILES (< 600px) */
@@ -316,7 +335,7 @@
                 <!-- 3. Visor BIM 3D (IFC) -->
                 <div id="modalIfcContainer" class="viewer-item" style="display: none; position: relative; width: 100%; height: 100%; overflow: hidden; cursor: grab;">
                     <!-- Indicador flotante modo caminar para PC -->
-                    <div id="walkPcHint" class="walk-pc-hint">🚶 <strong>Modo Caminar:</strong> Usa <strong>W, A, S, D</strong> para moverte y arrastra el ratón para mirar.</div>
+                    <div id="walkPcHint" class="walk-pc-hint">🚶 <strong>Modo Caminar:</strong> Usa <strong>W, A, S, D</strong> para desplazarte y arrastra el ratón para mirar.</div>
 
                     <!-- Joystick táctil virtual para Móviles y Tablets -->
                     <div id="walkTouchContainer" class="walk-touch-container">
@@ -328,7 +347,7 @@
                         </div>
                     </div>
 
-                    <!-- Botonera de Orientación y Vistas -->
+                    <!-- Botonera de Orientación y Vistas (Con user-select bloqueado) -->
                     <div id="ifcNavToolbar" style="position: absolute; top: 12px; right: 12px; z-index: 20; display: flex; flex-direction: column; gap: 5px; background: rgba(15, 23, 42, 0.88); padding: 7px; border-radius: 8px; backdrop-filter: blur(6px); border: 1px solid rgba(255, 255, 255, 0.15); box-shadow: 0 4px 14px rgba(0,0,0,0.4);">
                         <button type="button" onclick="cambiarVistaIFC('ISO')" title="Vista Isométrica 3D" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">🧭 <span class="btn-nav-text">Iso</span></button>
                         <button type="button" onclick="cambiarVistaIFC('FRONTAL')" title="Fachada Frontal" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">🏢 <span class="btn-nav-text">Frontal</span></button>
