@@ -1460,6 +1460,14 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcControls.enableDamping = true;
     ifcControls.dampingFactor = 0.08;
 
+    // Configuración estándar BIM:
+    // Clic Izquierdo -> Libre para selección / Clic Derecho -> Orbitar / Clic Central -> Paneo
+    ifcControls.mouseButtons = {
+        LEFT: THREE.MOUSE.NONE,    // Clic izquierdo reservado para seleccionar e inspeccionar elementos
+        MIDDLE: THREE.MOUSE.PAN,   // Rueda presionada para paneo
+        RIGHT: THREE.MOUSE.ROTATE  // Clic derecho para rotar libremente la cámara
+    };
+
     const hemiLight = new THREE.HemisphereLight(0xffffff, 0xcfd8dc, 0.85);
     hemiLight.position.set(0, 60, 0);
     ifcScene.add(hemiLight);
@@ -1514,8 +1522,8 @@ async function inicializarVisorIFC(fileUrl, container) {
 
         const deltaX = Math.abs(e.clientX - pointerDownPos.x);
         const deltaY = Math.abs(e.clientY - pointerDownPos.y);
-        // Procesar clic si no hubo arrastre
-        if (deltaX < 6 && deltaY < 6) {
+        // Procesar selección únicamente si se presionó clic izquierdo sin arrastrar
+        if (deltaX < 6 && deltaY < 6 && e.button === 0) {
             if (isPickSlabModeActive || !isWalkModeActive) {
                 onIfcModelClick(e);
             }
@@ -2322,7 +2330,7 @@ function onIfcModelClick(event) {
             return;
         }
 
-        // 3. MODO INSPECCIÓN DE PROPIEDADES
+        // 3. MODO INSPECCIÓN DE PROPIEDADES CON CLIC IZQUIERDO
         resaltarElementoIFC(hit.object);
         mostrarPropiedadesElementoIFC(hit.object.userData);
     }
