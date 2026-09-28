@@ -15,7 +15,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
-    <!-- ESTILOS AISLADOS EXCLUSIVOS PARA EL VISOR 3D, NIVELES, MENÚ CONTEXTUAL Y MODO CAMINAR -->
+    <!-- ESTILOS AISLADOS EXCLUSIVOS PARA EL VISOR 3D, NIVELES, BANDEJA CAPTURAS Y MODO CAMINAR -->
     <style>
         /* Bloqueo estricto de selección de texto en la botonera flotante */
         #ifcNavToolbar, #ifcNavToolbar * {
@@ -117,6 +117,66 @@
             height: 1px;
             background: #334155;
             margin: 3px 0;
+        }
+
+        /* Botón Flotante de Bandeja de Capturas (Carrito de Inspección) */
+        #btnBandejaCapturas {
+            position: absolute;
+            top: 14px;
+            left: 14px;
+            z-index: 35;
+            background: var(--accent-copper, #d97706);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 20px;
+            padding: 6px 14px;
+            font-size: 0.76rem;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            gap: 6px;
+            backdrop-filter: blur(4px);
+            transition: transform 0.15s, background 0.2s;
+        }
+        #btnBandejaCapturas:hover {
+            transform: scale(1.05);
+            background: #b45309;
+        }
+
+        /* Miniaturas dentro del modal de consolidación de capturas */
+        .captura-thumb-item {
+            position: relative;
+            display: inline-block;
+            border: 2px solid #334155;
+            border-radius: 6px;
+            overflow: hidden;
+            width: 110px;
+            height: 80px;
+            background: #0f172a;
+        }
+        .captura-thumb-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .btn-delete-thumb {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            background: rgba(239, 68, 68, 0.9);
+            color: #fff;
+            border: none;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            font-size: 0.65rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
         }
 
         /* Controles táctiles de caminata (Touch D-Pad) */
@@ -409,6 +469,39 @@
         </div>
     </div>
 
+    <!-- MODAL DE CONSOLIDACIÓN DE CAPTURAS 3D (REPORTE / OBSERVACIÓN) -->
+    <div id="capturaConsolidadaModal" class="modal-hidden">
+        <div class="modal-content card" style="max-width: 580px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 8px;">
+                <h3 style="color: var(--accent-copper); margin:0;">📷 Observación con Evidencia 3D</h3>
+                <button type="button" onclick="cerrarModalCapturasConsolidadas()" style="background:none; border:none; color:#94a3b8; font-size:1.1rem; cursor:pointer;">✕</button>
+            </div>
+            
+            <form id="formCapturaConsolidada" style="margin-top: 12px;">
+                <label><small>Evidencias Capturadas en el Recorrido (<span id="capturasCountLabel">0</span>):</small></label>
+                <div id="galeriaThumbsContainer" style="display: flex; gap: 8px; overflow-x: auto; padding: 8px 4px; margin-bottom: 10px; background: rgba(15,23,42,0.6); border-radius: 6px; min-height: 90px; align-items: center;"></div>
+
+                <label><small>Asunto / Resumen de la Observación:</small></label>
+                <input type="text" id="capturaAsuntoInput" placeholder="Ej: Interferencia de altura en paso bajo de escalera" required style="width: 100%; margin-top: 4px; margin-bottom: 10px; padding: 8px; border-radius: 6px; background: #0f172a; color: #fff; border: 1px solid #334155;">
+
+                <label><small>Detalle Técnico de la Observación / Subsanación:</small></label>
+                <textarea id="capturaDetalleInput" placeholder="Describa claramente la modificación requerida o la subsanación realizada..." required style="width: 100%; height: 90px; margin-top: 4px; margin-bottom: 12px; padding: 8px; border-radius: 6px; background: #0f172a; color: #fff; border: 1px solid #334155; resize: vertical;"></textarea>
+
+                <div id="checkSubsanacionGroup" style="display: none; margin-bottom: 12px; font-size: 0.8rem; color: #10b981;">
+                    <label><input type="checkbox" id="checkEsSubsanacion"> Marcar como Subsanación / Solución aplicada por Modelador</label>
+                </div>
+
+                <div class="modal-actions" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                    <button type="button" class="btn-secondary" onclick="guardarCapturasEnPCLocal()">💾 Guardar en mi PC</button>
+                    <div style="display: flex; gap: 8px;">
+                        <button type="button" class="btn-secondary" onclick="cerrarModalCapturasConsolidadas()">Cancelar</button>
+                        <button type="submit" class="btn-primary" id="btnEnviarCapturasCDE">🚀 Publicar en CDE</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- MODAL DE VISOR UNIVERSAL -->
     <div id="viewerModal" class="modal-hidden">
         <div class="modal-content card viewer-modal-layout">
@@ -433,9 +526,14 @@
 
                 <!-- 3. Visor BIM 3D (IFC) -->
                 <div id="modalIfcContainer" class="viewer-item" style="display: none; position: relative; width: 100%; height: 100%; overflow: hidden; cursor: default;">
-                    <!-- Menú Contextual Personalizado BIM -->
+                    <!-- Botón Flotante de Carrito de Inspección (Bandeja de Capturas) -->
+                    <button type="button" id="btnBandejaCapturas" onclick="abrirModalCapturasConsolidadas()">
+                        📷 Observación (<span id="trayCounter">0</span>)
+                    </button>
+
+                    <!-- Menú Contextual Personalizado BIM (Clic Derecho) -->
                     <div id="ifcContextMenu">
-                        <div class="ifc-context-item" onclick="ejecutarCapturaPantallaIFC()">📸 Tomar Captura de Pantalla</div>
+                        <div class="ifc-context-item" onclick="agregarCapturaABandejaIFC()">📸 Tomar Captura de Pantalla</div>
                         <div class="ifc-context-item" onclick="ajustarVistaModeloIFC()">🎯 Encuadrar Todo (Zoom Extensión)</div>
                         <div class="ifc-context-separator"></div>
                         <div class="ifc-context-item" id="menuOcultarElemento" onclick="ocultarElementoSeleccionadoIFC()">👁️ Ocultar Elemento</div>
