@@ -52,7 +52,7 @@ let isMeasureToolActive = false;
 let measurePoints = [];
 const measureVisualObjects = [];
 
-// HERRAMIENTA DE RECORRIDO EN PRIMERA PERSONA (MODO CAMINAR)
+// HERRAMIENTA DE RECORRIDO EN PRIMERA PERSONA (WALK MODE)
 let isWalkModeActive = false;
 const walkMovement = { forward: false, backward: false, left: false, right: false };
 const walkClock = new THREE.Clock();
@@ -1489,6 +1489,7 @@ async function inicializarVisorIFC(fileUrl, container) {
             walkLastMousePos.x = e.clientX;
             walkLastMousePos.y = e.clientY;
 
+            // Sensibilidad de mirada ergonómica
             walkYaw -= deltaX * 0.0035;
             walkPitch -= deltaY * 0.0035;
             walkPitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, walkPitch));
@@ -1705,7 +1706,7 @@ function alternarAristasIFC() {
 }
 
 // ==============================================================================
-// HERRAMIENTA DE RECORRIDO EN PRIMERA PERSONA (WALK MODE)
+// HERRAMIENTA DE RECORRIDO EN PRIMERA PERSONA (WALK MODE CORREGIDA)
 // ==============================================================================
 function alternarModoCaminarIFC() {
     isWalkModeActive = !isWalkModeActive;
@@ -1716,18 +1717,21 @@ function alternarModoCaminarIFC() {
     const esDispositivoTactil = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 992);
 
     if (isWalkModeActive) {
-        // Desactivar mediciones y paneles para no saturar
+        // Desactivar mediciones y paneles para no saturar la vista
         desactivarModoMedicion();
         cerrarCardPropiedadesIFC();
 
         if (ifcControls) ifcControls.enabled = false;
 
-        // Situar cámara a escala peatonal (1.65m sobre la base)
-        const nivelSuelo = ifcModelBounds.center.y - (ifcModelBounds.size.y / 2);
-        const alturaOjo = Math.max(1.65, nivelSuelo + 1.65);
-        ifcCamera.position.set(0, alturaOjo, (ifcModelBounds.size.z / 2) + 2.0);
+        // Teletransporte al interior del edificio:
+        // Se ubica en el centro de planta (0, 0) y a 1.65m sobre el piso base
+        const nivelPisoBase = Math.max(0, ifcModelBounds.center.y - (ifcModelBounds.size.y / 2));
+        const alturaOjoHumano = nivelPisoBase + 1.65;
+        
+        // Ubicamos la cámara adentro (ligeramente corrida hacia el acceso interior)
+        ifcCamera.position.set(0, alturaOjoHumano, 0.5);
 
-        // Inicializar ángulos de mirada apuntando al centro
+        // Orientar la mirada hacia el interior del edificio (rumbo norte/profundidad)
         walkYaw = Math.PI;
         walkPitch = 0;
         aplicarRotacionCaminar();
@@ -1778,9 +1782,8 @@ function desactivarModoCaminar() {
 
     if (ifcControls) {
         ifcControls.enabled = true;
-        // Enfocar a donde quedó mirando la cámara
         const forward = new THREE.Vector3(0, 0, -1).applyEuler(ifcCamera.rotation);
-        ifcControls.target.copy(ifcCamera.position).add(forward.multiplyScalar(4));
+        ifcControls.target.copy(ifcCamera.position).add(forward.multiplyScalar(5));
         ifcControls.update();
     }
 }
@@ -1839,10 +1842,12 @@ function setupWalkTouchListeners() {
 
         const startMove = (e) => {
             e.preventDefault();
+            e.stopPropagation();
             walkMovement[direction] = true;
         };
         const endMove = (e) => {
             e.preventDefault();
+            e.stopPropagation();
             walkMovement[direction] = false;
         };
 
