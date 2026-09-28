@@ -69,7 +69,7 @@ let walkListenersConfigured = false;
 const MAX_STEP_HEIGHT = 0.25; // 25 cm tolerancia de escalón / rampa
 
 // BANDEJA DE CAPTURAS 3D (OPCIÓN A - CARRITO DE INSPECCIÓN)
-const capturasBandeja = []; // Almacena dataURL Base64 de las fotos tomadas
+const capturasBandeja = [];
 
 // INTERACCIÓN Y SELECCIÓN DE PROPIEDADES BIM
 let raycaster = null;
@@ -257,6 +257,9 @@ function filtrarPorSubcarpeta(sub) {
     loadFiles();
 }
 
+/**
+ * PISTA DINÁMICA DE SUBCARPETAS CON PRIORIDAD EN CAMPO 4 (TIPO ISO 19650)
+ */
 function actualizarPistaSubcarpetaModal() {
     const isoName = document.getElementById("isoNameInput").value.trim().toUpperCase();
     const targetTab = document.getElementById("uploadTargetTab").value;
@@ -269,27 +272,42 @@ function actualizarPistaSubcarpetaModal() {
         return;
     }
 
+    const nombreSinExt = isoName.split('.').slice(0, -1).join('.');
+    const partes = nombreSinExt.split('_');
+    const tipoISO = (partes.length >= 6) ? partes[3].toUpperCase() : "";
+    const discISO = (partes.length >= 6) ? partes[4].toUpperCase() : "";
+
     let subDetectada = "Principal";
-    const esInstalacion = ["_MEP_", "_HID_", "_SAN_", "_ELE_", "_MEC_", "_PCI_", "_GAS_", "_VAC_"].some(tag => isoName.includes(tag));
+    const esInstalacion = ["MEP", "HID", "SAN", "ELE", "MEC", "PCI", "GAS", "VAC"].indexOf(discISO) !== -1;
 
     if (targetTab === "01_WIP") {
-        if (isoName.includes("_ARQ_")) subDetectada = "01_WIP / ARQ_Arquitectura";
-        else if (isoName.includes("_EST_")) subDetectada = "01_WIP / EST_Estructura";
+        if (discISO === "ARQ" || discISO === "DIS") subDetectada = "01_WIP / ARQ_Arquitectura";
+        else if (discISO === "EST") subDetectada = "01_WIP / EST_Estructura";
         else if (esInstalacion) subDetectada = "01_WIP / MEP_Instalaciones";
         else subDetectada = "01_WIP / ARQ_Arquitectura (Default)";
     } else if (targetTab === "02_SHARED") {
-        if (isoName.includes("_M3_") || isoName.endsWith(".IFC") || isoName.endsWith(".RVT")) subDetectada = "02_SHARED / 01_Modelos_3D";
-        else if (isoName.includes("_PL_") || isoName.includes("_DR_") || isoName.includes("_IM_") || isoName.includes("_VI_") || isoName.endsWith(".DWG")) subDetectada = "02_SHARED / 02_Planos_Coordinados";
-        else subDetectada = "02_SHARED / 03_Informes_Interferencias";
-    } else if (targetTab === "03_PUBLISHED") {
-        if (isoName.includes("_ACT_") || isoName.includes("ACTA") || isoName.includes("_MEM_") || isoName.includes("_INF_") || isoName.includes("_CON_") || isoName.includes("_POL_")) {
-            subDetectada = "03_PUBLISHED / 03_Actas_y_Memorias";
-        } else if (isoName.includes("_M3_") || isoName.endsWith(".IFC")) {
-            subDetectada = "03_PUBLISHED / 01_Modelos_Aprobados";
-        } else if (isoName.includes("_PL_") || isoName.includes("_DR_") || isoName.includes("_IM_") || isoName.includes("_VI_") || isoName.endsWith(".DWG")) {
-            subDetectada = "03_PUBLISHED / 02_Planos_Contractuales";
+        if (tipoISO === "M3") {
+            subDetectada = "02_SHARED / 01_Modelos_3D";
+        } else if (tipoISO === "PL" || tipoISO === "DR") {
+            subDetectada = "02_SHARED / 02_Planos_Coordinados";
+        } else if (tipoISO === "INF" || tipoISO === "MEM") {
+            subDetectada = "02_SHARED / 03_Informes_Interferencias";
         } else {
-            subDetectada = "03_PUBLISHED / 03_Actas_y_Memorias (Default Admin)";
+            if (isoName.endsWith(".IFC") || isoName.endsWith(".RVT")) subDetectada = "02_SHARED / 01_Modelos_3D";
+            else if (isoName.endsWith(".DWG") || isoName.endsWith(".DXF")) subDetectada = "02_SHARED / 02_Planos_Coordinados";
+            else subDetectada = "02_SHARED / 03_Informes_Interferencias";
+        }
+    } else if (targetTab === "03_PUBLISHED") {
+        if (tipoISO === "M3") {
+            subDetectada = "03_PUBLISHED / 01_Modelos_Aprobados";
+        } else if (tipoISO === "PL" || tipoISO === "DR") {
+            subDetectada = "03_PUBLISHED / 02_Planos_Contractuales";
+        } else if (tipoISO === "ACT" || tipoISO === "CON" || tipoISO === "INF" || tipoISO === "MEM") {
+            subDetectada = "03_PUBLISHED / 03_Actas_y_Memorias";
+        } else {
+            if (isoName.endsWith(".IFC") || isoName.endsWith(".RVT")) subDetectada = "03_PUBLISHED / 01_Modelos_Aprobados";
+            else if (isoName.endsWith(".DWG") || isoName.endsWith(".DXF")) subDetectada = "03_PUBLISHED / 02_Planos_Contractuales";
+            else subDetectada = "03_PUBLISHED / 03_Actas_y_Memorias (Default Admin)";
         }
     }
 
@@ -521,7 +539,6 @@ async function evaluarNotasTecnicasActivas() {
         let asunto = partesMensaje[0] || mensajeCompleto;
         let detalleConEnlaces = partesMensaje[1] || "";
 
-        // Extraer enlaces a imágenes o informes si existen en el detalle
         let enlaceReporte = null;
         let enlaceImagen = null;
         if (detalleConEnlaces.includes(" | Reporte: ")) {
@@ -777,8 +794,8 @@ function validarCoherenciaTipoYExtension(tipo, extension) {
         "DR": ["dwg", "pdf", "dxf"],
         "VI": ["mp4", "mov", "webm", "mkv", "avi"],
         "IM": ["png", "jpg", "jpeg", "webp", "tiff", "tif"],
-        "INF": ["pdf", "xlsx", "xls", "docx", "doc", "html"],
-        "MEM": ["pdf", "docx", "doc", "xlsx"],
+        "INF": ["pdf", "xlsx", "xls", "docx", "doc", "html", "dwg"],
+        "MEM": ["pdf", "docx", "doc", "xlsx", "dwg"],
         "ACT": ["pdf"],
         "CON": ["pdf"]
     };
@@ -1498,8 +1515,6 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcControls.enableDamping = true;
     ifcControls.dampingFactor = 0.08;
 
-    // Configuración estándar BIM:
-    // Clic Izquierdo -> Libre para selección / Clic Central -> Paneo
     ifcControls.mouseButtons = {
         LEFT: THREE.MOUSE.NONE,
         MIDDLE: THREE.MOUSE.PAN,
@@ -1525,14 +1540,12 @@ async function inicializarVisorIFC(fileUrl, container) {
     raycaster = new THREE.Raycaster();
     mousePointer = new THREE.Vector2();
 
-    // INTERCEPCIÓN DEL CLIC DERECHO -> MENÚ CONTEXTUAL PERSONALIZADO BIM
     container.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         e.stopPropagation();
         desplegarMenuContextualIFC(e);
     });
 
-    // CERRAR MENÚ CONTEXTUAL SI SE HACE CLIC EN CUALQUIER OTRA PARTE
     window.addEventListener('click', (e) => {
         const menu = document.getElementById("ifcContextMenu");
         if (menu && menu.style.display === "flex" && !menu.contains(e.target)) {
@@ -1540,7 +1553,6 @@ async function inicializarVisorIFC(fileUrl, container) {
         }
     });
 
-    // NAVEGACIÓN CON RUEDA PRESIONADA + SHIFT PARA ROTAR VISTA (ORBIT MANUAL)
     let isMiddleShiftOrbit = false;
     let lastMiddlePos = { x: 0, y: 0 };
 
@@ -1583,12 +1595,10 @@ async function inicializarVisorIFC(fileUrl, container) {
         if (e.button === 1) isMiddleShiftOrbit = false;
     });
 
-    // REGISTRO UNIFICADO DE PUNTERO
     ifcRenderer.domElement.addEventListener('pointerdown', (e) => {
         pointerDownPos.x = e.clientX;
         pointerDownPos.y = e.clientY;
 
-        // En modo caminar, arrastrar con clic izquierdo gira la mirada (cabeza)
         if (isWalkModeActive && !isPickSlabModeActive && e.button === 0) {
             walkIsDraggingLook = true;
             walkLastMousePos.x = e.clientX;
@@ -1619,7 +1629,6 @@ async function inicializarVisorIFC(fileUrl, container) {
         const deltaX = Math.abs(e.clientX - pointerDownPos.x);
         const deltaY = Math.abs(e.clientY - pointerDownPos.y);
 
-        // Procesar selección únicamente con clic izquierdo sin arrastre
         if (deltaX < 6 && deltaY < 6 && e.button === 0) {
             if (isPickSlabModeActive || !isWalkModeActive) {
                 onIfcModelClick(e);
@@ -1741,7 +1750,6 @@ async function inicializarVisorIFC(fileUrl, container) {
         }
     });
 
-    // Centrado de la geometría del edificio en la escena de Three.js
     const box = new THREE.Box3().setFromObject(ifcCurrentGroup);
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
@@ -1835,7 +1843,6 @@ function agregarCapturaABandejaIFC() {
     capturasBandeja.push(dataUrl);
     actualizarBotonBandejaCapturas();
 
-    // Efecto sutil de confirmación visual
     const btn = document.getElementById("btnBandejaCapturas");
     if (btn) {
         btn.style.transform = "scale(1.15)";
@@ -1861,13 +1868,11 @@ function abrirModalCapturasConsolidadas() {
     registrarAperturaModalEnHistorial("capturaConsolidadaModal");
 
     const modal = document.getElementById("capturaConsolidadaModal");
-    const container = document.getElementById("galeriaThumbsContainer");
     const countLabel = document.getElementById("capturasCountLabel");
     const checkSubsanacion = document.getElementById("checkSubsanacionGroup");
 
     if (countLabel) countLabel.innerText = capturasBandeja.length;
 
-    // Si el usuario es modelador, mostrar casilla para registrar como subsanación
     if (checkSubsanacion && currentUser) {
         const esMod = currentUser.cargo.includes("MODELADOR") || currentUser.cargo.includes("SUPER_ADMIN");
         checkSubsanacion.style.display = esMod ? "block" : "none";
@@ -1876,7 +1881,7 @@ function abrirModalCapturasConsolidadas() {
     renderizarMiniaturasBandeja();
 
     if (modal) {
-        modal.style.display = "flex";
+        modal.style.setProperty("display", "flex", "important");
         modal.classList.remove("modal-hidden");
         modal.classList.add("modal-overlay");
     }
@@ -1923,7 +1928,6 @@ function cerrarModalCapturasConsolidadas(triggerHistory = true) {
     }
 }
 
-// Guardado en equipo local con cuadro de diálogo ("Guardar como...")
 async function guardarCapturasEnPCLocal() {
     if (capturasBandeja.length === 0) return;
 
@@ -1966,7 +1970,6 @@ function descargarBlobTradicional(blob, fileName) {
     URL.revokeObjectURL(url);
 }
 
-// Envío y Publicación de la observación / reporte compilado hacia Google Drive + Supabase
 async function handleEnviarCapturasAlCDE(e) {
     e.preventDefault();
     if (capturasBandeja.length === 0) return;
@@ -1987,7 +1990,6 @@ async function handleEnviarCapturasAlCDE(e) {
     try {
         let pdfReporteBase64 = null;
 
-        // Si son 2 o más capturas, compilar un Informe Técnico formal en PDF
         if (capturasBandeja.length > 1) {
             pdfReporteBase64 = await compilarInformePDFCapturas(asunto, detalle, capturasBandeja);
         }
@@ -2032,7 +2034,6 @@ async function handleEnviarCapturasAlCDE(e) {
     }
 }
 
-// Compilador PDF de Ficha Técnica / Informe con fotos ordenadas
 async function compilarInformePDFCapturas(asunto, detalle, capturasArray) {
     if (!window.PDFLib) {
         await new Promise(resolve => {
@@ -2051,7 +2052,6 @@ async function compilarInformePDFCapturas(asunto, detalle, capturasArray) {
     const page = pdfDoc.addPage([612, 792]);
     const { width, height } = page.getSize();
 
-    // Encabezado InnovArqZ
     page.drawText("InnovArqZ SOLUCIONES INTEGRALES S.A.S.", { x: 50, y: height - 50, size: 14, font: fontBold, color: rgb(0.06, 0.09, 0.16) });
     page.drawText("INFORME DE OBSERVACIONES Y EVIDENCIAS BIM 3D (ISO 19650)", { x: 50, y: height - 68, size: 9, font: fontBold, color: rgb(0.85, 0.47, 0.02) });
 
@@ -2067,7 +2067,6 @@ async function compilarInformePDFCapturas(asunto, detalle, capturasArray) {
     page.drawText("DESCRIPCIÓN TÉCNICA:", { x: 50, y: height - 160, size: 9, font: fontBold });
     page.drawText(detalle, { x: 50, y: height - 175, size: 8.5, font: fontRegular, maxWidth: 512, lineHeight: 12 });
 
-    // Insertar imágenes en cuadrícula ordenada
     let imgY = height - 250;
     for (let i = 0; i < Math.min(capturasArray.length, 4); i++) {
         const imgBytes = UtilitiesBase64ToUint8(capturasArray[i].split(',')[1]);
@@ -2096,7 +2095,7 @@ function UtilitiesBase64ToUint8(base64) {
 }
 
 // ==============================================================================
-// GESTIÓN DEL ÁRBOL DE NIVELES BIM (PARAMÉTRICO ROBUSTO Y NORMALIZADO EN METROS)
+// GESTIÓN DEL ÁRBOL DE NIVELES BIM
 // ==============================================================================
 function extraerNivelesDelModeloIFC() {
     ifcBuildingStoreys = [];
@@ -2325,7 +2324,7 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
 
     if (ifcControls) {
         ifcControls.enabled = false;
-        ifcControls.enableZoom = false; // Bloquear zoom de rueda en caminata
+        ifcControls.enableZoom = false;
     }
 
     const alturaOjoHumano = yLosa + 1.65;
@@ -2394,7 +2393,6 @@ function aplicarRotacionCaminar() {
     ifcCamera.quaternion.setFromEuler(euler);
 }
 
-// ACTUALIZACIÓN DE FÍSICA: DETECCIÓN CONTINUA DE PELDAÑOS Y RAMPAS (ESCALERAS)
 function actualizarFisicaCaminar(delta) {
     if (!isWalkModeActive || !ifcCamera) return;
 
@@ -2412,7 +2410,6 @@ function actualizarFisicaCaminar(delta) {
         const pasoDistancia = walkSpeed * delta;
         const siguientePos = ifcCamera.position.clone().add(moveVector.clone().multiplyScalar(pasoDistancia));
 
-        // Lanzar rayo vertical hacia abajo desde la posición objetivo a nivel de cabeza (+0.5m)
         const origenRayo = new THREE.Vector3(siguientePos.x, ifcCamera.position.y + 0.5, siguientePos.z);
         const rayoPiso = new THREE.Raycaster(origenRayo, new THREE.Vector3(0, -1, 0), 0, 4.0);
 
@@ -2425,19 +2422,14 @@ function actualizarFisicaCaminar(delta) {
             const cotaSueloActual = cotaOjoActual - 1.65;
             const deltaAltura = cotaSueloObjetivo - cotaSueloActual;
 
-            // Si sube un peldaño o rampa transitable (hasta 25 cm) o desciende
             if (deltaAltura <= MAX_STEP_HEIGHT && deltaAltura >= -1.2) {
-                // Desplazamiento horizontal permitido
                 ifcCamera.position.x = siguientePos.x;
                 ifcCamera.position.z = siguientePos.z;
 
-                // Suavizado vertical exacto sobre el peldaño manteniendo altura de ojo +1.65 m
                 const cotaOjoDeseada = cotaSueloObjetivo + 1.65;
                 ifcCamera.position.y += (cotaOjoDeseada - ifcCamera.position.y) * Math.min(1.0, delta * 12.0);
             }
-            // Si deltaAltura > 0.25 m es un muro o antepecho: se bloquea el avance frontal
         } else {
-            // No hay suelo debajo (vacío): se permite avance horizontal manteniendo cota
             ifcCamera.position.x = siguientePos.x;
             ifcCamera.position.z = siguientePos.z;
         }
@@ -2772,19 +2764,16 @@ function onIfcModelClick(event) {
 
         if (!hit) return;
 
-        // 1. MODO SELECCIÓN DIRECTA DE LOSA / FORJADO PARA CAMINAR
         if (isPickSlabModeActive) {
             iniciarModoCaminarEnCoordenadas(hit.point.x, hit.point.y, hit.point.z);
             return;
         }
 
-        // 2. MODO MEDICIÓN ACTIVO
         if (isMeasureToolActive) {
             procesarClickMedicion(hit.point);
             return;
         }
 
-        // 3. MODO INSPECCIÓN DE PROPIEDADES CON CLIC IZQUIERDO
         resaltarElementoIFC(hit.object);
         mostrarPropiedadesElementoIFC(hit.object.userData);
     }
@@ -2850,7 +2839,7 @@ function cerrarCardPropiedadesIFC() {
 }
 
 // ==============================================================================
-// RENDERIZADO DE ENTREGABLES CON EXCLUSIÓN DE EVENTOS DE AUDITORÍA
+// RENDERIZADO DE ENTREGABLES CON ENRUTAMIENTO RIGUROSO POR CAMPO 4 (TIPO ISO)
 // ==============================================================================
 async function loadFiles() {
     const tbody = document.getElementById("filesTableBody");
@@ -2916,22 +2905,29 @@ async function loadFiles() {
         listaAProcesar = Array.from(mapaUnicos.values());
     }
 
+    // FILTRADO POR SUBCARPETAS (PRIORIDAD ESTRICTA EN CAMPO 4 TIPO ISO)
     if (activeSubfolder !== "TODAS" && activeTab !== "04_ARCHIVED") {
         listaAProcesar = listaAProcesar.filter(f => {
             const nameUpper = f.archivo_nombre.toUpperCase();
-            const esInstalacion = ["_MEP_", "_HID_", "_SAN_", "_ELE_", "_MEC_", "_PCI_", "_GAS_", "_VAC_"].some(tag => nameUpper.includes(tag));
+            const nombreSinExt = nameUpper.split('.').slice(0, -1).join('.');
+            const partes = nombreSinExt.split('_');
+            const tipoISO = (partes.length >= 6) ? partes[3].toUpperCase() : "";
+            const discISO = (partes.length >= 6) ? partes[4].toUpperCase() : "";
+
+            const esInstalacion = ["MEP", "HID", "SAN", "ELE", "MEC", "PCI", "GAS", "VAC"].indexOf(discISO) !== -1;
+
             if (activeTab === "01_WIP") {
-                if (activeSubfolder === "ARQ_Arquitectura") return nameUpper.includes("_ARQ_");
-                if (activeSubfolder === "EST_Estructura") return nameUpper.includes("_EST_");
-                if (activeSubfolder === "MEP_Instalaciones") return esInstalacion;
+                if (activeSubfolder === "ARQ_Arquitectura") return discISO === "ARQ" || discISO === "DIS" || nameUpper.includes("_ARQ_");
+                if (activeSubfolder === "EST_Estructura") return discISO === "EST" || nameUpper.includes("_EST_");
+                if (activeSubfolder === "MEP_Instalaciones") return esInstalacion || ["_MEP_", "_HID_", "_SAN_", "_ELE_", "_MEC_", "_PCI_", "_GAS_", "_VAC_"].some(tag => nameUpper.includes(tag));
             } else if (activeTab === "02_SHARED") {
-                if (activeSubfolder === "01_Modelos_3D") return nameUpper.includes("_M3_") || nameUpper.endsWith(".IFC") || nameUpper.endsWith(".RVT");
-                if (activeSubfolder === "02_Planos_Coordinados") return nameUpper.includes("_PL_") || nameUpper.includes("_DR_") || nameUpper.includes("_IM_") || nameUpper.includes("_VI_") || nameUpper.endsWith(".DWG");
-                if (activeSubfolder === "03_Informes_Interferencias") return !nameUpper.includes("_M3_") && !nameUpper.includes("_PL_") && !nameUpper.includes("_IM_") && !nameUpper.includes("_VI_") && !nameUpper.endsWith(".DWG");
+                if (activeSubfolder === "01_Modelos_3D") return tipoISO === "M3" || (!tipoISO && (nameUpper.endsWith(".IFC") || nameUpper.endsWith(".RVT")));
+                if (activeSubfolder === "02_Planos_Coordinados") return tipoISO === "PL" || tipoISO === "DR" || (!tipoISO && (nameUpper.endsWith(".DWG") || nameUpper.endsWith(".DXF")));
+                if (activeSubfolder === "03_Informes_Interferencias") return tipoISO === "INF" || tipoISO === "MEM" || (!tipoISO && !nameUpper.endsWith(".IFC") && !nameUpper.endsWith(".RVT") && !nameUpper.endsWith(".DWG"));
             } else if (activeTab === "03_PUBLISHED") {
-                if (activeSubfolder === "01_Modelos_Aprobados") return nameUpper.includes("_M3_") || nameUpper.endsWith(".IFC");
-                if (activeSubfolder === "02_Planos_Contractuales") return nameUpper.includes("_PL_") || nameUpper.includes("_DR_") || nameUpper.includes("_IM_") || nameUpper.includes("_VI_");
-                if (activeSubfolder === "03_Actas_y_Memorias") return nameUpper.includes("_ACT_") || nameUpper.includes("ACTA") || nameUpper.includes("_MEM_") || nameUpper.includes("_INF_") || (!nameUpper.includes("_M3_") && !nameUpper.includes("_PL_") && !nameUpper.includes("_IM_") && !nameUpper.includes("_VI_"));
+                if (activeSubfolder === "01_Modelos_Aprobados") return tipoISO === "M3" || (!tipoISO && (nameUpper.endsWith(".IFC") || nameUpper.endsWith(".RVT")));
+                if (activeSubfolder === "02_Planos_Contractuales") return tipoISO === "PL" || tipoISO === "DR" || (!tipoISO && (nameUpper.endsWith(".DWG") || nameUpper.endsWith(".DXF")));
+                if (activeSubfolder === "03_Actas_y_Memorias") return tipoISO === "ACT" || tipoISO === "CON" || tipoISO === "INF" || tipoISO === "MEM" || nameUpper.includes("ACTA");
             }
             return true;
         });
