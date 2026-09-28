@@ -37,6 +37,9 @@ let ifcCurrentGroup = null;
 let ifcModelBounds = { center: new THREE.Vector3(), size: new THREE.Vector3(), maxDim: 30 };
 let currentLoadedModelID = null;
 
+// ÁRBOL DE NIVELES BIM
+let ifcBuildingStoreys = [];
+
 // GESTIÓN DE PLANOS DE CORTE / SECCIONES (CLIPPING PLANES)
 let ifcClippingPlane = null;
 let ifcClipInverted = false;
@@ -61,6 +64,7 @@ let walkPitch = 0;
 let walkYaw = 0;
 let walkIsDraggingLook = false;
 let walkLastMousePos = { x: 0, y: 0 };
+let walkListenersConfigured = false;
 
 // INTERACCIÓN Y SELECCIÓN DE PROPIEDADES BIM
 let raycaster = null;
@@ -117,8 +121,6 @@ document.addEventListener("DOMContentLoaded", () => {
     setupDropdownWithOther("ubicacionSelect", "ubicacionOtherInput");
     setupDropdownWithOther("tipoSelect", "tipoOtherInput");
     setupUniversalZoomInteractions();
-    setupWalkKeyboardListeners();
-    setupWalkTouchListeners();
 
     window.addEventListener("keydown", (e) => {
         if (e.key === "Escape") cerrarCualquierModalAbierto();
@@ -1277,6 +1279,7 @@ function closeViewerModal(triggerHistory = true) {
     cerrarCardPropiedadesIFC();
     desactivarModoMedicion();
     desactivarModoCaminar();
+    cerrarPanelNivelesIFC();
 
     if (ifcAnimationId) {
         cancelAnimationFrame(ifcAnimationId);
@@ -1426,8 +1429,10 @@ async function inicializarVisorIFC(fileUrl, container) {
     }
     ifcMeshesList.length = 0;
     ifcEdgesList.length = 0;
+    ifcBuildingStoreys = [];
     limpiarMedicionIFC();
     desactivarModoCaminar();
+    cerrarPanelNivelesIFC();
 
     const width = container.clientWidth || 800;
     const height = container.clientHeight || 550;
@@ -1647,8 +1652,133 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcModelBounds.size.copy(size);
     ifcModelBounds.maxDim = Math.max(size.x, size.y, size.z);
 
+    // 7. Extraer niveles y configurar escuchadores diferidos del visor
+    extraerNivelesDelModeloIFC();
+    configurarEscuchadoresVisorDiferidos();
+
     configurarPlanoCorte();
     ajustarVistaModeloIFC();
+}
+
+// ==============================================================================
+// GESTIÓN DEL ÁRBOL DE NIVELES BIM
+// ==============================================================================
+function extraerNivelesDelModeloIFC() {
+    ifcBuildingStoreys = [];
+    if (!ifcApiInstance || currentLoadedModelID === null) return;
+
+    try {
+        if (window.WebIFC && window.WebIFC.IFCBUILDINGSTOREY) {
+            const storeyIDs = ifcApiInstance.GetLineIDsWithType(currentLoadedModelID, window.WebIFC.IFCBUILDINGSTOREY);
+            for (let i = 0; i < storeyIDs.size(); i++) {
+                const id = storeyIDs.get(i);
+                const storey = ifcApiInstance.GetLine(currentLoadedModelID, id);
+                let nombre = storey.Name ? storey.Name.value : `Nivel ${i + 1}`;
+                let elevacion = storey.Elevation ? parseFloat(storey.Elevation.value) : (i * 2.80);
+                ifcBuildingStoreys.push({ id, nombre, elevacion });
+            }
+        }
+    } catch (e) {
+        console.warn("Lectura de IfcBuildingStorey omitida por fallback:", e);
+    }
+
+    if (ifcBuildingStoreys.length === 0) {
+        const totalAltura = ifcModelBounds.size.y || 10;
+        const pisosEstimados = Math.max(1, Math.round(totalAltura / 2.80));
+        for (let p = 0; p < pisosEstimados; p++) {
+            ifcBuildingStoreys.push({
+                id: p,
+                nombre: (p === 0) ? "Planta Baja (Nivel 1)" : `Piso ${p + 1}`,
+                elevacion: p * 2.80
+            });
+        }
+    }
+
+    ifcBuildingStoreys.sort((a, b) => a.elevacion - b.elevacion);
+    renderizarListaNivelesIFC();
+}
+
+function renderizarListaNivelesIFC() {
+    const listCont = document.getElementById("ifcLevelsList");
+    if (!listCont) return;
+
+    if (ifcBuildingStoreys.length === 0) {
+        listCont.innerHTML = `<small style="color:#94a3b8;">No se detectaron niveles definidos en el IFC.</small>`;
+        return;
+    }
+
+    let html = "";
+    ifcBuildingStoreys.forEach((lvl) => {
+        const elevStr = lvl.elevacion >= 0 ? `+${lvl.elevacion.toFixed(2)}` : `${lvl.elevacion.toFixed(2)}`;
+        html += `
+            <div class="ifc-level-item">
+                <div>
+                    <strong>${lvl.nombre}</strong><br>
+                    <small style="color: #38bdf8;">Cota: ${elevStr} m</small>
+                </div>
+                <div class="ifc-level-actions">
+                    <button type="button" class="btn-level-act" style="background: #0284c7; color:#fff;" onclick="cortarEnNivel(${lvl.elevacion})" title="Cortar sección en este piso">✂️ Cortar</button>
+                    <button type="button" class="btn-level-act" style="background: #10b981; color:#fff;" onclick="caminarEnNivel(${lvl.elevacion})" title="Entrar a caminar en este piso">🚶 Entrar</button>
+                </div>
+            </div>
+        `;
+    });
+    listCont.innerHTML = html;
+}
+
+function alternarPanelNivelesIFC() {
+    const panel = document.getElementById("ifcLevelsCard");
+    const btn = document.getElementById("btnToggleLevels");
+    if (!panel) return;
+
+    const visible = panel.style.display === "block";
+    panel.style.display = visible ? "none" : "block";
+    if (btn) btn.style.background = visible ? "#1e293b" : "#10b981";
+    if (btn) btn.style.color = visible ? "#10b981" : "#fff";
+}
+
+function cerrarPanelNivelesIFC() {
+    const panel = document.getElementById("ifcLevelsCard");
+    const btn = document.getElementById("btnToggleLevels");
+    if (panel) panel.style.display = "none";
+    if (btn) {
+        btn.style.background = "#1e293b";
+        btn.style.color = "#10b981";
+    }
+}
+
+function cortarEnNivel(elevacionPiso) {
+    if (!ifcClippingPlane) return;
+
+    isSectionToolActive = true;
+    const panel = document.getElementById("ifcSectionToolPanel");
+    const btn = document.getElementById("btnToggleSectionBox");
+    if (panel) panel.style.display = "block";
+    if (btn) btn.style.background = "#10b981";
+
+    const radios = document.getElementsByName("clipAxis");
+    radios.forEach(r => { if (r.value === 'Y') r.checked = true; });
+    ifcClipAxis = 'Y';
+    ifcClipInverted = false;
+    ifcClippingPlane.normal.set(0, -1, 0);
+
+    const cotaCorte = elevacionPiso + 1.20;
+    ifcClippingPlane.constant = cotaCorte;
+
+    const max = ifcModelBounds.size.y || 20;
+    const pct = Math.min(100, Math.max(0, (cotaCorte / max) * 100));
+    const slider = document.getElementById("clipSlider");
+    if (slider) slider.value = pct;
+}
+
+function caminarEnNivel(elevacionPiso) {
+    cerrarPanelNivelesIFC();
+    if (!isWalkModeActive) {
+        alternarModoCaminarIFC(elevacionPiso);
+    } else {
+        const cotaOjo = elevacionPiso + 1.65;
+        ifcCamera.position.set(0, cotaOjo, 0.5);
+    }
 }
 
 // ==============================================================================
@@ -1657,6 +1787,7 @@ async function inicializarVisorIFC(fileUrl, container) {
 function ajustarVistaModeloIFC() {
     if (!ifcCamera || !ifcControls) return;
     desactivarModoCaminar();
+    cerrarPanelNivelesIFC();
     const d = ifcModelBounds.maxDim || 25;
     ifcCamera.position.set(d * 1.3, d * 1.0, d * 1.3);
     ifcControls.target.copy(ifcModelBounds.center);
@@ -1666,6 +1797,7 @@ function ajustarVistaModeloIFC() {
 function cambiarVistaIFC(tipo) {
     if (!ifcCamera || !ifcControls) return;
     desactivarModoCaminar();
+    cerrarPanelNivelesIFC();
     const d = ifcModelBounds.maxDim || 25;
     const cy = ifcModelBounds.center.y;
 
@@ -1706,9 +1838,16 @@ function alternarAristasIFC() {
 }
 
 // ==============================================================================
-// HERRAMIENTA DE RECORRIDO EN PRIMERA PERSONA (WALK MODE CORREGIDA)
+// HERRAMIENTA DE RECORRIDO EN PRIMERA PERSONA (WALK MODE)
 // ==============================================================================
-function alternarModoCaminarIFC() {
+function configurarEscuchadoresVisorDiferidos() {
+    if (walkListenersConfigured) return;
+    setupWalkKeyboardListeners();
+    setupWalkTouchListeners();
+    walkListenersConfigured = true;
+}
+
+function alternarModoCaminarIFC(cotaSueloManual = null) {
     isWalkModeActive = !isWalkModeActive;
     const btn = document.getElementById("btnToggleWalk");
     const pcHint = document.getElementById("walkPcHint");
@@ -1717,21 +1856,23 @@ function alternarModoCaminarIFC() {
     const esDispositivoTactil = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 992);
 
     if (isWalkModeActive) {
-        // Desactivar mediciones y paneles para no saturar la vista
         desactivarModoMedicion();
         cerrarCardPropiedadesIFC();
 
         if (ifcControls) ifcControls.enabled = false;
 
-        // Teletransporte al interior del edificio:
-        // Se ubica en el centro de planta (0, 0) y a 1.65m sobre el piso base
-        const nivelPisoBase = Math.max(0, ifcModelBounds.center.y - (ifcModelBounds.size.y / 2));
-        const alturaOjoHumano = nivelPisoBase + 1.65;
-        
-        // Ubicamos la cámara adentro (ligeramente corrida hacia el acceso interior)
+        let cotaBase = 0;
+        if (cotaSueloManual !== null) {
+            cotaBase = cotaSueloManual;
+        } else if (ifcBuildingStoreys.length > 0) {
+            cotaBase = ifcBuildingStoreys[0].elevacion;
+        } else {
+            cotaBase = Math.max(0, ifcModelBounds.center.y - (ifcModelBounds.size.y / 2));
+        }
+
+        const alturaOjoHumano = cotaBase + 1.65;
         ifcCamera.position.set(0, alturaOjoHumano, 0.5);
 
-        // Orientar la mirada hacia el interior del edificio (rumbo norte/profundidad)
         walkYaw = Math.PI;
         walkPitch = 0;
         aplicarRotacionCaminar();
@@ -1864,7 +2005,7 @@ function setupWalkTouchListeners() {
 }
 
 // ==============================================================================
-// HERRAMIENTA DE MEDICIÓN 3D PUNTO A PUNTO (TOUCH & MOUSE COMPATIBLE)
+// HERRAMIENTA DE MEDICIÓN 3D PUNTO A PUNTO
 // ==============================================================================
 function alternarModoMedicionIFC() {
     isMeasureToolActive = !isMeasureToolActive;
@@ -1874,6 +2015,7 @@ function alternarModoMedicionIFC() {
 
     if (isMeasureToolActive) {
         desactivarModoCaminar();
+        cerrarPanelNivelesIFC();
         if (btn) {
             btn.style.background = "#0284c7";
             btn.style.color = "#fff";
@@ -1931,7 +2073,6 @@ function procesarClickMedicion(intersectPoint) {
 
     measurePoints.push(intersectPoint.clone());
 
-    // Marcador esférico visible siempre en primer plano
     const sphereGeo = new THREE.SphereGeometry(0.2, 16, 16);
     const sphereMat = new THREE.MeshBasicMaterial({ 
         color: (measurePoints.length === 1) ? 0x38bdf8 : 0x10b981, 
@@ -1956,7 +2097,6 @@ function procesarClickMedicion(intersectPoint) {
         const p1 = measurePoints[0];
         const p2 = measurePoints[1];
 
-        // Línea conectora 3D en primer plano
         const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
         const lineMat = new THREE.LineBasicMaterial({ 
             color: 0x10b981, 
@@ -1969,7 +2109,6 @@ function procesarClickMedicion(intersectPoint) {
         ifcScene.add(lineObj);
         measureVisualObjects.push(lineObj);
 
-        // Cálculos métricos
         const distReal = p1.distanceTo(p2);
         const distY = Math.abs(p2.y - p1.y);
         const distXZ = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.z - p1.z, 2));
@@ -2059,7 +2198,6 @@ function onIfcModelClick(event) {
 
     raycaster.setFromCamera(mousePointer, ifcCamera);
     
-    // Filtrar solo las mallas válidas del modelo
     const mallasValidas = ifcMeshesList.filter(m => m.visible);
     const intersects = raycaster.intersectObjects(mallasValidas, false);
 
@@ -2080,13 +2218,11 @@ function onIfcModelClick(event) {
 
         if (!hit) return;
 
-        // MODO MEDICIÓN ACTIVO
         if (isMeasureToolActive) {
             procesarClickMedicion(hit.point);
             return;
         }
 
-        // MODO INSPECCIÓN DE PROPIEDADES
         resaltarElementoIFC(hit.object);
         mostrarPropiedadesElementoIFC(hit.object.userData);
     }
