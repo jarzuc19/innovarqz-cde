@@ -59,6 +59,9 @@ let highlightedMesh = null;
 let originalMaterial = null;
 const ifcMeshesList = [];
 
+// GESTIÓN DE PUNTERO TÁCTIL Y RATÓN (COMPATIBILIDAD MÓVIL/TABLET/PC)
+let pointerDownPos = { x: 0, y: 0 };
+
 // ESTADO DE ZOOM Y PANEO UNIVERSAL (IMÁGENES Y PDF)
 let activeZoomScale = 1;
 let activePanX = 0;
@@ -1453,7 +1456,20 @@ async function inicializarVisorIFC(fileUrl, container) {
     raycaster = new THREE.Raycaster();
     mousePointer = new THREE.Vector2();
 
-    ifcRenderer.domElement.addEventListener('click', onIfcModelClick);
+    // REGISTRO UNIFICADO DE PUNTERO (MÓVIL, TABLET Y PC)
+    ifcRenderer.domElement.addEventListener('pointerdown', (e) => {
+        pointerDownPos.x = e.clientX;
+        pointerDownPos.y = e.clientY;
+    });
+
+    ifcRenderer.domElement.addEventListener('pointerup', (e) => {
+        const deltaX = Math.abs(e.clientX - pointerDownPos.x);
+        const deltaY = Math.abs(e.clientY - pointerDownPos.y);
+        // Si el desplazamiento es mínimo (menor a 6px), se procesa como toque/clic
+        if (deltaX < 6 && deltaY < 6) {
+            onIfcModelClick(e);
+        }
+    });
 
     function animate() {
         ifcAnimationId = requestAnimationFrame(animate);
@@ -1639,7 +1655,7 @@ function alternarAristasIFC() {
 }
 
 // ==============================================================================
-// HERRAMIENTA DE MEDICIÓN 3D PUNTO A PUNTO (OPTIMIZADA)
+// HERRAMIENTA DE MEDICIÓN 3D PUNTO A PUNTO (TOUCH & MOUSE COMPATIBLE)
 // ==============================================================================
 function alternarModoMedicionIFC() {
     isMeasureToolActive = !isMeasureToolActive;
@@ -1692,7 +1708,7 @@ function limpiarMedicionIFC() {
     const status = document.getElementById("ifcMeasureStatus");
     const dataDiv = document.getElementById("ifcMeasureData");
     if (status) {
-        status.innerText = "Haz clic en el primer punto (Punto A)...";
+        status.innerText = "Toca o haz clic en el Punto A...";
         status.style.color = "#fbbf24";
     }
     if (dataDiv) dataDiv.style.display = "none";
@@ -1705,8 +1721,8 @@ function procesarClickMedicion(intersectPoint) {
 
     measurePoints.push(intersectPoint.clone());
 
-    // Marcador esférico visible siempre al frente
-    const sphereGeo = new THREE.SphereGeometry(0.18, 16, 16);
+    // Marcador esférico visible siempre en primer plano
+    const sphereGeo = new THREE.SphereGeometry(0.2, 16, 16);
     const sphereMat = new THREE.MeshBasicMaterial({ 
         color: (measurePoints.length === 1) ? 0x38bdf8 : 0x10b981, 
         depthTest: false,
@@ -1723,7 +1739,7 @@ function procesarClickMedicion(intersectPoint) {
 
     if (measurePoints.length === 1) {
         if (status) {
-            status.innerText = "📍 Punto A fijado. Haz clic en el Punto B...";
+            status.innerText = "📍 Punto A fijado. Toca el Punto B...";
             status.style.color = "#38bdf8";
         }
     } else if (measurePoints.length === 2) {
@@ -1822,7 +1838,7 @@ function invertirPlanoCorte() {
 }
 
 // ==============================================================================
-// INSPECCIÓN DE PROPIEDADES BIM Y DISPATCHER DE CLICS (OPTIMIZADO)
+// INSPECCIÓN DE PROPIEDADES BIM Y DISPATCHER DE CLICS / TOQUES
 // ==============================================================================
 function onIfcModelClick(event) {
     if (!ifcRenderer || !ifcCamera) return;
