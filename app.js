@@ -1454,7 +1454,6 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcControls.enableDamping = true;
     ifcControls.dampingFactor = 0.08;
 
-    // Iluminación Técnica BIM
     const hemiLight = new THREE.HemisphereLight(0xffffff, 0xcfd8dc, 0.85);
     hemiLight.position.set(0, 60, 0);
     ifcScene.add(hemiLight);
@@ -1471,11 +1470,10 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcGridHelper.position.y = -0.01;
     ifcScene.add(ifcGridHelper);
 
-    // Inicializar Raycaster
     raycaster = new THREE.Raycaster();
     mousePointer = new THREE.Vector2();
 
-    // REGISTRO UNIFICADO DE PUNTERO (MÓVIL, TABLET Y PC)
+    // REGISTRO UNIFICADO DE PUNTERO
     ifcRenderer.domElement.addEventListener('pointerdown', (e) => {
         pointerDownPos.x = e.clientX;
         pointerDownPos.y = e.clientY;
@@ -1510,7 +1508,6 @@ async function inicializarVisorIFC(fileUrl, container) {
 
         const deltaX = Math.abs(e.clientX - pointerDownPos.x);
         const deltaY = Math.abs(e.clientY - pointerDownPos.y);
-        // Si el desplazamiento es mínimo (menor a 6px), se procesa como toque/clic
         if (deltaX < 6 && deltaY < 6 && !isWalkModeActive) {
             onIfcModelClick(e);
         }
@@ -1532,7 +1529,6 @@ async function inicializarVisorIFC(fileUrl, container) {
     walkClock.start();
     animate();
 
-    // 1. Motor WebIFC v0.0.78 de That Open Company
     const IfcAPIClass = await obtenerConstructorIfcAPI();
     if (!ifcApiInstance) {
         ifcApiInstance = new IfcAPIClass();
@@ -1540,13 +1536,11 @@ async function inicializarVisorIFC(fileUrl, container) {
         await ifcApiInstance.Init();
     }
 
-    // 2. Extraer ID del archivo en Drive
     let fileId = "";
     const match = fileUrl.match(/[-\w]{25,}/);
     if (match) fileId = match[0];
     if (!fileId) throw new Error("No se pudo detectar el ID del archivo en Google Drive.");
 
-    // 3. Descarga Directa Binaria con Google Drive API Key
     const directApiUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${GOOGLE_DRIVE_API_KEY}`;
     const response = await fetch(directApiUrl);
     if (!response.ok) {
@@ -1557,7 +1551,6 @@ async function inicializarVisorIFC(fileUrl, container) {
     const buffer = await response.arrayBuffer();
     const bytesArray = new Uint8Array(buffer);
 
-    // 4. Apertura con configuración avanzada de That Open Company
     const modelSettings = {
         COORDINATE_TO_ORIGIN: true,
         USE_FAST_BOOLS: true
@@ -1566,10 +1559,8 @@ async function inicializarVisorIFC(fileUrl, container) {
     currentLoadedModelID = ifcApiInstance.OpenModel(bytesArray, modelSettings);
     ifcCurrentGroup = new THREE.Group();
 
-    // Inicializar plano de corte en Y
     ifcClippingPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 100);
 
-    // Material de aristas técnicas: vinculado al plano de corte para desaparecer en la sección
     const edgeLineMaterial = new THREE.LineBasicMaterial({
         color: 0x334155,
         transparent: true,
@@ -1577,7 +1568,6 @@ async function inicializarVisorIFC(fileUrl, container) {
         clippingPlanes: [ifcClippingPlane]
     });
 
-    // 5. Procesamiento de mallas con aristas y planos de corte activos
     ifcApiInstance.StreamAllMeshes(currentLoadedModelID, (flatMesh) => {
         const placedGeometries = flatMesh.geometries;
         for (let i = 0; i < placedGeometries.size(); i++) {
@@ -1637,7 +1627,6 @@ async function inicializarVisorIFC(fileUrl, container) {
         }
     });
 
-    // 6. Centrado y caja de encuadre
     const box = new THREE.Box3().setFromObject(ifcCurrentGroup);
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
@@ -1652,7 +1641,6 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcModelBounds.size.copy(size);
     ifcModelBounds.maxDim = Math.max(size.x, size.y, size.z);
 
-    // 7. Extraer niveles y configurar escuchadores diferidos del visor
     extraerNivelesDelModeloIFC();
     configurarEscuchadoresVisorDiferidos();
 
@@ -1849,7 +1837,6 @@ function configurarEscuchadoresVisorDiferidos() {
 
 function alternarModoCaminarIFC(cotaSueloManual = null) {
     isWalkModeActive = !isWalkModeActive;
-    const btn = document.getElementById("btnToggleWalk");
     const pcHint = document.getElementById("walkPcHint");
     const touchDpad = document.getElementById("walkTouchContainer");
     const container = document.getElementById("modalIfcContainer");
@@ -1877,20 +1864,13 @@ function alternarModoCaminarIFC(cotaSueloManual = null) {
         walkPitch = 0;
         aplicarRotacionCaminar();
 
-        if (btn) {
-            btn.style.background = "#10b981";
-            btn.style.color = "#fff";
-            const spanText = btn.querySelector(".btn-nav-text");
-            if (spanText) spanText.innerText = "Caminando...";
-        }
-
         if (container) container.style.cursor = "move";
 
         if (esDispositivoTactil) {
             if (touchDpad) touchDpad.style.display = "flex";
             if (pcHint) pcHint.style.display = "none";
         } else {
-            if (pcHint) pcHint.style.display = "block";
+            if (pcHint) pcHint.style.display = "flex";
             if (touchDpad) touchDpad.style.display = "none";
         }
     } else {
@@ -1905,17 +1885,9 @@ function desactivarModoCaminar() {
     walkMovement.left = false;
     walkMovement.right = false;
 
-    const btn = document.getElementById("btnToggleWalk");
     const pcHint = document.getElementById("walkPcHint");
     const touchDpad = document.getElementById("walkTouchContainer");
     const container = document.getElementById("modalIfcContainer");
-
-    if (btn) {
-        btn.style.background = "#1e293b";
-        btn.style.color = "#10b981";
-        const spanText = btn.querySelector(".btn-nav-text");
-        if (spanText) spanText.innerText = "Caminar";
-    }
 
     if (pcHint) pcHint.style.display = "none";
     if (touchDpad) touchDpad.style.display = "none";
