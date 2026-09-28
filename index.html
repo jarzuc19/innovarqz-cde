@@ -15,10 +15,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
-    <!-- ESTILOS AISLADOS EXCLUSIVOS PARA EL VISOR 3D Y MODO CAMINAR -->
+    <!-- ESTILOS AISLADOS EXCLUSIVOS PARA EL VISOR 3D, NIVELES Y MODO CAMINAR -->
     <style>
-        /* Bloqueo estricto de selección de texto en la barra de herramientas del visor */
-        #ifcNavToolbar {
+        /* Bloqueo estricto de selección de texto en la botonera flotante */
+        #ifcNavToolbar, #ifcNavToolbar * {
             user-select: none !important;
             -webkit-user-select: none !important;
             -webkit-touch-callout: none !important;
@@ -26,10 +26,58 @@
             -ms-user-select: none !important;
         }
 
-        #ifcNavToolbar button {
-            user-select: none !important;
-            -webkit-user-select: none !important;
-            -webkit-touch-callout: none !important;
+        /* Panel flotante de árbol de niveles IFC */
+        #ifcLevelsCard {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            z-index: 25;
+            background: rgba(15, 23, 42, 0.95);
+            padding: 10px 14px;
+            border-radius: 8px;
+            backdrop-filter: blur(8px);
+            border: 1px solid #10b981;
+            color: #fff;
+            max-width: 320px;
+            width: calc(100vw - 40px);
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+            display: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .ifc-levels-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 220px;
+            overflow-y: auto;
+            margin-top: 8px;
+        }
+
+        .ifc-level-item {
+            background: rgba(30, 41, 59, 0.85);
+            border: 1px solid #334155;
+            padding: 6px 8px;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.75rem;
+        }
+
+        .ifc-level-actions {
+            display: flex;
+            gap: 4px;
+        }
+
+        .btn-level-act {
+            border: none;
+            padding: 3px 6px;
+            border-radius: 4px;
+            font-size: 0.68rem;
+            cursor: pointer;
+            font-weight: bold;
         }
 
         /* Controles táctiles de caminata (Touch D-Pad) */
@@ -122,7 +170,7 @@
                 max-width: calc(100vw - 16px) !important;
                 padding: 8px 10px !important;
             }
-            #ifcPropertyCard {
+            #ifcPropertyCard, #ifcLevelsCard {
                 top: 8px !important;
                 left: 8px !important;
                 max-width: calc(100vw - 50px) !important;
@@ -335,7 +383,7 @@
                 <!-- 3. Visor BIM 3D (IFC) -->
                 <div id="modalIfcContainer" class="viewer-item" style="display: none; position: relative; width: 100%; height: 100%; overflow: hidden; cursor: grab;">
                     <!-- Indicador flotante modo caminar para PC -->
-                    <div id="walkPcHint" class="walk-pc-hint">🚶 <strong>Modo Caminar:</strong> Usa <strong>W, A, S, D</strong> para desplazarte y arrastra el ratón para mirar.</div>
+                    <div id="walkPcHint" class="walk-pc-hint">🚶 <strong>Modo Caminar:</strong> Usa <strong>W, A, S, D</strong> para moverte y arrastra el ratón para mirar.</div>
 
                     <!-- Joystick táctil virtual para Móviles y Tablets -->
                     <div id="walkTouchContainer" class="walk-touch-container">
@@ -344,6 +392,17 @@
                             <button type="button" class="walk-btn-dir" id="btnWalkLeft">◄</button>
                             <button type="button" class="walk-btn-dir" id="btnWalkBackward">▼</button>
                             <button type="button" class="walk-btn-dir" id="btnWalkRight">►</button>
+                        </div>
+                    </div>
+
+                    <!-- Panel Flotante de Árbol de Niveles IFC -->
+                    <div id="ifcLevelsCard">
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 4px;">
+                            <strong style="color: #10b981; font-size: 0.8rem;">🏢 Pisos y Niveles BIM</strong>
+                            <button type="button" onclick="alternarPanelNivelesIFC()" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 0.9rem;">✕</button>
+                        </div>
+                        <div id="ifcLevelsList" class="ifc-levels-list">
+                            <small style="color: #94a3b8;">Cargando niveles del archivo...</small>
                         </div>
                     </div>
 
@@ -358,6 +417,7 @@
                         <button type="button" onclick="cambiarVistaIFC('INFERIOR')" title="Vista Inferior" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">⬇️ <span class="btn-nav-text">Inferior</span></button>
                         <div style="height: 1px; background: rgba(255, 255, 255, 0.2); margin: 2px 0;"></div>
                         <button type="button" onclick="ajustarVistaModeloIFC()" title="Ajustar y Centrar Modelo" style="padding: 5px 8px; font-size: 0.72rem; background: var(--accent-copper, #d97706); color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">🎯 <span class="btn-nav-text">Centrar</span></button>
+                        <button type="button" id="btnToggleLevels" onclick="alternarPanelNivelesIFC()" title="Árbol de niveles y pisos del edificio" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #10b981; border: 1px solid #10b981; border-radius: 4px; cursor: pointer; font-weight: bold;">📚 <span class="btn-nav-text">Niveles</span></button>
                         <button type="button" onclick="alternarCuadriculaIFC()" title="Mostrar u Ocultar Rejilla" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #cbd5e1; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">▦ <span class="btn-nav-text">Rejilla</span></button>
                         <button type="button" id="btnToggleEdges" onclick="alternarAristasIFC()" title="Mostrar u Ocultar Líneas de Arista" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #cbd5e1; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">🖋️ <span class="btn-nav-text">Líneas</span></button>
                         <button type="button" id="btnToggleSectionBox" onclick="alternarPanelCorteIFC()" title="Caja de Sección y Cortes 3D" style="padding: 5px 8px; font-size: 0.72rem; background: #0284c7; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">✂️ <span class="btn-nav-text">Corte</span></button>
