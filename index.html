@@ -17,6 +17,11 @@
 
     <!-- ESTILOS AISLADOS EXCLUSIVOS PARA EL VISOR 3D, NIVELES, BANDEJA CAPTURAS Y MODO CAMINAR -->
     <style>
+        /* Contención nativa de scroll para neutralizar pull-to-refresh sin JavaScript */
+        #viewerModal {
+            overscroll-behavior: contain !important;
+        }
+
         /* Bloqueo estricto de selección de texto en la botonera flotante */
         #ifcNavToolbar, #ifcNavToolbar * {
             user-select: none !important;
@@ -296,7 +301,7 @@
                 left: 8px !important;
                 max-width: calc(100vw - 50px) !important;
             }
-            /* AJUSTE MAESTRO: cruceta flotante completa por encima del botón Salir en móvil */
+            /* Cruceta elevada y con escala para encajar por encima del botón Salir en móvil */
             .walk-touch-container {
                 position: absolute !important;
                 bottom: 95px !important;
