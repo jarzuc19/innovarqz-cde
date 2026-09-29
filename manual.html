@@ -31,9 +31,56 @@
             line-height: 1.6;
             display: flex;
             min-height: 100vh;
+            overflow-x: hidden;
         }
 
-        /* BARRA LATERAL (ÍNDICE TIPO LIBRO) */
+        /* BOTÓN HAMBURGUESA FLOTANTE PARA MÓVIL */
+        .mobile-menu-btn {
+            display: none;
+            position: fixed;
+            top: 14px;
+            left: 14px;
+            z-index: 1200;
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid var(--accent-sky);
+            color: var(--accent-sky);
+            width: 42px;
+            height: 42px;
+            border-radius: 8px;
+            font-size: 1.3rem;
+            cursor: pointer;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+            backdrop-filter: blur(8px);
+            transition: all 0.2s ease;
+        }
+
+        .mobile-menu-btn:active {
+            transform: scale(0.92);
+        }
+
+        /* OVERLAY OSCURO EN MÓVIL */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1050;
+            backdrop-filter: blur(3px);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .sidebar-overlay.active {
+            display: block;
+            opacity: 1;
+        }
+
+        /* BARRA LATERAL (DRAWER / ÍNDICE) */
         aside.manual-sidebar {
             width: 320px;
             background-color: var(--bg-sidebar);
@@ -46,16 +93,34 @@
             flex-direction: column;
             padding: 24px 18px;
             overflow-y: auto;
-            z-index: 100;
+            z-index: 1100;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .sidebar-header-box {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 4px;
         }
 
         .sidebar-brand {
             font-size: 1.3rem;
             font-weight: 800;
             color: #fff;
-            margin-bottom: 4px;
         }
         .sidebar-brand span { color: var(--accent-copper); }
+
+        .btn-close-sidebar {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.4rem;
+            cursor: pointer;
+            padding: 0 4px;
+        }
+
         .sidebar-sub {
             font-size: 0.75rem;
             color: var(--accent-emerald);
@@ -113,6 +178,7 @@
             flex: 1;
             padding: 40px 60px;
             max-width: 1160px;
+            width: calc(100% - 320px);
         }
 
         header.manual-header {
@@ -124,6 +190,7 @@
             font-size: 2.2rem;
             color: #fff;
             margin-bottom: 8px;
+            line-height: 1.25;
         }
         header.manual-header p {
             color: var(--text-muted);
@@ -132,7 +199,7 @@
 
         section.manual-chapter {
             margin-bottom: 55px;
-            scroll-margin-top: 30px;
+            scroll-margin-top: 40px;
         }
 
         h2 {
@@ -192,16 +259,22 @@
             color: #6ee7b7;
         }
 
-        /* TABLAS DE GUÍA TÉCNICA */
+        /* CONTENEDOR DE TABLAS RESPONSIVAS */
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
+            margin: 20px 0;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            -webkit-overflow-scrolling: touch;
+        }
+
         table.manual-table {
             width: 100%;
             border-collapse: collapse;
-            margin: 20px 0;
             font-size: 0.82rem;
             background: var(--bg-card);
-            border-radius: 6px;
-            overflow: hidden;
-            border: 1px solid var(--border-color);
+            min-width: 580px;
         }
 
         table.manual-table th, table.manual-table td {
@@ -214,6 +287,7 @@
             background: #1e293b;
             color: var(--accent-sky);
             font-weight: 700;
+            white-space: nowrap;
         }
 
         table.manual-table tr:hover td {
@@ -227,6 +301,7 @@
             border-radius: 4px;
             font-family: Consolas, Monaco, monospace;
             font-size: 0.84rem;
+            word-break: break-word;
         }
 
         .badge-role {
@@ -235,6 +310,7 @@
             border-radius: 12px;
             font-size: 0.72rem;
             font-weight: bold;
+            white-space: nowrap;
         }
         .badge-super { background: #6366f1; color: #fff; }
         .badge-modelador { background: #0284c7; color: #fff; }
@@ -255,7 +331,7 @@
             border-radius: 8px;
             padding: 20px;
             flex: 1;
-            min-width: 290px;
+            min-width: 280px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -271,6 +347,8 @@
 
         .diagram-card svg {
             margin-bottom: 16px;
+            max-width: 100%;
+            height: auto;
         }
 
         .diagram-card p {
@@ -296,7 +374,7 @@
 
         .flow-step {
             flex: 1;
-            min-width: 170px;
+            min-width: 150px;
             background: #1e293b;
             border-radius: 6px;
             padding: 12px;
@@ -325,25 +403,73 @@
             font-weight: bold;
         }
 
-        @media (max-width: 992px) {
-            aside.manual-sidebar {
-                position: relative;
-                width: 100%;
-                height: auto;
-                border-right: none;
-                border-bottom: 1px solid var(--border-color);
+        /* MEDIA QUERIES PARA ADAPTACIÓN MÓVIL TOTAL (< 900px) */
+        @media (max-width: 900px) {
+            .mobile-menu-btn {
+                display: flex;
             }
-            body { flex-direction: column; }
-            main.manual-content { margin-left: 0; padding: 24px; }
-            .flow-arrow { display: none; }
+
+            .btn-close-sidebar {
+                display: block;
+            }
+
+            aside.manual-sidebar {
+                position: fixed;
+                top: 0;
+                bottom: 0;
+                left: 0;
+                width: 290px;
+                transform: translateX(-100%);
+                box-shadow: 4px 0 25px rgba(0,0,0,0.7);
+            }
+
+            aside.manual-sidebar.active {
+                transform: translateX(0);
+            }
+
+            main.manual-content {
+                margin-left: 0;
+                width: 100%;
+                padding: 70px 20px 40px 20px;
+            }
+
+            header.manual-header h1 {
+                font-size: 1.7rem;
+            }
+
+            h2 {
+                font-size: 1.25rem;
+            }
+
+            .flow-arrow {
+                display: none;
+            }
+
+            .pipeline-flow {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .diagram-card {
+                min-width: 100%;
+            }
         }
     </style>
 </head>
 <body>
 
-    <!-- MENÚ LATERAL INTERACTIVO -->
-    <aside class="manual-sidebar">
-        <div class="sidebar-brand">Innov<span>ArqZ</span></div>
+    <!-- BOTÓN DE MENÚ HAMBURGUESA FLOTANTE EN MÓVIL -->
+    <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Abrir Menú" onclick="toggleSidebar()">☰</button>
+
+    <!-- OVERLAY OSCURO PARA CERRAR EL MENÚ AL TOCAR AFUERA -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
+    <!-- MENÚ LATERAL INTERACTIVO (DRAWER EN MÓVIL) -->
+    <aside class="manual-sidebar" id="manualSidebar">
+        <div class="sidebar-header-box">
+            <div class="sidebar-brand">Innov<span>ArqZ</span></div>
+            <button class="btn-close-sidebar" onclick="toggleSidebar()">✕</button>
+        </div>
         <div class="sidebar-sub">Estándar CDE ISO 19650 (2026)</div>
 
         <div class="search-box">
@@ -351,18 +477,18 @@
         </div>
 
         <ul class="nav-sections" id="sidebarLinks">
-            <li><a href="#intro">1. Introducción y Objeto</a></li>
-            <li><a href="#roles">2. Matriz de Roles y Responsabilidades</a></li>
-            <li><a href="#cde-cycle">3. Ciclo de Información ISO 19650</a></li>
-            <li><a href="#nomenclatura">4. Codificación Oficial (6 Campos)</a></li>
-            <li><a href="#concordancia">5. Concordancia Tipo vs. Extensión</a></li>
-            <li><a href="#reglas-renders">6. Protocolo de Renders y Dossiers</a></li>
-            <li><a href="#subidas">7. Subida Híbrida y Enrutamiento</a></li>
-            <li><a href="#interaccion-mouse">8. Diagramas de Interacción (Mouse y 3D)</a></li>
-            <li><a href="#visor-bim">9. Visor BIM 3D y Herramientas</a></li>
-            <li><a href="#corte-caminar">10. Caja de Sección y Modo Peatonal</a></li>
-            <li><a href="#capturas">11. Bandeja de Observaciones 3D</a></li>
-            <li><a href="#actas">12. Actas Formales y Cierre de Hito</a></li>
+            <li><a href="#intro" onclick="closeSidebarOnMobile()">1. Introducción y Objeto</a></li>
+            <li><a href="#roles" onclick="closeSidebarOnMobile()">2. Matriz de Roles y Responsabilidades</a></li>
+            <li><a href="#cde-cycle" onclick="closeSidebarOnMobile()">3. Ciclo de Información ISO 19650</a></li>
+            <li><a href="#nomenclatura" onclick="closeSidebarOnMobile()">4. Codificación Oficial (6 Campos)</a></li>
+            <li><a href="#concordancia" onclick="closeSidebarOnMobile()">5. Concordancia Tipo vs. Extensión</a></li>
+            <li><a href="#reglas-renders" onclick="closeSidebarOnMobile()">6. Protocolo de Renders y Dossiers</a></li>
+            <li><a href="#subidas" onclick="closeSidebarOnMobile()">7. Subida Híbrida y Enrutamiento</a></li>
+            <li><a href="#interaccion-mouse" onclick="closeSidebarOnMobile()">8. Diagramas de Interacción (Mouse y 3D)</a></li>
+            <li><a href="#visor-bim" onclick="closeSidebarOnMobile()">9. Visor BIM 3D y Herramientas</a></li>
+            <li><a href="#corte-caminar" onclick="closeSidebarOnMobile()">10. Caja de Sección y Modo Peatonal</a></li>
+            <li><a href="#capturas" onclick="closeSidebarOnMobile()">11. Bandeja de Observaciones 3D</a></li>
+            <li><a href="#actas" onclick="closeSidebarOnMobile()">12. Actas Formales y Cierre de Hito</a></li>
         </ul>
     </aside>
 
@@ -388,37 +514,39 @@
             <h2>2. Matriz de Roles y Responsabilidades</h2>
             <p>La seguridad y trazabilidad del CDE se basa en el principio de menor privilegio necesario, condicionando la visibilidad de carpetas y acciones según el cargo del usuario:</p>
 
-            <table class="manual-table">
-                <thead>
-                    <tr>
-                        <th>Rol Corporativo</th>
-                        <th>Contenedores Autorizados</th>
-                        <th>Atribuciones y Efecto Operativo</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td><span class="badge-role badge-super">SuperAdmin / BIM Manager</span></td>
-                        <td>01_WIP, 02_SHARED, 03_PUBLISHED, 04_ARCHIVED</td>
-                        <td>Creación de proyectos anualizados, auditoría de no conformidades, asignación de permisos y publicación administrativa directa.</td>
-                    </tr>
-                    <tr>
-                        <td><span class="badge-role badge-modelador">Modelador BIM</span></td>
-                        <td>01_WIP (Trabajo en Progreso)</td>
-                        <td>Elaboración y carga de modelos nativos (RVT, PLN, DWG), respuesta técnica a observaciones y promoción física hacia SHARED.</td>
-                    </tr>
-                    <tr>
-                        <td><span class="badge-role badge-revisor">Revisor / Coordinador</span></td>
-                        <td>02_SHARED (Compartido)</td>
-                        <td>Cruce multidisciplinar, detección de interferencias, emisión de instrucciones técnicas a modeladores y promoción a PUBLISHED.</td>
-                    </tr>
-                    <tr>
-                        <td><span class="badge-role badge-cliente">Cliente / Supervisión</span></td>
-                        <td>03_PUBLISHED (Publicado)</td>
-                        <td>Inspección de entregables contractuales aprobados, formulación de observaciones de ajuste y firma digital de Actas en PDF.</td>
-                    </tr>
-                </tbody>
-            </table>
+            <div class="table-responsive">
+                <table class="manual-table">
+                    <thead>
+                        <tr>
+                            <th>Rol Corporativo</th>
+                            <th>Contenedores Autorizados</th>
+                            <th>Atribuciones y Efecto Operativo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="badge-role badge-super">SuperAdmin / BIM Manager</span></td>
+                            <td>01_WIP, 02_SHARED, 03_PUBLISHED, 04_ARCHIVED</td>
+                            <td>Creación de proyectos anualizados, auditoría de no conformidades, asignación de permisos y publicación administrativa directa.</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge-role badge-modelador">Modelador BIM</span></td>
+                            <td>01_WIP (Trabajo en Progreso)</td>
+                            <td>Elaboración y carga de modelos nativos (RVT, PLN, DWG), respuesta técnica a observaciones y promoción física hacia SHARED.</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge-role badge-revisor">Revisor / Coordinador</span></td>
+                            <td>02_SHARED (Compartido)</td>
+                            <td>Cruce multidisciplinar, detección de interferencias, emisión de instrucciones técnicas a modeladores y promoción a PUBLISHED.</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge-role badge-cliente">Cliente / Supervisión</span></td>
+                            <td>03_PUBLISHED (Publicado)</td>
+                            <td>Inspección de entregables contractuales aprobados, formulación de observaciones de ajuste y firma digital de Actas en PDF.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </section>
 
         <!-- CAPÍTULO 3 -->
@@ -460,270 +588,278 @@
             <p><code>[PROYECTO]_[ORIGINADOR]_[ZONA]_[TIPO]_[DISCIPLINA]_[ESTADO].[ext]</code></p>
 
             <h3>4.1. Campo 3: ZONA / NIVEL (Desglose Espacial)</h3>
-            <table class="manual-table">
-                <thead>
-                    <tr>
-                        <th>Código</th>
-                        <th>Denominación Técnica</th>
-                        <th>Ámbito de Aplicación Práctica</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td><code>ZZ</code></td>
-                        <td>Proyecto Integral / Multinivel</td>
-                        <td>Modelos federados, memorias generales, renders exteriores, actas y contratos.</td>
-                    </tr>
-                    <tr>
-                        <td><code>XX</code></td>
-                        <td>Sin Nivel Específico</td>
-                        <td>Detalles constructivos tipo, cuadros de áreas o catálogos generales.</td>
-                    </tr>
-                    <tr>
-                        <td><code>SB</code></td>
-                        <td>Subsuelo / Sótanos</td>
-                        <td>Cimentación, fosos de ascensor, parqueaderos subterráneos y contenciones.</td>
-                    </tr>
-                    <tr>
-                        <td><code>N1, N2...</code></td>
-                        <td>Nivel / Piso Específico</td>
-                        <td>Planos de planta sectorizados, trazados de redes por piso o encofrados.</td>
-                    </tr>
-                    <tr>
-                        <td><code>CB</code></td>
-                        <td>Cubierta / Techo</td>
-                        <td>Estructuras de cerramiento superior, cubiertas e impermeabilización.</td>
-                    </tr>
-                </tbody>
-            </table>
+            <div class="table-responsive">
+                <table class="manual-table">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Denominación Técnica</th>
+                            <th>Ámbito de Aplicación Práctica</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>ZZ</code></td>
+                            <td>Proyecto Integral / Multinivel</td>
+                            <td>Modelos federados, memorias generales, renders exteriores, actas y contratos.</td>
+                        </tr>
+                        <tr>
+                            <td><code>XX</code></td>
+                            <td>Sin Nivel Específico</td>
+                            <td>Detalles constructivos tipo, cuadros de áreas o catálogos generales.</td>
+                        </tr>
+                        <tr>
+                            <td><code>SB</code></td>
+                            <td>Subsuelo / Sótanos</td>
+                            <td>Cimentación, fosos de ascensor, parqueaderos subterráneos y contenciones.</td>
+                        </tr>
+                        <tr>
+                            <td><code>N1, N2...</code></td>
+                            <td>Nivel / Piso Específico</td>
+                            <td>Planos de planta sectorizados, trazados de redes por piso o encofrados.</td>
+                        </tr>
+                        <tr>
+                            <td><code>CB</code></td>
+                            <td>Cubierta / Techo</td>
+                            <td>Estructuras de cerramiento superior, cubiertas e impermeabilización.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
 
             <h3>4.2. Campo 4: TIPO DE INFORMACIÓN (Naturaleza del Entregable)</h3>
-            <table class="manual-table">
-                <thead>
-                    <tr>
-                        <th>Código</th>
-                        <th>Tipo Documental</th>
-                        <th>Aplicación en InnovArqZ</th>
-                        <th>Formatos Admitidos</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td><code>M3</code></td>
-                        <td>Modelo 3D Paramétrico</td>
-                        <td>Modelos tridimensionales de diseño, coordinación o récord.</td>
-                        <td>.ifc, .rvt, .pln, .nwc, .nwd</td>
-                    </tr>
-                    <tr>
-                        <td><code>PL</code></td>
-                        <td>Plano 2D Coordinado</td>
-                        <td>Planimetría formal, láminas técnicas y planos de presentación.</td>
-                        <td>.dwg, .pdf, .dxf, .plt</td>
-                    </tr>
-                    <tr>
-                        <td><code>DR</code></td>
-                        <td>Dibujo / Detalle 2D</td>
-                        <td>Detalles constructivos singulares, esquemas técnicos auxiliares.</td>
-                        <td>.dwg, .pdf, .dxf</td>
-                    </tr>
-                    <tr>
-                        <td><code>IM</code></td>
-                        <td>Imagen / Render Estático</td>
-                        <td>Perspectivas hiperrealistas y vistas 3D fijas en formato gráfico.</td>
-                        <td>.png, .jpg, .jpeg, .webp, .tiff</td>
-                    </tr>
-                    <tr>
-                        <td><code>VI</code></td>
-                        <td>Video / Animación</td>
-                        <td>Recorridos virtuales, animaciones 3D o fases constructivas 4D.</td>
-                        <td>.mp4, .mov, .webm, .mkv, .avi</td>
-                    </tr>
-                    <tr>
-                        <td><code>INF</code></td>
-                        <td>Informe Técnico</td>
-                        <td>Reportes de colisiones (clash detection), catálogos o dossiers.</td>
-                        <td>.pdf, .xlsx, .docx, .html</td>
-                    </tr>
-                    <tr>
-                        <td><code>MEM</code></td>
-                        <td>Memoria de Cálculo</td>
-                        <td>Memorias de cálculo estructural, memorias técnicas MEP.</td>
-                        <td>.pdf, .docx, .xlsx</td>
-                    </tr>
-                    <tr>
-                        <td><code>ACT</code></td>
-                        <td>Acta Administrativa</td>
-                        <td>Actas de reunión, recibo a satisfacción y cierre de hitos.</td>
-                        <td>.pdf</td>
-                    </tr>
-                    <tr>
-                        <td><code>CON</code></td>
-                        <td>Documento Legal</td>
-                        <td>Contratos de consultoría, pólizas, actas de confidencialidad.</td>
-                        <td>.pdf</td>
-                    </tr>
-                </tbody>
-            </table>
+            <div class="table-responsive">
+                <table class="manual-table">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Tipo Documental</th>
+                            <th>Aplicación en InnovArqZ</th>
+                            <th>Formatos Admitidos</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>M3</code></td>
+                            <td>Modelo 3D Paramétrico</td>
+                            <td>Modelos tridimensionales de diseño, coordinación o récord.</td>
+                            <td>.ifc, .rvt, .pln, .nwc, .nwd</td>
+                        </tr>
+                        <tr>
+                            <td><code>PL</code></td>
+                            <td>Plano 2D Coordinado</td>
+                            <td>Planimetría formal, láminas técnicas y planos de presentación.</td>
+                            <td>.dwg, .pdf, .dxf, .plt</td>
+                        </tr>
+                        <tr>
+                            <td><code>DR</code></td>
+                            <td>Dibujo / Detalle 2D</td>
+                            <td>Detalles constructivos singulares, esquemas técnicos auxiliares.</td>
+                            <td>.dwg, .pdf, .dxf</td>
+                        </tr>
+                        <tr>
+                            <td><code>IM</code></td>
+                            <td>Imagen / Render Estático</td>
+                            <td>Perspectivas hiperrealistas y vistas 3D fijas en formato gráfico.</td>
+                            <td>.png, .jpg, .jpeg, .webp, .tiff</td>
+                        </tr>
+                        <tr>
+                            <td><code>VI</code></td>
+                            <td>Video / Animación</td>
+                            <td>Recorridos virtuales, animaciones 3D o fases constructivas 4D.</td>
+                            <td>.mp4, .mov, .webm, .mkv, .avi</td>
+                        </tr>
+                        <tr>
+                            <td><code>INF</code></td>
+                            <td>Informe Técnico</td>
+                            <td>Reportes de colisiones (clash detection), catálogos o dossiers.</td>
+                            <td>.pdf, .xlsx, .docx, .html</td>
+                        </tr>
+                        <tr>
+                            <td><code>MEM</code></td>
+                            <td>Memoria de Cálculo</td>
+                            <td>Memorias de cálculo estructural, memorias técnicas MEP.</td>
+                            <td>.pdf, .docx, .xlsx</td>
+                        </tr>
+                        <tr>
+                            <td><code>ACT</code></td>
+                            <td>Acta Administrativa</td>
+                            <td>Actas de reunión, recibo a satisfacción y cierre de hitos.</td>
+                            <td>.pdf</td>
+                        </tr>
+                        <tr>
+                            <td><code>CON</code></td>
+                            <td>Documento Legal</td>
+                            <td>Contratos de consultoría, pólizas, actas de confidencialidad.</td>
+                            <td>.pdf</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
 
             <h3>4.3. Campo 5: DISCIPLINA (Especialidad Técnica)</h3>
-            <table class="manual-table">
-                <thead>
-                    <tr>
-                        <th>Código</th>
-                        <th>Especialidad Técnica</th>
-                        <th>Responsable Primario</th>
-                        <th>Enrutamiento en 01_WIP</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td><code>ARQ</code></td>
-                        <td>Arquitectura y Diseño Espacial</td>
-                        <td>Modelador / Especialista Arquitectónico</td>
-                        <td>ARQ_Arquitectura</td>
-                    </tr>
-                    <tr>
-                        <td><code>EST</code></td>
-                        <td>Estructuras y Cimentación</td>
-                        <td>Ingeniero Estructural / Modelador BIM</td>
-                        <td>EST_Estructura</td>
-                    </tr>
-                    <tr>
-                        <td><code>MEP</code></td>
-                        <td>Redes Integradas (Genérico)</td>
-                        <td>Coordinador de Instalaciones</td>
-                        <td>MEP_Instalaciones</td>
-                    </tr>
-                    <tr>
-                        <td><code>HID</code></td>
-                        <td>Instalaciones Hidráulicas</td>
-                        <td>Ingeniero / Modelador Hidráulico</td>
-                        <td>MEP_Instalaciones</td>
-                    </tr>
-                    <tr>
-                        <td><code>SAN</code></td>
-                        <td>Instalaciones Sanitarias y Pluviales</td>
-                        <td>Ingeniero / Modelador Sanitario</td>
-                        <td>MEP_Instalaciones</td>
-                    </tr>
-                    <tr>
-                        <td><code>ELE</code></td>
-                        <td>Redes Eléctricas e Iluminación</td>
-                        <td>Ingeniero / Modelador Eléctrico</td>
-                        <td>MEP_Instalaciones</td>
-                    </tr>
-                    <tr>
-                        <td><code>MEC</code></td>
-                        <td>Climatización / HVAC / Mecánica</td>
-                        <td>Ingeniero Mecánico / Especialista HVAC</td>
-                        <td>MEP_Instalaciones</td>
-                    </tr>
-                    <tr>
-                        <td><code>PCI</code></td>
-                        <td>Protección Contra Incendios</td>
-                        <td>Especialista en Redes Contra Incendio</td>
-                        <td>MEP_Instalaciones</td>
-                    </tr>
-                    <tr>
-                        <td><code>GAS</code></td>
-                        <td>Redes de Gas Combustible</td>
-                        <td>Especialista Técnico en Gas</td>
-                        <td>MEP_Instalaciones</td>
-                    </tr>
-                    <tr>
-                        <td><code>DIS</code></td>
-                        <td>Diseño de Interiores</td>
-                        <td>Especialista de Interiores</td>
-                        <td>ARQ_Arquitectura</td>
-                    </tr>
-                    <tr>
-                        <td><code>COO</code></td>
-                        <td>Coordinación Multidisciplinar</td>
-                        <td>BIM Manager / Revisor de Coordinación</td>
-                        <td>Transversal (02_SHARED)</td>
-                    </tr>
-                    <tr>
-                        <td><code>LEG</code></td>
-                        <td>Aspectos Legales y Normativos</td>
-                        <td>SuperAdmin / Dirección General</td>
-                        <td>03_Actas_y_Memorias</td>
-                    </tr>
-                    <tr>
-                        <td><code>CLI</code></td>
-                        <td>Aprobación del Cliente</td>
-                        <td>Supervisión Técnica / Cliente Final</td>
-                        <td>03_Actas_y_Memorias</td>
-                    </tr>
-                </tbody>
-            </table>
+            <div class="table-responsive">
+                <table class="manual-table">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Especialidad Técnica</th>
+                            <th>Responsable Primario</th>
+                            <th>Enrutamiento en 01_WIP</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>ARQ</code></td>
+                            <td>Arquitectura y Diseño Espacial</td>
+                            <td>Modelador / Especialista Arquitectónico</td>
+                            <td>ARQ_Arquitectura</td>
+                        </tr>
+                        <tr>
+                            <td><code>EST</code></td>
+                            <td>Estructuras y Cimentación</td>
+                            <td>Ingeniero Estructural / Modelador BIM</td>
+                            <td>EST_Estructura</td>
+                        </tr>
+                        <tr>
+                            <td><code>MEP</code></td>
+                            <td>Redes Integradas (Genérico)</td>
+                            <td>Coordinador de Instalaciones</td>
+                            <td>MEP_Instalaciones</td>
+                        </tr>
+                        <tr>
+                            <td><code>HID</code></td>
+                            <td>Instalaciones Hidráulicas</td>
+                            <td>Ingeniero / Modelador Hidráulico</td>
+                            <td>MEP_Instalaciones</td>
+                        </tr>
+                        <tr>
+                            <td><code>SAN</code></td>
+                            <td>Instalaciones Sanitarias y Pluviales</td>
+                            <td>Ingeniero / Modelador Sanitario</td>
+                            <td>MEP_Instalaciones</td>
+                        </tr>
+                        <tr>
+                            <td><code>ELE</code></td>
+                            <td>Redes Eléctricas e Iluminación</td>
+                            <td>Ingeniero / Modelador Eléctrico</td>
+                            <td>MEP_Instalaciones</td>
+                        </tr>
+                        <tr>
+                            <td><code>MEC</code></td>
+                            <td>Climatización / HVAC / Mecánica</td>
+                            <td>Ingeniero Mecánico / Especialista HVAC</td>
+                            <td>MEP_Instalaciones</td>
+                        </tr>
+                        <tr>
+                            <td><code>PCI</code></td>
+                            <td>Protección Contra Incendios</td>
+                            <td>Especialista en Redes Contra Incendio</td>
+                            <td>MEP_Instalaciones</td>
+                        </tr>
+                        <tr>
+                            <td><code>GAS</code></td>
+                            <td>Redes de Gas Combustible</td>
+                            <td>Especialista Técnico en Gas</td>
+                            <td>MEP_Instalaciones</td>
+                        </tr>
+                        <tr>
+                            <td><code>DIS</code></td>
+                            <td>Diseño de Interiores</td>
+                            <td>Especialista de Interiores</td>
+                            <td>ARQ_Arquitectura</td>
+                        </tr>
+                        <tr>
+                            <td><code>COO</code></td>
+                            <td>Coordinación Multidisciplinar</td>
+                            <td>BIM Manager / Revisor de Coordinación</td>
+                            <td>Transversal (02_SHARED)</td>
+                        </tr>
+                        <tr>
+                            <td><code>LEG</code></td>
+                            <td>Aspectos Legales y Normativos</td>
+                            <td>SuperAdmin / Dirección General</td>
+                            <td>03_Actas_y_Memorias</td>
+                        </tr>
+                        <tr>
+                            <td><code>CLI</code></td>
+                            <td>Aprobación del Cliente</td>
+                            <td>Supervisión Técnica / Cliente Final</td>
+                            <td>03_Actas_y_Memorias</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
 
             <h3>4.4. Campo 6: ESTADO Y APTITUD DE USO (Suitability Code)</h3>
-            <table class="manual-table">
-                <thead>
-                    <tr>
-                        <th>Código</th>
-                        <th>Aptitud de Uso</th>
-                        <th>Contenedor Obligatorio</th>
-                        <th>Alcance y Efecto Legal</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td><code>S0</code></td>
-                        <td>Trabajo en Progreso</td>
-                        <td>01_WIP</td>
-                        <td>Documentación editable preliminar sin validez de coordinación externa.</td>
-                    </tr>
-                    <tr>
-                        <td><code>S1</code></td>
-                        <td>Apto para Coordinación</td>
-                        <td>02_SHARED</td>
-                        <td>Versión congelada habilitada para cruce multidisciplinar.</td>
-                    </tr>
-                    <tr>
-                        <td><code>S2</code></td>
-                        <td>Apto para Información</td>
-                        <td>02_SHARED</td>
-                        <td>Compartido para conocimiento técnico sin efecto vinculante de obra.</td>
-                    </tr>
-                    <tr>
-                        <td><code>S3</code></td>
-                        <td>Apto para Revisión</td>
-                        <td>02_SHARED</td>
-                        <td>Emitido para dictamen formal del Revisor o Interventoría.</td>
-                    </tr>
-                    <tr>
-                        <td><code>A1</code></td>
-                        <td>Aprobado para Construcción</td>
-                        <td>03_PUBLISHED</td>
-                        <td>Entregable contractual firmado. Autoriza ejecución material en obra.</td>
-                    </tr>
-                    <tr>
-                        <td><code>A2</code></td>
-                        <td>Aprobado para Licitación</td>
-                        <td>03_PUBLISHED</td>
-                        <td>Set oficial congelado para cotizaciones y pliegos de compra.</td>
-                    </tr>
-                    <tr>
-                        <td><code>A3</code></td>
-                        <td>Aprobado con Observaciones</td>
-                        <td>03_PUBLISHED</td>
-                        <td>Visto bueno temporal condicionado a ajustes para liquidación.</td>
-                    </tr>
-                    <tr>
-                        <td><code>A4</code></td>
-                        <td>Aprobado As-Built / Récord</td>
-                        <td>03_PUBLISHED</td>
-                        <td>Documentación conforme a la realidad final efectivamente construida.</td>
-                    </tr>
-                    <tr>
-                        <td><code>CR / ACT / CON</code></td>
-                        <td>Excepciones Administrativas</td>
-                        <td>03_PUBLISHED</td>
-                        <td>Ingreso directo de actas o contratos sin requerir paso por WIP.</td>
-                    </tr>
-                </tbody>
-            </table>
+            <div class="table-responsive">
+                <table class="manual-table">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Aptitud de Uso</th>
+                            <th>Contenedor Obligatorio</th>
+                            <th>Alcance y Efecto Legal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>S0</code></td>
+                            <td>Trabajo en Progreso</td>
+                            <td>01_WIP</td>
+                            <td>Documentación editable preliminar sin validez de coordinación externa.</td>
+                        </tr>
+                        <tr>
+                            <td><code>S1</code></td>
+                            <td>Apto para Coordinación</td>
+                            <td>02_SHARED</td>
+                            <td>Versión congelada habilitada para cruce multidisciplinar.</td>
+                        </tr>
+                        <tr>
+                            <td><code>S2</code></td>
+                            <td>Apto para Información</td>
+                            <td>02_SHARED</td>
+                            <td>Compartido para conocimiento técnico sin efecto vinculante de obra.</td>
+                        </tr>
+                        <tr>
+                            <td><code>S3</code></td>
+                            <td>Apto para Revisión</td>
+                            <td>02_SHARED</td>
+                            <td>Emitido para dictamen formal del Revisor o Interventoría.</td>
+                        </tr>
+                        <tr>
+                            <td><code>A1</code></td>
+                            <td>Aprobado para Construcción</td>
+                            <td>03_PUBLISHED</td>
+                            <td>Entregable contractual firmado. Autoriza ejecución material en obra.</td>
+                        </tr>
+                        <tr>
+                            <td><code>A2</code></td>
+                            <td>Aprobado para Licitación</td>
+                            <td>03_PUBLISHED</td>
+                            <td>Set oficial congelado para cotizaciones y pliegos de compra.</td>
+                        </tr>
+                        <tr>
+                            <td><code>A3</code></td>
+                            <td>Aprobado con Observaciones</td>
+                            <td>03_PUBLISHED</td>
+                            <td>Visto bueno temporal condicionado a ajustes para liquidación.</td>
+                        </tr>
+                        <tr>
+                            <td><code>A4</code></td>
+                            <td>Aprobado As-Built / Récord</td>
+                            <td>03_PUBLISHED</td>
+                            <td>Documentación conforme a la realidad final efectivamente construida.</td>
+                        </tr>
+                        <tr>
+                            <td><code>CR / ACT / CON</code></td>
+                            <td>Excepciones Administrativas</td>
+                            <td>03_PUBLISHED</td>
+                            <td>Ingreso directo de actas o contratos sin requerir paso por WIP.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </section>
 
         <!-- CAPÍTULO 5 -->
@@ -731,47 +867,49 @@
             <h2>5. Matriz de Concordancia Obligatoria (Tipo vs. Extensión)</h2>
             <p>El motor del CDE valida la compatibilidad entre el tipo declarado y la extensión física antes de procesar cualquier carga. Todo archivo no conforme es bloqueado:</p>
 
-            <table class="manual-table">
-                <thead>
-                    <tr>
-                        <th>Tipo Declarado</th>
-                        <th>Extensiones Binarias Admitidas</th>
-                        <th>Incompatibilidad Bloqueada</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td><code>M3 (Modelo 3D)</code></td>
-                        <td>.ifc, .rvt, .pln, .nwc, .nwd</td>
-                        <td>Asignar .dwg o .pdf a un modelo tridimensional.</td>
-                    </tr>
-                    <tr>
-                        <td><code>PL / DR (Planos/Detalles)</code></td>
-                        <td>.dwg, .pdf, .dxf, .plt</td>
-                        <td>Intentar subir videos o imágenes sueltas bajo tipo PL.</td>
-                    </tr>
-                    <tr>
-                        <td><code>VI (Videos / Animación)</code></td>
-                        <td>.mp4, .mov, .webm, .mkv, .avi</td>
-                        <td>Registrar videos terminados en .pdf o nombrados como PL.</td>
-                    </tr>
-                    <tr>
-                        <td><code>IM (Imágenes / Renders)</code></td>
-                        <td>.png, .jpg, .jpeg, .webp, .tiff</td>
-                        <td>Registrar imágenes o renders sueltos terminados en .pdf.</td>
-                    </tr>
-                    <tr>
-                        <td><code>INF / MEM (Informes/Memorias)</code></td>
-                        <td>.pdf, .xlsx, .docx, .html</td>
-                        <td>Asignar extensiones de video o modelos tridimensionales.</td>
-                    </tr>
-                    <tr>
-                        <td><code>ACT / CON (Actas/Contratos)</code></td>
-                        <td>.pdf</td>
-                        <td>Cualquier formato que no sea lectura fija contractual firmada.</td>
-                    </tr>
-                </tbody>
-            </table>
+            <div class="table-responsive">
+                <table class="manual-table">
+                    <thead>
+                        <tr>
+                            <th>Tipo Declarado</th>
+                            <th>Extensiones Binarias Admitidas</th>
+                            <th>Incompatibilidad Bloqueada</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>M3 (Modelo 3D)</code></td>
+                            <td>.ifc, .rvt, .pln, .nwc, .nwd</td>
+                            <td>Asignar .dwg o .pdf a un modelo tridimensional.</td>
+                        </tr>
+                        <tr>
+                            <td><code>PL / DR (Planos/Detalles)</code></td>
+                            <td>.dwg, .pdf, .dxf, .plt</td>
+                            <td>Intentar subir videos o imágenes sueltas bajo tipo PL.</td>
+                        </tr>
+                        <tr>
+                            <td><code>VI (Videos / Animación)</code></td>
+                            <td>.mp4, .mov, .webm, .mkv, .avi</td>
+                            <td>Registrar videos terminados en .pdf o nombrados como PL.</td>
+                        </tr>
+                        <tr>
+                            <td><code>IM (Imágenes / Renders)</code></td>
+                            <td>.png, .jpg, .jpeg, .webp, .tiff</td>
+                            <td>Registrar imágenes o renders sueltos terminados en .pdf.</td>
+                        </tr>
+                        <tr>
+                            <td><code>INF / MEM (Informes/Memorias)</code></td>
+                            <td>.pdf, .xlsx, .docx, .html</td>
+                            <td>Asignar extensiones de video o modelos tridimensionales.</td>
+                        </tr>
+                        <tr>
+                            <td><code>ACT / CON (Actas/Contratos)</code></td>
+                            <td>.pdf</td>
+                            <td>Cualquier formato que no sea lectura fija contractual firmada.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </section>
 
         <!-- CAPÍTULO 6 -->
@@ -805,16 +943,11 @@
                 <div class="diagram-card">
                     <h4>Navegación con Mouse (Modo Órbita)</h4>
                     <svg width="180" height="150" viewBox="0 0 180 150">
-                        <!-- Cuerpo Ratón -->
                         <rect x="50" y="20" width="80" height="110" rx="40" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
-                        <!-- Botón Izquierdo -->
                         <path d="M 50 60 L 50 40 A 40 40 0 0 1 85 20 L 85 60 Z" fill="#0284c7" opacity="0.8"/>
-                        <!-- Botón Derecho -->
                         <path d="M 95 60 L 95 20 A 40 40 0 0 1 130 40 L 130 60 Z" fill="#d97706" opacity="0.8"/>
-                        <!-- Rueda Scroll -->
                         <rect x="85" y="35" width="10" height="25" rx="5" fill="#10b981"/>
                         <line x1="90" y1="65" x2="90" y2="120" stroke="#334155" stroke-width="2"/>
-                        <!-- Etiquetas -->
                         <text x="35" y="45" fill="#38bdf8" font-size="9" font-weight="bold" text-anchor="end">Seleccionar / Medir</text>
                         <text x="145" y="45" fill="#d97706" font-size="9" font-weight="bold">Menú Contextual</text>
                         <text x="90" y="145" fill="#10b981" font-size="9" text-anchor="middle">Scroll = Zoom | Clic Rueda = Paneo</text>
@@ -826,16 +959,12 @@
                 <div class="diagram-card">
                     <h4>Desplazamiento Peatonal (Modo Caminar)</h4>
                     <svg width="180" height="150" viewBox="0 0 180 150">
-                        <!-- Tecla W -->
                         <rect x="70" y="20" width="40" height="40" rx="6" fill="#1e293b" stroke="#10b981" stroke-width="2"/>
                         <text x="90" y="45" fill="#10b981" font-size="16" font-weight="bold" text-anchor="middle">W</text>
-                        <!-- Tecla A -->
                         <rect x="25" y="65" width="40" height="40" rx="6" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
                         <text x="45" y="90" fill="#38bdf8" font-size="16" font-weight="bold" text-anchor="middle">A</text>
-                        <!-- Tecla S -->
                         <rect x="70" y="65" width="40" height="40" rx="6" fill="#1e293b" stroke="#10b981" stroke-width="2"/>
                         <text x="90" y="90" fill="#10b981" font-size="16" font-weight="bold" text-anchor="middle">S</text>
-                        <!-- Tecla D -->
                         <rect x="115" y="65" width="40" height="40" rx="6" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
                         <text x="135" y="90" fill="#38bdf8" font-size="16" font-weight="bold" text-anchor="middle">D</text>
                         <text x="90" y="130" fill="#cbd5e1" font-size="9" text-anchor="middle">W/S: Avance • A/D: Laterales</text>
@@ -852,7 +981,7 @@
             <ul>
                 <li><strong>Árbol de Pisos y Niveles:</strong> Lee de forma paramétrica la entidad <code>IfcBuildingStorey</code> sin desfasar cotas de cimentación, permitiendo aislar y analizar plantas específicas.</li>
                 <li><strong>Inspección de Parámetros:</strong> Al tocar un objeto en la escena, el sistema consulta su <code>ExpressID</code>, tipo y propiedades nativas registradas por el software de autoría.</li>
-                <li><strong>Herramienta de Medición (📏 Medir):</strong> Calcula simultáneamente la distancia euclidiana neta, el desnivel vertical ($\Delta Y$) y la separación proyectada en planta ($\Delta XZ$).</li>
+                <li><strong>Herramienta de Medición (📏 Medir):</strong> Calcula simultáneamente la distancia euclidiana neta, el desnivel vertical (&Delta;Y) y la separación proyectada en planta (&Delta;XZ).</li>
             </ul>
         </section>
 
@@ -893,8 +1022,26 @@
         </section>
     </main>
 
-    <!-- SCRIPT DE BÚSQUEDA INTERNA -->
+    <!-- SCRIPT DE INTERACCIÓN Y NAVEGACIÓN -->
     <script>
+        // Control de apertura y cierre del menú hamburguesa en móvil
+        function toggleSidebar() {
+            const sidebar = document.getElementById('manualSidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            sidebar.classList.toggle('active');
+            overlay.classList.toggle('active');
+        }
+
+        function closeSidebarOnMobile() {
+            if (window.innerWidth <= 900) {
+                const sidebar = document.getElementById('manualSidebar');
+                const overlay = document.getElementById('sidebarOverlay');
+                sidebar.classList.remove('active');
+                overlay.classList.remove('active');
+            }
+        }
+
+        // Búsqueda en tiempo real
         function filterManual() {
             const query = document.getElementById("manualSearch").value.toLowerCase();
             const chapters = document.querySelectorAll(".manual-chapter");
@@ -910,13 +1057,14 @@
             });
         }
 
+        // Resaltar sección activa durante el desplazamiento
         window.addEventListener('scroll', () => {
             const chapters = document.querySelectorAll('.manual-chapter');
             const links = document.querySelectorAll('#sidebarLinks li a');
             let currentId = '';
 
             chapters.forEach(chapter => {
-                const top = chapter.offsetTop - 80;
+                const top = chapter.offsetTop - 90;
                 if (window.pageYOffset >= top) {
                     currentId = chapter.getAttribute('id');
                 }
