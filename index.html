@@ -17,9 +17,16 @@
 
     <!-- ESTILOS AISLADOS EXCLUSIVOS PARA EL VISOR 3D, NIVELES, BANDEJA CAPTURAS Y MODO CAMINAR -->
     <style>
-        /* Contención nativa de scroll para neutralizar pull-to-refresh sin JavaScript */
-        #viewerModal {
-            overscroll-behavior-y: contain !important;
+        /* Bloqueo estricto del pull-to-refresh en la raíz del documento y en los visores */
+        html, body {
+            overscroll-behavior-y: none !important;
+            overscroll-behavior: none !important;
+        }
+
+        #viewerModal, #modalIfcContainer, #modalIfcContainer canvas {
+            overscroll-behavior: none !important;
+            overscroll-behavior-y: none !important;
+            touch-action: none !important;
         }
 
         /* Bloqueo estricto de selección de texto en la botonera flotante */
@@ -301,7 +308,7 @@
                 left: 8px !important;
                 max-width: calc(100vw - 50px) !important;
             }
-            /* Cruceta elevada y con escala para encajar por encima del botón Salir en móvil */
+            /* Cruceta elevada holgadamente sobre el botón Salir en móvil */
             .walk-touch-container {
                 position: absolute !important;
                 bottom: 95px !important;
