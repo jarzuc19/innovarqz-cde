@@ -55,18 +55,18 @@ let isMeasureToolActive = false;
 let measurePoints = [];
 const measureVisualObjects = [];
 
-// HERRAMIENTA DE RECORRIDO EN PRIMERA PERSONA (WALK MODE)
+// HERRAMIENTA DE RECORRIDO EN PRIMERA PERSONA (NAVEGACIÓN LIBRE SIN BLOQUEOS)
 let isWalkModeActive = false;
 let isPickSlabModeActive = false;
 const walkMovement = { forward: false, backward: false, left: false, right: false };
 const walkClock = new THREE.Clock();
-const walkSpeed = 3.6; // metros por segundo
+const walkSpeed = 3.8; // metros por segundo
 let walkPitch = 0;
 let walkYaw = 0;
+let walkFixedY = 1.65; // Cota de ojos bloqueada para el nivel activo
 let walkIsDraggingLook = false;
 let walkLastMousePos = { x: 0, y: 0 };
 let walkListenersConfigured = false;
-const MAX_STEP_HEIGHT = 0.25; // 25 cm tolerancia de escalón / rampa
 const highlightedSlabs = [];
 
 // BANDEJA DE CAPTURAS 3D (OPCIÓN A - CARRITO DE INSPECCIÓN)
@@ -169,7 +169,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 });
 
-// GESTIÓN DE PILA DE MODALES
 function registrarAperturaModalEnHistorial(modalId) {
     modalActivoId = modalId;
     history.pushState({ modalOpen: true, modalId: modalId }, "");
@@ -258,9 +257,6 @@ function filtrarPorSubcarpeta(sub) {
     loadFiles();
 }
 
-/**
- * PISTA DINÁMICA DE SUBCARPETAS CON PRIORIDAD EN CAMPO 4 (TIPO ISO 19650)
- */
 function actualizarPistaSubcarpetaModal() {
     const isoName = document.getElementById("isoNameInput").value.trim().toUpperCase();
     const targetTab = document.getElementById("uploadTargetTab").value;
@@ -480,7 +476,7 @@ function aplicarRestriccionPestanasVisuales() {
 }
 
 // ==============================================================================
-// HILO DE NOTAS TÉCNICAS (CON SOPORTE DE IMAGEN Y REPORTE 3D)
+// HILO DE NOTAS TÉCNICAS
 // ==============================================================================
 async function evaluarNotasTecnicasActivas() {
     const threadContainer = document.getElementById("interactionThreadContainer");
@@ -978,7 +974,7 @@ async function procesarAprobacionCliente(estadoAprobacion) {
         return;
     }
     if (estadoAprobacion === "RECHAZADO" && !observaciones) {
-        alert("⚠️ Por favor ingrese sus observaciones detalladas.");
+        alert("⚠️️ Por favor ingrese sus observaciones detalladas.");
         return;
     }
 
@@ -1593,7 +1589,6 @@ async function inicializarVisorIFC(fileUrl, container) {
         if (e.button === 1) isMiddleShiftOrbit = false;
     });
 
-    // EVENTOS DE NAVEGACIÓN Y GIRO DE CÁMARA
     ifcRenderer.domElement.addEventListener('pointerdown', (e) => {
         pointerDownPos.x = e.clientX;
         pointerDownPos.y = e.clientY;
@@ -1612,7 +1607,6 @@ async function inicializarVisorIFC(fileUrl, container) {
             walkLastMousePos.x = e.clientX;
             walkLastMousePos.y = e.clientY;
 
-            // Sensibilidad ágil (0.0125) en táctil y suave (0.0035) para ratón de PC
             const factorSensibilidad = (e.pointerType === 'touch') ? 0.0125 : 0.0035;
 
             walkYaw -= deltaX * factorSensibilidad;
@@ -1734,10 +1728,8 @@ async function inicializarVisorIFC(fileUrl, container) {
             const matrix = new THREE.Matrix4().fromArray(placedGeometry.flatTransformation);
             mesh.applyMatrix4(matrix);
 
-            // DETECCIÓN DINÁMICA PARAMÉTRICA DE ELEMENTOS
             let esPuerta = false;
             let esLosa = false;
-            let esMueble = false;
 
             try {
                 const tipoLinea = ifcApiInstance.GetLine(currentLoadedModelID, placedGeometry.geometryExpressID);
@@ -1752,9 +1744,6 @@ async function inicializarVisorIFC(fileUrl, container) {
                     if (constructorName.includes("SLAB") || entityName.includes("SLAB") || entityName.includes("LOSA") || entityName.includes("FORJADO") || entityName.includes("PISO") || objectType.includes("SLAB") || objectType.includes("LOSA")) {
                         esLosa = true;
                     }
-                    if (constructorName.includes("FURNISHING") || entityName.includes("CAMA") || entityName.includes("BED") || entityName.includes("TABLE") || entityName.includes("MESA") || entityName.includes("SOFA") || entityName.includes("SILLA") || objectType.includes("FURNISHING")) {
-                        esMueble = true;
-                    }
                 }
             } catch (errCheck) {}
 
@@ -1762,9 +1751,7 @@ async function inicializarVisorIFC(fileUrl, container) {
                 expressID: placedGeometry.geometryExpressID,
                 modelID: currentLoadedModelID,
                 esPuerta: esPuerta,
-                esLosa: esLosa,
-                esMueble: esMueble,
-                matOriginal: material
+                esLosa: esLosa
             };
 
             if (!esTransparente && posFloats.length < 6000) {
@@ -1780,18 +1767,17 @@ async function inicializarVisorIFC(fileUrl, container) {
         }
     });
 
-    // ARQUITECTURA PARAMÉTRICA: CENTRADO HORIZONTAL EXCLUSIVO (Y NATIVO 1:1)
+    // ARQUITECTURA PARAMÉTRICA NATIVA (Y NATIVO 1:1, CENTRADO HORIZONTAL EXCLUSIVO)
     const box = new THREE.Box3().setFromObject(ifcCurrentGroup);
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
 
     ifcCurrentGroup.position.x -= center.x;
     ifcCurrentGroup.position.z -= center.z;
-    ifcCurrentGroup.position.y = 0; // Escala vertical 100% nativa con cotas IFC
+    ifcCurrentGroup.position.y = 0; // Cota vertical nativa sin compensaciones artificiales
 
     ifcScene.add(ifcCurrentGroup);
 
-    // Rejilla adaptativa al punto más bajo del modelo
     ifcGridHelper = new THREE.GridHelper(Math.max(size.x, size.z) * 1.5, 50, 0x94a3b8, 0xe2e8f0);
     ifcGridHelper.position.y = box.min.y - 0.05;
     ifcScene.add(ifcGridHelper);
@@ -1865,7 +1851,7 @@ function restablecerVisibilidadIFC() {
 }
 
 // ==============================================================================
-// BANDEJA DE CAPTURAS TEMPORALES (OPCIÓN A - CARRITO DE INSPECCIÓN 3D)
+// BANDEJA DE CAPTURAS TEMPORALES
 // ==============================================================================
 function agregarCapturaABandejaIFC() {
     ocultarMenuContextualIFC();
@@ -2185,7 +2171,7 @@ function extraerNivelesDelModeloIFC() {
                 id: lvl.id,
                 nombre: lvl.nombre,
                 cotaNativa: cotaMetros,
-                cotaEscena: cotaMetros // Correspondencia 1:1 estricta sin offsets
+                cotaEscena: cotaMetros // Correspondencia 1:1 nativa
             };
         });
     } else {
@@ -2275,20 +2261,20 @@ function cortarEnNivel(cotaLosaEscena) {
     ifcClippingPlane.constant = cotaCorte;
 
     const min = ifcModelBounds.minY || 0;
-    const max = (ifcModelBounds.minY || 0) + (ifcModelBounds.size.y || 20);
+    const max = min + (ifcModelBounds.size.y || 20);
     const pct = Math.min(100, Math.max(0, ((cotaCorte - min) / (max - min)) * 100));
     const slider = document.getElementById("clipSlider");
     if (slider) slider.value = pct;
 }
 
 // ==============================================================================
-// TELETRANSPORTACIÓN DETERMINISTA Y FÍSICA PEATONAL
+// TELETRANSPORTACIÓN DETERMINISTA Y DESPLAZAMIENTO LIBRE
 // ==============================================================================
 function caminarEnNivel(cotaLosaEscena) {
     cerrarPanelNivelesIFC();
     desactivarSeleccionLosa();
 
-    // 1. Filtrar losas o forjados en la franja del piso seleccionado
+    // 1. Filtrar las mallas de losas/pisos en la franja del nivel seleccionado
     const losasNivel = ifcMeshesList.filter(mesh => {
         if (!mesh.visible || mesh.userData.esPuerta) return false;
         mesh.updateWorldMatrix(true, false);
@@ -2299,7 +2285,7 @@ function caminarEnNivel(cotaLosaEscena) {
     let posX = 0;
     let posZ = 0.5;
 
-    // 2. Extraer el centroide horizontal de la losa del nivel
+    // 2. Extraer el centroide horizontal de la planta
     if (losasNivel.length > 0) {
         const boxPlanta = new THREE.Box3();
         losasNivel.forEach(m => boxPlanta.expandByObject(m));
@@ -2311,7 +2297,7 @@ function caminarEnNivel(cotaLosaEscena) {
         posZ = ifcModelBounds.center.z;
     }
 
-    // 3. Posicionar cámara a cotaLosaEscena + 1.65 m oficiales
+    // 3. Teletransportar con cota estricta (cotaLosaEscena + 1.65m)
     iniciarModoCaminarEnCoordenadas(posX, cotaLosaEscena, posZ);
 }
 
@@ -2339,7 +2325,6 @@ function activarSeleccionLosaCaminar() {
             pcHint.style.display = "flex";
         }
 
-        // Resaltar sutilmente todas las losas transitables del modelo
         resaltarLosasTransitables(true);
     } else {
         desactivarModoCaminar();
@@ -2351,7 +2336,6 @@ function resaltarLosasTransitables(activar) {
         highlightedSlabs.length = 0;
         ifcMeshesList.forEach(mesh => {
             if (!mesh.visible || mesh.userData.esPuerta) return;
-            // Si está identificada como losa o si es una superficie plana horizontal predominante
             const box = new THREE.Box3().setFromObject(mesh);
             const size = box.getSize(new THREE.Vector3());
             const esHorizontal = (size.y < 0.6 && (size.x > 1.2 || size.z > 1.2));
@@ -2401,7 +2385,7 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
     const container = document.getElementById("modalIfcContainer");
     const esDispositivoTactil = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 992);
 
-    // Conservar la dirección frontal de la cámara en el plano horizontal para no rotar contra paredes
+    // Conservar la dirección horizontal previa para mirar hacia el espacio
     if (ifcCamera && ifcControls) {
         const direccionPrevia = new THREE.Vector3();
         ifcCamera.getWorldDirection(direccionPrevia);
@@ -2417,8 +2401,9 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
         ifcControls.enableZoom = false;
     }
 
-    const alturaOjoHumano = yLosa + 1.65;
-    ifcCamera.position.set(x, alturaOjoHumano, z);
+    // Cota vertical fija para la planta
+    walkFixedY = yLosa + 1.65;
+    ifcCamera.position.set(x, walkFixedY, z);
     aplicarRotacionCaminar();
 
     if (btn) {
@@ -2435,9 +2420,7 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
     }
 
     if (esDispositivoTactil) {
-        if (touchDpad) {
-            touchDpad.style.display = "flex";
-        }
+        if (touchDpad) touchDpad.style.display = "flex";
         if (pcHint) pcHint.style.display = "none";
     } else {
         if (pcHint) pcHint.style.display = "flex";
@@ -2487,6 +2470,7 @@ function aplicarRotacionCaminar() {
     ifcCamera.quaternion.setFromEuler(euler);
 }
 
+// NAVEGACIÓN EN PLANTA: DESPLAZAMIENTO HORIZONTAL LIBRE E INMEDIATO
 function actualizarFisicaCaminar(delta) {
     if (!isWalkModeActive || !ifcCamera) return;
 
@@ -2502,36 +2486,14 @@ function actualizarFisicaCaminar(delta) {
     if (moveVector.lengthSq() > 0) {
         moveVector.normalize();
         const pasoDistancia = walkSpeed * delta;
-        const siguientePos = ifcCamera.position.clone().add(moveVector.clone().multiplyScalar(pasoDistancia));
-
-        // Origen del rayo: 1 metro sobre los ojos
-        const origenRayo = new THREE.Vector3(siguientePos.x, ifcCamera.position.y + 1.0, siguientePos.z);
-        const rayoPiso = new THREE.Raycaster(origenRayo, new THREE.Vector3(0, -1, 0), 0.05, 12.0);
-
-        // Se excluyen puertas y muebles para caminar con fluidez sin trabas de cama o zócalo
-        const mallasSuelo = ifcMeshesList.filter(m => m.visible && !m.userData.esPuerta && !m.userData.esMueble);
-        const hits = rayoPiso.intersectObjects(mallasSuelo, false);
-
-        if (hits.length > 0) {
-            const cotaSueloObjetivo = hits[0].point.y;
-            const cotaOjoActual = ifcCamera.position.y;
-            const cotaSueloActual = cotaOjoActual - 1.65;
-            const deltaAltura = cotaSueloObjetivo - cotaSueloActual;
-
-            // Tolerancia para escaleras/rampas (<= 25 cm) y desniveles de bajada
-            if (deltaAltura <= MAX_STEP_HEIGHT && deltaAltura >= -1.5) {
-                ifcCamera.position.x = siguientePos.x;
-                ifcCamera.position.z = siguientePos.z;
-
-                const cotaOjoDeseada = cotaSueloObjetivo + 1.65;
-                ifcCamera.position.y += (cotaOjoDeseada - ifcCamera.position.y) * Math.min(1.0, delta * 12.0);
-            }
-        } else {
-            // Avance horizontal si no hay colisión directa
-            ifcCamera.position.x = siguientePos.x;
-            ifcCamera.position.z = siguientePos.z;
-        }
+        
+        // Avance directo sin colisiones que congelen el avatar
+        ifcCamera.position.x += moveVector.x * pasoDistancia;
+        ifcCamera.position.z += moveVector.z * pasoDistancia;
     }
+
+    // La cota Y se mantiene constante según la elevación del nivel
+    ifcCamera.position.y = walkFixedY;
 }
 
 function configurarEscuchadoresVisorDiferidos() {
@@ -2561,9 +2523,6 @@ function setupWalkKeyboardListeners() {
     });
 }
 
-/**
- * BOTONERA TÁCTIL AISLADA: ESCUCHA DIRECTA CON STOPPROPAGATION
- */
 function setupWalkTouchListeners() {
     const bindBtn = (id, direction) => {
         const btn = document.getElementById(id);
@@ -2580,17 +2539,14 @@ function setupWalkTouchListeners() {
             walkMovement[direction] = false;
         };
 
-        // Pointer events directos y aislados
         btn.addEventListener('pointerdown', start, { passive: false });
         btn.addEventListener('pointerup', stop, { passive: false });
         btn.addEventListener('pointercancel', stop, { passive: false });
 
-        // Touch events de respaldo
         btn.addEventListener('touchstart', start, { passive: false });
         btn.addEventListener('touchend', stop, { passive: false });
         btn.addEventListener('touchcancel', stop, { passive: false });
 
-        // Mouse events para PC
         btn.addEventListener('mousedown', start);
         btn.addEventListener('mouseup', stop);
     };
@@ -2970,7 +2926,7 @@ function cerrarCardPropiedadesIFC() {
 }
 
 // ==============================================================================
-// RENDERIZADO DE ENTREGABLES CON ENRUTAMIENTO RIGUROSO POR CAMPO 4 (TIPO ISO)
+// RENDERIZADO DE ENTREGABLES
 // ==============================================================================
 async function loadFiles() {
     const tbody = document.getElementById("filesTableBody");
@@ -3036,7 +2992,6 @@ async function loadFiles() {
         listaAProcesar = Array.from(mapaUnicos.values());
     }
 
-    // FILTRADO POR SUBCARPETAS (PRIORIDAD ESTRICTA EN CAMPO 4 TIPO ISO)
     if (activeSubfolder !== "TODAS" && activeTab !== "04_ARCHIVED") {
         listaAProcesar = listaAProcesar.filter(f => {
             const nameUpper = f.archivo_nombre.toUpperCase();
