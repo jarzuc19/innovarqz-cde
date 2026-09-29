@@ -2310,10 +2310,10 @@ function cortarEnNivel(cotaLosaEscena) {
 function detectarAlturaRealLosa(x, cotaAproximadaY, z) {
     if (!ifcScene) return cotaAproximadaY;
 
-    // Disparar desde arriba hacia abajo con margen amplio de 3.5m
-    const origenRayo = new THREE.Vector3(x, cotaAproximadaY + 3.5, z);
+    // Disparar desde 3 metros arriba de la cota indicada hasta 15 metros abajo
+    const origenRayo = new THREE.Vector3(x, cotaAproximadaY + 3.0, z);
     const direccionAbajo = new THREE.Vector3(0, -1, 0);
-    const rayoVertical = new THREE.Raycaster(origenRayo, direccionAbajo, 0.1, 15.0);
+    const rayoVertical = new THREE.Raycaster(origenRayo, direccionAbajo, 0.05, 20.0);
 
     // Se excluyen puertas para no generar falsos pisos
     const mallasValidas = ifcMeshesList.filter(m => m.visible && !m.userData.esPuerta);
@@ -2330,7 +2330,7 @@ function caminarEnNivel(cotaLosaEscena) {
     cerrarPanelNivelesIFC();
     desactivarSeleccionLosa();
 
-    // Ubicarse en el centro del modelo respetando la cota de ese piso
+    // Centrar la posición en el volumen del edificio
     const posX = (ifcModelBounds && ifcModelBounds.center) ? ifcModelBounds.center.x : 0;
     const posZ = (ifcModelBounds && ifcModelBounds.center) ? ifcModelBounds.center.z : 0.5;
     const cotaFisicaLosa = detectarAlturaRealLosa(posX, cotaLosaEscena, posZ);
@@ -2420,19 +2420,19 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
             touchDpad.style.overscrollBehavior = "none";
             touchDpad.style.webkitUserSelect = "none";
             touchDpad.style.userSelect = "none";
-            touchDpad.style.zIndex = "100000";
+            touchDpad.style.zIndex = "999999";
             touchDpad.style.pointerEvents = "auto";
 
-            // POSICIONAMIENTO ELEVADO EN MÓVIL (<= 600px) PARA EVITAR QUE SE CORTE
+            // POSICIONAMIENTO FIXED ROBUSTO: SE ELEVA COMPLETAMENTE SOBRE EL BOTÓN SALIR Y EL BORDE DEL TELÉFONO
             if (window.innerWidth < 600) {
-                touchDpad.style.position = "absolute";
-                touchDpad.style.bottom = "120px";
-                touchDpad.style.left = "16px";
+                touchDpad.style.position = "fixed";
+                touchDpad.style.bottom = "85px";
+                touchDpad.style.left = "15px";
                 touchDpad.style.transform = "scale(0.85)";
                 touchDpad.style.transformOrigin = "bottom left";
             } else {
                 touchDpad.style.position = "absolute";
-                touchDpad.style.bottom = "28px";
+                touchDpad.style.bottom = "25px";
                 touchDpad.style.left = "25px";
                 touchDpad.style.transform = "none";
             }
@@ -2443,8 +2443,8 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
         if (touchDpad) touchDpad.style.display = "none";
     }
 
-    // Asegurar vinculación inmediata de los botones al encender el modo caminar
-    setupWalkTouchListeners();
+    // Configurar o refrescar escuchadores táctiles
+    configurarEscuchadoresVisorDiferidos();
 }
 
 function desactivarModoCaminar() {
@@ -2503,9 +2503,9 @@ function actualizarFisicaCaminar(delta) {
         const pasoDistancia = walkSpeed * delta;
         const siguientePos = ifcCamera.position.clone().add(moveVector.clone().multiplyScalar(pasoDistancia));
 
-        // Origen del rayo: 1 metro sobre los ojos con amplio alcance para cubrir pisos altos
+        // Origen del rayo: 1 metro sobre la cabeza, buscando hasta 10 metros abajo para no perder forjados de pisos altos
         const origenRayo = new THREE.Vector3(siguientePos.x, ifcCamera.position.y + 1.0, siguientePos.z);
-        const rayoPiso = new THREE.Raycaster(origenRayo, new THREE.Vector3(0, -1, 0), 0.1, 15.0);
+        const rayoPiso = new THREE.Raycaster(origenRayo, new THREE.Vector3(0, -1, 0), 0.05, 12.0);
 
         // SE FILTRAN PUERTAS PARA PODER ATRAVESARLAS, PERO SE CONSERVAN MUROS Y MUEBLES ALTOS
         const mallasValidas = ifcMeshesList.filter(m => m.visible && !m.userData.esPuerta);
@@ -2517,7 +2517,7 @@ function actualizarFisicaCaminar(delta) {
             const cotaSueloActual = cotaOjoActual - 1.65;
             const deltaAltura = cotaSueloObjetivo - cotaSueloActual;
 
-            // Escalares y desniveles <= 25 cm son transitables, permitiendo descensos de hasta -1.5m
+            // Escalares y desniveles <= 25 cm son transitables, permitiendo bajadas de hasta -1.5m
             if (deltaAltura <= MAX_STEP_HEIGHT && deltaAltura >= -1.5) {
                 ifcCamera.position.x = siguientePos.x;
                 ifcCamera.position.z = siguientePos.z;
@@ -2562,52 +2562,68 @@ function setupWalkKeyboardListeners() {
 }
 
 /**
- * BOTONERA TÁCTIL BLINDADA: CAPTURA DIRECTA DE POINTER, TOUCH Y MOUSE CON MÁXIMA PRIORIDAD
+ * BOTONERA TÁCTIL UNIVERSAL: ESCUCHA DIRECTA Y CONFIABLE CON RESTABLECIMIENTO EN WINDOW
  */
 function setupWalkTouchListeners() {
     const bindBtn = (id, direction) => {
         const btn = document.getElementById(id);
         if (!btn) return;
 
-        // Estilos inline forzados: máxima capa y recepción garantizada
         btn.style.touchAction = "none";
         btn.style.webkitUserSelect = "none";
         btn.style.userSelect = "none";
-        btn.style.webkitTouchCallout = "none";
         btn.style.pointerEvents = "auto";
-        btn.style.zIndex = "100001";
         btn.style.cursor = "pointer";
 
-        const startMove = (e) => {
+        const start = (e) => {
             if (e.cancelable) e.preventDefault();
             e.stopPropagation();
             walkMovement[direction] = true;
         };
 
-        const endMove = (e) => {
-            if (e.cancelable) e.preventDefault();
-            e.stopPropagation();
+        const stop = (e) => {
             walkMovement[direction] = false;
         };
 
-        // Triple capa de eventos: Pointer, Touch y Mouse para máxima compatibilidad
-        btn.onpointerdown = startMove;
-        btn.onpointerup = endMove;
-        btn.onpointercancel = endMove;
-        btn.onpointerleave = endMove;
+        // Pointer events directos en el botón
+        btn.addEventListener('pointerdown', start, { passive: false });
+        btn.addEventListener('pointerup', stop, { passive: false });
+        btn.addEventListener('pointercancel', stop, { passive: false });
 
-        btn.ontouchstart = startMove;
-        btn.ontouchend = endMove;
-        btn.ontouchcancel = endMove;
+        // Touch events de respaldo directo
+        btn.addEventListener('touchstart', start, { passive: false });
+        btn.addEventListener('touchend', stop, { passive: false });
+        btn.addEventListener('touchcancel', stop, { passive: false });
 
-        btn.onmousedown = startMove;
-        btn.onmouseup = endMove;
+        // Mouse events para pruebas en PC
+        btn.addEventListener('mousedown', start);
+        btn.addEventListener('mouseup', stop);
     };
 
     bindBtn('btnWalkForward', 'forward');
     bindBtn('btnWalkBackward', 'backward');
     bindBtn('btnWalkLeft', 'left');
     bindBtn('btnWalkRight', 'right');
+
+    // Seguridad global: si se levanta el dedo en cualquier punto de la pantalla, se detiene el movimiento
+    window.addEventListener('pointerup', () => {
+        walkMovement.forward = false;
+        walkMovement.backward = false;
+        walkMovement.left = false;
+        walkMovement.right = false;
+    });
+    window.addEventListener('touchend', () => {
+        walkMovement.forward = false;
+        walkMovement.backward = false;
+        walkMovement.left = false;
+        walkMovement.right = false;
+    });
+    window.addEventListener('mouseup', () => {
+        walkMovement.forward = false;
+        walkMovement.backward = false;
+        walkMovement.left = false;
+        walkMovement.right = false;
+    });
 }
 
 // ==============================================================================
