@@ -2415,14 +2415,18 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
             touchDpad.style.overscrollBehavior = "none";
             touchDpad.style.webkitUserSelect = "none";
             touchDpad.style.userSelect = "none";
+            touchDpad.style.zIndex = "100000";
+            touchDpad.style.pointerEvents = "auto";
 
-            // AJUSTE DINÁMICO EXCLUSIVO PARA MÓVIL (<= 600px) SIN TOCAR STYLES.CSS
+            // REUBICACIÓN EN MÓVIL: ELEVADA PARA NO CORTARSE Y COMPLETAMENTE VISIBLE
             if (window.innerWidth < 600) {
-                touchDpad.style.bottom = "85px";
+                touchDpad.style.bottom = "125px";
+                touchDpad.style.left = "18px";
                 touchDpad.style.transform = "scale(0.85)";
                 touchDpad.style.transformOrigin = "bottom left";
             } else {
-                touchDpad.style.bottom = "20px";
+                touchDpad.style.bottom = "30px";
+                touchDpad.style.left = "25px";
                 touchDpad.style.transform = "none";
             }
         }
@@ -2431,6 +2435,9 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
         if (pcHint) pcHint.style.display = "flex";
         if (touchDpad) touchDpad.style.display = "none";
     }
+
+    // Asegurar vinculación inmediata de los botones al encender el modo caminar
+    setupWalkTouchListeners();
 }
 
 function desactivarModoCaminar() {
@@ -2510,7 +2517,7 @@ function actualizarFisicaCaminar(delta) {
                 const cotaOjoDeseada = cotaSueloObjetivo + 1.65;
                 ifcCamera.position.y += (cotaOjoDeseada - ifcCamera.position.y) * Math.min(1.0, delta * 12.0);
             }
-            // Si el desnivel supera 25 cm (mueble o pared), se bloquea el paso automáticamente
+            // Si el obstáculo supera 25 cm (mueble o pared), se bloquea el paso automáticamente
         } else {
             // Avance libre en huecos o pasillos sin obstáculo inmediato
             ifcCamera.position.x = siguientePos.x;
@@ -2547,18 +2554,21 @@ function setupWalkKeyboardListeners() {
 }
 
 /**
- * BOTONERA TÁCTIL CORREGIDA: RESPUESTA DIRECTA Y ROBUSTA SIN BLOQUEO DE CAPTURA
+ * BOTONERA TÁCTIL BLINDADA: CAPTURA DIRECTA DE POINTER, TOUCH Y MOUSE CON MÁXIMA PRIORIDAD
  */
 function setupWalkTouchListeners() {
     const bindBtn = (id, direction) => {
         const btn = document.getElementById(id);
         if (!btn) return;
 
-        // Estilos inline de protección táctil
+        // Estilos inline forzados: máxima capa y recepción garantizada
         btn.style.touchAction = "none";
         btn.style.webkitUserSelect = "none";
         btn.style.userSelect = "none";
         btn.style.webkitTouchCallout = "none";
+        btn.style.pointerEvents = "auto";
+        btn.style.zIndex = "100001";
+        btn.style.cursor = "pointer";
 
         const startMove = (e) => {
             if (e.cancelable) e.preventDefault();
@@ -2572,15 +2582,18 @@ function setupWalkTouchListeners() {
             walkMovement[direction] = false;
         };
 
-        // Soporte universal doble: Eventos Pointer + Eventos Touch nativos
-        btn.addEventListener('pointerdown', startMove, { passive: false });
-        btn.addEventListener('pointerup', endMove, { passive: false });
-        btn.addEventListener('pointerleave', endMove, { passive: false });
-        btn.addEventListener('pointercancel', endMove, { passive: false });
+        // Triple capa de eventos: Pointer, Touch y Mouse para máxima compatibilidad
+        btn.onpointerdown = startMove;
+        btn.onpointerup = endMove;
+        btn.onpointercancel = endMove;
+        btn.onpointerleave = endMove;
 
-        btn.addEventListener('touchstart', startMove, { passive: false });
-        btn.addEventListener('touchend', endMove, { passive: false });
-        btn.addEventListener('touchcancel', endMove, { passive: false });
+        btn.ontouchstart = startMove;
+        btn.ontouchend = endMove;
+        btn.ontouchcancel = endMove;
+
+        btn.onmousedown = startMove;
+        btn.onmouseup = endMove;
     };
 
     bindBtn('btnWalkForward', 'forward');
