@@ -274,17 +274,17 @@
         <!-- CAPÍTULO 1 -->
         <section class="manual-chapter" id="intro">
             <h2>1. Introducción y Principios Fundamentales</h2>
-            <p>El CDE (Common Data Environment) de <strong>InnovArqZ Soluciones Integrales S.A.S.</strong> centraliza, gestiona y audita toda la información geométrica y documental de los proyectos de arquitectura e ingeniería civil[cite: 3, 4].</p>
-            <p>Su función primordial es actuar como la <em>"Única Fuente de Verdad"</em>, erradicando la dispersión de planos en correos o chats informales y garantizando la trazabilidad histórica de cada revisión, decisión de comités y actas contractuales[cite: 3, 4].</p>
+            <p>El CDE (Common Data Environment) de <strong>InnovArqZ Soluciones Integrales S.A.S.</strong> centraliza, gestiona y audita toda la información geométrica y documental de los proyectos de arquitectura e ingeniería civil.</p>
+            <p>Su función primordial es actuar como la <em>"Única Fuente de Verdad"</em>, erradicando la dispersión de planos en correos o chats informales y garantizando la trazabilidad histórica de cada revisión, decisión de comités y actas contractuales.</p>
             <div class="card-tip">
-                <strong>💡 Acceso Rápido:</strong> La plataforma es una Single Page Application (SPA) compatible con Google Chrome, Mozilla Firefox, Microsoft Edge y Safari en dispositivos de escritorio, tablets y smartphones[cite: 3, 4].
+                <strong>💡 Acceso Rápido:</strong> La plataforma es una Single Page Application (SPA) compatible con Google Chrome, Mozilla Firefox, Microsoft Edge y Safari en dispositivos de escritorio, tablets y smartphones.
             </div>
         </section>
 
         <!-- CAPÍTULO 2 -->
         <section class="manual-chapter" id="roles">
             <h2>2. Matriz de Roles y Permisos</h2>
-            <p>Cada usuario interactúa con la plataforma a través de permisos condicionados estrictamente a su cargo asignado en la base de datos[cite: 4]:</p>
+            <p>Cada usuario interactúa con la plataforma a través de permisos condicionados estrictamente a su cargo asignado en la base de datos:</p>
 
             <table class="manual-table">
                 <thead>
@@ -298,22 +298,22 @@
                     <tr>
                         <td><span class="badge-role badge-super">Director / BIM Manager</span></td>
                         <td>Todas (WIP, SHARED, PUBLISHED, ARCHIVED)</td>
-                        <td>Creación de proyectos, asignación de permisos, supervisión general y publicación directa[cite: 4].</td>
+                        <td>Creación de proyectos, asignación de permisos, supervisión general y publicación directa.</td>
                     </tr>
                     <tr>
                         <td><span class="badge-role badge-modelador">Modelador BIM</span></td>
                         <td>01_WIP (Trabajo en Proceso)</td>
-                        <td>Carga de modelos nativos (RVT, PLN, DWG), respuesta a notas técnicas y promoción física hacia SHARED[cite: 3, 4].</td>
+                        <td>Carga de modelos nativos (RVT, PLN, DWG), respuesta a notas técnicas y promoción física hacia SHARED.</td>
                     </tr>
                     <tr>
                         <td><span class="badge-role badge-revisor">Revisor / Coordinador</span></td>
                         <td>02_SHARED (Compartido)</td>
-                        <td>Revisión de coordinación multidisciplinar, emisión de instrucciones técnicas a modeladores y publicación hacia Cliente[cite: 3, 4].</td>
+                        <td>Revisión de coordinación multidisciplinar, emisión de instrucciones técnicas a modeladores y publicación hacia Cliente.</td>
                     </tr>
                     <tr>
                         <td><span class="badge-role badge-cliente">Cliente Final</span></td>
                         <td>03_PUBLISHED (Publicado)</td>
-                        <td>Visualización de entregables aprobados, formulación de ajustes y firma digital de Actas de Recibo con emisión PDF[cite: 3, 4].</td>
+                        <td>Visualización de entregables aprobados, formulación de ajustes y firma digital de Actas de Recibo con emisión PDF.</td>
                     </tr>
                 </tbody>
             </table>
@@ -322,20 +322,20 @@
         <!-- CAPÍTULO 3 -->
         <section class="manual-chapter" id="cde-cycle">
             <h2>3. Ciclo CDE e ISO 19650</h2>
-            <p>La estructura de carpetas implementa las 4 fases fundamentales del ciclo de vida de la información[cite: 3]:</p>
+            <p>La estructura de carpetas implementa las 4 fases fundamentales del ciclo de vida de la información:</p>
             <ol>
-                <li><strong>01_WIP (Work In Progress):</strong> Espacio de diseño interno no verificado[cite: 3]. Los archivos se encuentran en estado de borrador <code>S0</code>[cite: 3, 4].</li>
-                <li><strong>02_SHARED (Compartido):</strong> Espacio para coordinación multidisciplinar y detección de interferencias entre arquitectura, estructura e instalaciones[cite: 3, 4]. Requiere estados <code>S1</code>, <code>S2</code>, etc[cite: 3, 4].</li>
-                <li><strong>03_PUBLISHED (Publicado):</strong> Entregables contractuales verificados y autorizados para el cliente o ejecución de obra[cite: 3, 4]. Estados <code>A1</code>, <code>A2</code> o códigos <code>CR</code>, <code>ACT</code>[cite: 3, 4].</li>
-                <li><strong>04_ARCHIVED (Archivado):</strong> Registro histórico inmutable de versiones superadas o sustituidas para auditoría futura[cite: 3, 4].</li>
+                <li><strong>01_WIP (Work In Progress):</strong> Espacio de diseño interno no verificado. Los archivos se encuentran en estado de borrador <code>S0</code>.</li>
+                <li><strong>02_SHARED (Compartido):</strong> Espacio para coordinación multidisciplinar y detección de interferencias entre arquitectura, estructura e instalaciones. Requiere estados <code>S1</code>, <code>S2</code>, etc.</li>
+                <li><strong>03_PUBLISHED (Publicado):</strong> Entregables contractuales verificados y autorizados para el cliente o ejecución de obra. Estados <code>A1</code>, <code>A2</code> o códigos <code>CR</code>, <code>ACT</code>.</li>
+                <li><strong>04_ARCHIVED (Archivado):</strong> Registro histórico inmutable de versiones superadas o sustituidas para auditoría futura.</li>
             </ol>
         </section>
 
         <!-- CAPÍTULO 4 -->
         <section class="manual-chapter" id="nomenclatura">
             <h2>4. Convención de Nombres ISO 19650</h2>
-            <p>Para garantizar compatibilidad universal, el sistema rechaza automáticamente archivos que no cumplan la estructura obligatoria de 6 campos delimitados por guiones bajos[cite: 4]:</p>
-            <p><code>[PROYECTO]_[ORIGINADOR]_[ZONA]_[TIPO]_[DISCIPLINA]_[ESTADO].[ext]</code>[cite: 4]</p>
+            <p>Para garantizar compatibilidad universal, el sistema rechaza automáticamente archivos que no cumplan la estructura obligatoria de 6 campos delimitados por guiones bajos:</p>
+            <p><code>[PROYECTO]_[ORIGINADOR]_[ZONA]_[TIPO]_[DISCIPLINA]_[ESTADO].[ext]</code></p>
 
             <table class="manual-table">
                 <thead>
@@ -349,95 +349,95 @@
                     <tr>
                         <td><code>PROYECTO</code></td>
                         <td>Código único del proyecto</td>
-                        <td>PRY2026-001, PRY2026-003[cite: 4]</td>
+                        <td>PRY2026-001, PRY2026-003</td>
                     </tr>
                     <tr>
                         <td><code>ORIGINADOR</code></td>
                         <td>Empresa o consultor creador</td>
-                        <td>INNOVARQZ[cite: 4]</td>
+                        <td>INNOVARQZ</td>
                     </tr>
                     <tr>
                         <td><code>ZONA</code></td>
                         <td>Sector, bloque o nivel</td>
-                        <td>ZZ (Todo), BL1 (Bloque 1), N01[cite: 4]</td>
+                        <td>ZZ (Todo), BL1 (Bloque 1), N01</td>
                     </tr>
                     <tr>
                         <td><code>TIPO</code></td>
                         <td>Tipo geométrico o documental</td>
-                        <td>M3 (Modelo 3D), PL (Plano), INF (Informe), ACT (Acta)[cite: 4]</td>
+                        <td>M3 (Modelo 3D), PL (Plano), INF (Informe), ACT (Acta)</td>
                     </tr>
                     <tr>
                         <td><code>DISCIPLINA</code></td>
                         <td>Especialidad técnica</td>
-                        <td>ARQ, EST, MEP, HID, SAN, ELE[cite: 4]</td>
+                        <td>ARQ, EST, MEP, HID, SAN, ELE</td>
                     </tr>
                     <tr>
                         <td><code>ESTADO</code></td>
                         <td>Fase de madurez ISO 19650</td>
-                        <td>S0 (WIP), S1/S2 (SHARED), A1/ACT (PUBLISHED)[cite: 3, 4]</td>
+                        <td>S0 (WIP), S1/S2 (SHARED), A1/ACT (PUBLISHED)</td>
                     </tr>
                 </tbody>
             </table>
             <div class="card-tip">
-                <strong>Ejemplo Correcto:</strong> <code>PRY2026-001_INNOVARQZ_ZZ_M3_ARQ_S0.rvt</code>[cite: 4]
+                <strong>Ejemplo Correcto:</strong> <code>PRY2026-001_INNOVARQZ_ZZ_M3_ARQ_S0.rvt</code>
             </div>
         </section>
 
         <!-- CAPÍTULO 5 -->
         <section class="manual-chapter" id="subidas">
             <h2>5. Carga y Subida de Entregables</h2>
-            <p>La plataforma cuenta con un sistema híbrido que optimiza el almacenamiento y previene saturación de cuotas[cite: 3, 4]:</p>
+            <p>La plataforma cuenta con un sistema híbrido que optimiza el almacenamiento y previene saturación de cuotas:</p>
             <ul>
-                <li><strong>Carga Directa (&le; 15 MB):</strong> Para documentos PDF, planos CAD livianos o informes ejecutivos[cite: 3, 4]. El archivo se transfiere de forma transparente al almacenamiento en nube mediante codificación segura Base64[cite: 4].</li>
-                <li><strong>Importación por Enlace Google Drive (&gt; 15 MB):</strong> Ideal para modelos pesados (IFC, RVT, PLN)[cite: 3, 4]. Se copia el enlace público con permisos de lectura y el sistema indexa y mapea los metadatos[cite: 4].</li>
+                <li><strong>Carga Directa (&le; 15 MB):</strong> Para documentos PDF, planos CAD livianos o informes ejecutivos. El archivo se transfiere de forma transparente al almacenamiento en nube mediante codificación segura Base64.</li>
+                <li><strong>Importación por Enlace Google Drive (&gt; 15 MB):</strong> Ideal para modelos pesados (IFC, RVT, PLN). Se copia el enlace público con permisos de lectura y el sistema indexa y mapea los metadatos.</li>
             </ul>
             <div class="card-alert">
-                <strong>Atención:</strong> El sistema evalúa dinámicamente la subcarpeta de destino según el Tipo y Disciplina declarados (ej. M3 se indexa en Modelos 3D, PL en Planos)[cite: 4].
+                <strong>Atención:</strong> El sistema evalúa dinámicamente la subcarpeta de destino según el Tipo y Disciplina declarados (ej. M3 se indexa en Modelos 3D, PL en Planos).
             </div>
         </section>
 
         <!-- CAPÍTULO 6 -->
         <section class="manual-chapter" id="flujos">
             <h2>6. Revisiones, Interacción y Actas de Cierre</h2>
-            <p>El CDE incluye módulos de comunicación directa estructurada para evitar pérdidas de información[cite: 3, 4]:</p>
+            <p>El CDE incluye módulos de comunicación directa estructurada para evitar pérdidas de información:</p>
             <h3>Hilo de Interacción Técnica</h3>
-            <p>Permite registrar alertas con colores normativos: correcciones de modelador, confirmación de lectura y convocatorias a comités técnicos[cite: 3, 4]. Quedan vinculadas con estampas de tiempo en la bitácora inmutable[cite: 4].</p>
+            <p>Permite registrar alertas con colores normativos: correcciones de modelador, confirmación de lectura y convocatorias a comités técnicos. Quedan vinculadas con estampas de tiempo en la bitácora inmutable.</p>
             <h3>Aprobación y Firma de Cliente</h3>
-            <p>Cuando el Cliente autoriza el hito en <code>03_PUBLISHED</code>, la plataforma compila en tiempo real un <strong>Acta de Recibo Formal en PDF</strong>[cite: 3, 4]. El documento incluye[cite: 4]:</p>
+            <p>Cuando el Cliente autoriza el hito en <code>03_PUBLISHED</code>, la plataforma compila en tiempo real un <strong>Acta de Recibo Formal en PDF</strong>. El documento incluye:</p>
             <ul>
-                <li>Membrete oficial, marcas de agua e información de matrícula profesional[cite: 4].</li>
-                <li>Declaración explícita de recibo a satisfacción[cite: 4].</li>
-                <li>Checklist automático con cada uno de los archivos vigentes[cite: 3, 4].</li>
-                <li>Sello de certificación digital y firmas de las partes[cite: 4].</li>
+                <li>Membrete oficial, marcas de agua e información de matrícula profesional.</li>
+                <li>Declaración explícita de recibo a satisfacción.</li>
+                <li>Checklist automático con cada uno de los archivos vigentes.</li>
+                <li>Sello de certificación digital y firmas de las partes.</li>
             </ul>
         </section>
 
         <!-- CAPÍTULO 7 -->
         <section class="manual-chapter" id="visor-multimodal">
             <h2>7. Visor Universal Multimodal</h2>
-            <p>Al hacer clic en el botón <strong>"Ver"</strong> de cualquier entregable[cite: 4]:</p>
+            <p>Al hacer clic en el botón <strong>"Ver"</strong> de cualquier entregable:</p>
             <ul>
-                <li><strong>Planos e Informes PDF:</strong> Previsualización integrada con barra de zoom y control de escalado universal[cite: 3, 4].</li>
-                <li><strong>Renders y Planos Gráficos (PNG, JPG, WEBP):</strong> Visor panorámico con navegación por paneo y arrastre[cite: 3, 4].</li>
-                <li><strong>Animaciones y Recorridos (MP4, WEBM):</strong> Reproductor nativo acelerado por hardware[cite: 3, 4].</li>
-                <li><strong>Pantalla Externa:</strong> El botón <code>⤢ Abrir</code> superior permite expandir la vista en una pestaña completa independiente[cite: 3, 4].</li>
+                <li><strong>Planos e Informes PDF:</strong> Previsualización integrada con barra de zoom y control de escalado universal.</li>
+                <li><strong>Renders y Planos Gráficos (PNG, JPG, WEBP):</strong> Visor panorámico con navegación por paneo y arrastre.</li>
+                <li><strong>Animaciones y Recorridos (MP4, WEBM):</strong> Reproductor nativo acelerado por hardware.</li>
+                <li><strong>Pantalla Externa:</strong> El botón <code>⤢ Abrir</code> superior permite expandir la vista en una pestaña completa independiente.</li>
             </ul>
         </section>
 
         <!-- CAPÍTULO 8 -->
         <section class="manual-chapter" id="visor-bim">
             <h2>8. Visor BIM 3D (Web-IFC & Three.js)</h2>
-            <p>El motor BIM opera mediante renderizado WebGL directo sin intermediarios, garantizando fidelidad matemática de las geometrías IFC[cite: 1, 3, 4]:</p>
+            <p>El motor BIM opera mediante renderizado WebGL directo sin intermediarios, garantizando fidelidad matemática de las geometrías IFC:</p>
             <h3>Botonera de Vistas</h3>
-            <p>Permite orientar la cámara al instante a configuraciones ortogonales (Frontal, Posterior, Lateral Izquierda, Lateral Derecha, Planta, Inferior) e Isométrica[cite: 3, 4]. El botón <strong>Centrar</strong> reajusta la caja envolvente del proyecto completo[cite: 3, 4].</p>
+            <p>Permite orientar la cámara al instante a configuraciones ortogonales (Frontal, Posterior, Lateral Izquierda, Lateral Derecha, Planta, Inferior) e Isométrica. El botón <strong>Centrar</strong> reajusta la caja envolvente del proyecto completo.</p>
             <h3>Inspección Paramétrica de Elementos</h3>
-            <p>Al tocar cualquier elemento constructivo (muro, zapata, viga o columna), este se resalta en tono cobre y despliega su <code>ExpressID</code>, tipo IFC y parámetros de propiedad en el cuadro lateral[cite: 4].</p>
+            <p>Al tocar cualquier elemento constructivo (muro, zapata, viga o columna), este se resalta en tono cobre y despliega su <code>ExpressID</code>, tipo IFC y parámetros de propiedad en el cuadro lateral.</p>
             <h3>Herramienta de Medición Punto a Punto</h3>
-            <p>Al activar <strong>📏 Medir</strong>, se seleccionan dos puntos de la geometría[cite: 3, 4]. El visor traza una línea esmeralda tridimensional calculando[cite: 4]:</p>
+            <p>Al activar <strong>📏 Medir</strong>, se seleccionan dos puntos de la geometría. El visor traza una línea esmeralda tridimensional calculando:</p>
             <ul>
-                <li><strong>Distancia Real:</strong> Longitud espacial euclidiana directa[cite: 4].</li>
-                <li><strong>Δ Altura (Y):</strong> Diferencia vertical neta entre ambos puntos[cite: 4].</li>
-                <li><strong>Δ Planta (XZ):</strong> Separación proyectada sobre el plano horizontal[cite: 4].</li>
+                <li><strong>Distancia Real:</strong> Longitud espacial euclidiana directa.</li>
+                <li><strong>Δ Altura (Y):</strong> Diferencia vertical neta entre ambos puntos.</li>
+                <li><strong>Δ Planta (XZ):</strong> Separación proyectada sobre el plano horizontal.</li>
             </ul>
         </section>
 
@@ -445,30 +445,30 @@
         <section class="manual-chapter" id="corte-caminar">
             <h2>9. Caja de Sección y Modo Caminar</h2>
             <h3>Cortes por Nivel y Caja de Sección</h3>
-            <p>La herramienta de corte (<code>✂️ Corte</code>) rebanada el modelo de forma paramétrica[cite: 3, 4]:</p>
+            <p>La herramienta de corte (<code>✂️ Corte</code>) secciona el modelo de forma paramétrica:</p>
             <ul>
-                <li><strong>Corte por Árbol de Niveles:</strong> Al hacer clic en <code>✂️ Cortar</code> dentro del panel de niveles, el plano secciona automáticamente a <strong>+1.20 m</strong> sobre el piso seleccionado (corte de planta arquitectónica estándar)[cite: 4].</li>
-                <li><strong>Cortes Manuales:</strong> Permite deslizar el corte dinámicamente en los ejes X, Y o Z, e invertir el lado visible de la sección[cite: 3, 4].</li>
+                <li><strong>Corte por Árbol de Niveles:</strong> Al hacer clic en <code>✂️ Cortar</code> dentro del panel de niveles, el plano secciona automáticamente a <strong>+1.20 m</strong> sobre el piso seleccionado (corte de planta arquitectónica estándar).</li>
+                <li><strong>Cortes Manuales:</strong> Permite deslizar el corte dinámicamente en los ejes X, Y o Z, e invertir el lado visible de la sección.</li>
             </ul>
 
             <h3>Modo Caminar (Primera Persona)</h3>
-            <p>Permite ingresar a las plantas con una cota de ojos fija y desplazamiento horizontal continuo sin atascos[cite: 3, 4]:</p>
+            <p>Permite ingresar a las plantas con una cota de ojos fija y desplazamiento horizontal continuo sin atascos:</p>
             <ul>
-                <li><strong>Entrar desde el Árbol de Niveles:</strong> Ubica la cámara a <strong>+1.65 m</strong> de la cota nativa oficial de la losa mirando al frente de la planta[cite: 4].</li>
-                <li><strong>Controles PC:</strong> Teclas <code>W, A, S, D</code> para desplazarse; arrastre con clic primario para rotar la mirada[cite: 3, 4].</li>
-                <li><strong>Controles Táctiles (Móvil / Tablet):</strong> Dispone de una cruceta virtual tipo D-Pad en pantalla para avance y giro suave al deslizar los dedos[cite: 3, 4].</li>
-                <li><strong>Libertad de Paso:</strong> La navegación atraviesa puertas y respeta la distribución interior sin trabarse contra zócalos o mobiliario liviano[cite: 4].</li>
+                <li><strong>Entrar desde el Árbol de Niveles:</strong> Ubica la cámara a <strong>+1.65 m</strong> de la cota nativa oficial de la losa mirando al frente de la planta.</li>
+                <li><strong>Controles PC:</strong> Teclas <code>W, A, S, D</code> para desplazarse; arrastre con clic primario para rotar la mirada.</li>
+                <li><strong>Controles Táctiles (Móvil / Tablet):</strong> Dispone de una cruceta virtual tipo D-Pad en pantalla para avance y giro suave al deslizar los dedos.</li>
+                <li><strong>Libertad de Paso:</strong> La navegación atraviesa puertas y respeta la distribución interior sin trabarse contra zócalos o mobiliario liviano.</li>
             </ul>
         </section>
 
         <!-- CAPÍTULO 10 -->
         <section class="manual-chapter" id="capturas">
             <h2>10. Bandeja de Observaciones y Reportes 3D</h2>
-            <p>Durante cualquier recorrido o análisis técnico, el usuario puede capturar hallazgos mediante clic derecho o menú contextual: <strong>"Tomar Captura de Pantalla"</strong>[cite: 3, 4].</p>
+            <p>Durante cualquier recorrido o análisis técnico, el usuario puede capturar hallazgos mediante clic derecho o menú contextual: <strong>"Tomar Captura de Pantalla"</strong>.</p>
             <ul>
-                <li><strong>Carrito de Inspección:</strong> El botón flotante superior contabiliza las evidencias capturadas sin alterar la navegación 3D[cite: 3, 4].</li>
-                <li><strong>Consolidación:</strong> Al pulsar el botón, se abre la ventana donde se pueden previsualizar las miniaturas, descartar capturas individuales o guardarlas al PC en formato PNG de alta resolución[cite: 3, 4].</li>
-                <li><strong>Compilación PDF al CDE:</strong> Si se publica al CDE con más de una imagen, el sistema genera de forma automática un <strong>Informe Técnico PDF</strong> que se vincula al hilo del proyecto con sellos de trazabilidad[cite: 4].</li>
+                <li><strong>Carrito de Inspección:</strong> El botón flotante superior contabiliza las evidencias capturadas sin alterar la navegación 3D.</li>
+                <li><strong>Consolidación:</strong> Al pulsar el botón, se abre la ventana donde se pueden previsualizar las miniaturas, descartar capturas individuales o guardarlas al PC en formato PNG de alta resolución.</li>
+                <li><strong>Compilación PDF al CDE:</strong> Si se publica al CDE con más de una imagen, el sistema genera de forma automática un <strong>Informe Técnico PDF</strong> que se vincula al hilo del proyecto con sellos de trazabilidad.</li>
             </ul>
         </section>
     </main>
@@ -490,7 +490,6 @@
             });
         }
 
-        // Resaltar sección activa al desplazarse
         window.addEventListener('scroll', () => {
             const chapters = document.querySelectorAll('.manual-chapter');
             const links = document.querySelectorAll('#sidebarLinks li a');
