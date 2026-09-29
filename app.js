@@ -177,15 +177,15 @@ function registrarAperturaModalEnHistorial(modalId) {
 function cerrarCualquierModalAbierto(triggerHistoryBack = true) {
     let seCerro = false;
 
-    const vModal = document.getElementById("viewerModal");
-    if (vModal && (vModal.style.display === "flex" || vModal.classList.contains("modal-overlay"))) {
-        closeViewerModal(false);
-        seCerro = true;
-    }
-
     const cModal = document.getElementById("capturaConsolidadaModal");
     if (cModal && (cModal.style.display === "flex" || cModal.classList.contains("modal-overlay"))) {
         cerrarModalCapturasConsolidadas(false);
+        seCerro = true;
+    }
+
+    const vModal = document.getElementById("viewerModal");
+    if (vModal && (vModal.style.display === "flex" || vModal.classList.contains("modal-overlay"))) {
+        closeViewerModal(false);
         seCerro = true;
     }
 
@@ -974,7 +974,7 @@ async function procesarAprobacionCliente(estadoAprobacion) {
         return;
     }
     if (estadoAprobacion === "RECHAZADO" && !observaciones) {
-        alert("⚠ Por favor ingrese sus observaciones detalladas.");
+        alert("⚠️ Por favor ingrese sus observaciones detalladas.");
         return;
     }
 
@@ -1886,7 +1886,6 @@ function actualizarBotonBandejaCapturas() {
 
 function abrirModalCapturasConsolidadas() {
     if (capturasBandeja.length === 0) return;
-    registrarAperturaModalEnHistorial("capturaConsolidadaModal");
 
     const modal = document.getElementById("capturaConsolidadaModal");
     const countLabel = document.getElementById("capturasCountLabel");
@@ -1937,15 +1936,13 @@ function eliminarCapturaDeBandeja(index) {
     }
 }
 
-function cerrarModalCapturasConsolidadas(triggerHistory = true) {
+// CIERRE AISLADO SIN DISPARAR HISTORY.BACK()
+function cerrarModalCapturasConsolidadas() {
     const modal = document.getElementById("capturaConsolidadaModal");
     if (modal) {
         modal.style.display = "none";
         modal.classList.remove("modal-overlay");
         modal.classList.add("modal-hidden");
-    }
-    if (triggerHistory && window.history.state && window.history.state.modalOpen) {
-        window.history.back();
     }
 }
 
@@ -2333,6 +2330,7 @@ function activarSeleccionLosaCaminar() {
     }
 }
 
+// RESALTADO EXCLUSIVO DE LOSAS (EXCLUYENDO ESTRICTAMENTE PUERTAS Y CARPINTERÍAS)
 function resaltarLosasTransitables(activar) {
     if (activar) {
         highlightedSlabs.length = 0;
@@ -2487,12 +2485,10 @@ function actualizarFisicaCaminar(delta) {
         moveVector.normalize();
         const pasoDistancia = walkSpeed * delta;
         
-        // Avance directo sin colisiones que congelen el avatar
         ifcCamera.position.x += moveVector.x * pasoDistancia;
         ifcCamera.position.z += moveVector.z * pasoDistancia;
     }
 
-    // La cota Y se mantiene constante según la elevación del nivel
     ifcCamera.position.y = walkFixedY;
 }
 
@@ -2850,6 +2846,7 @@ function onIfcModelClick(event) {
 
         if (!hit) return;
 
+        // BOTÓN "CAMINAR" MANUAL
         if (isPickSlabModeActive) {
             iniciarModoCaminarEnCoordenadas(hit.point.x, hit.point.y, hit.point.z);
             return;
