@@ -1301,6 +1301,12 @@ async function desplegarModalIFC(driveUrl, titulo) {
     activeZoomTarget = null;
 
     ifcCont.style.display = "block";
+
+    // BLINDAJE DINÁMICO TÁCTIL EN MEMORIA (SIN ALTERAR STYLES.CSS)
+    ifcCont.style.touchAction = "none";
+    ifcCont.style.overscrollBehavior = "none";
+    modal.style.overscrollBehavior = "none";
+
     if (loading) {
         loading.style.display = "block";
         loading.innerHTML = `<div style="margin-bottom:6px;">⏳ Descargando modelo desde Google Drive...</div><small style="color:#94a3b8;">(Procesando geometría BIM 3D con That Open Company v0.0.78)</small>`;
@@ -1336,6 +1342,15 @@ function closeViewerModal(triggerHistory = true) {
     if (zoomControls) zoomControls.style.display = "none";
     if (dragOverlay) dragOverlay.style.display = "none";
     if (loading) loading.style.display = "none";
+
+    // RESTABLECIMIENTO DINÁMICO LIMPIO
+    if (ifcCont) {
+        ifcCont.style.touchAction = "";
+        ifcCont.style.overscrollBehavior = "";
+    }
+    if (modal) {
+        modal.style.overscrollBehavior = "";
+    }
 
     resetActiveZoom();
     ocultarMenuContextualIFC();
@@ -1515,6 +1530,17 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcRenderer.localClippingEnabled = true;
     container.insertBefore(ifcRenderer.domElement, container.firstChild);
 
+    // Inyección inline directa en el elemento canvas de Three.js
+    ifcRenderer.domElement.style.touchAction = "none";
+    ifcRenderer.domElement.style.overscrollBehavior = "none";
+    ifcRenderer.domElement.style.webkitUserSelect = "none";
+    ifcRenderer.domElement.style.userSelect = "none";
+
+    // Evitar recarga de página por pull-to-refresh al arrastrar dentro del canvas
+    ifcRenderer.domElement.addEventListener('touchmove', (e) => {
+        if (e.cancelable) e.preventDefault();
+    }, { passive: false });
+
     ifcControls = new THREE.OrbitControls(ifcCamera, ifcRenderer.domElement);
     ifcControls.enableDamping = true;
     ifcControls.dampingFactor = 0.08;
@@ -1603,37 +1629,43 @@ async function inicializarVisorIFC(fileUrl, container) {
         pointerDownPos.x = e.clientX;
         pointerDownPos.y = e.clientY;
 
-        if (isWalkModeActive && !isPickSlabModeActive && e.button === 0) {
+        if (isWalkModeActive && !isPickSlabModeActive && (e.button === 0 || e.pointerType === 'touch')) {
             walkIsDraggingLook = true;
             walkLastMousePos.x = e.clientX;
             walkLastMousePos.y = e.clientY;
+            if (e.pointerType === 'touch' && e.cancelable) e.preventDefault();
         }
     });
 
     window.addEventListener('pointermove', (e) => {
         if (isWalkModeActive && walkIsDraggingLook && !isPickSlabModeActive) {
+            if (e.cancelable) e.preventDefault();
+
             const deltaX = e.clientX - walkLastMousePos.x;
             const deltaY = e.clientY - walkLastMousePos.y;
             walkLastMousePos.x = e.clientX;
             walkLastMousePos.y = e.clientY;
 
-            walkYaw -= deltaX * 0.0035;
-            walkPitch -= deltaY * 0.0035;
+            // Sensibilidad dinámica: 0.0075 en táctil para giro fluido, 0.0035 en ratón de PC
+            const factorSensibilidad = (e.pointerType === 'touch') ? 0.0075 : 0.0035;
+
+            walkYaw -= deltaX * factorSensibilidad;
+            walkPitch -= deltaY * factorSensibilidad;
             walkPitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, walkPitch));
 
             aplicarRotacionCaminar();
         }
-    });
+    }, { passive: false });
 
     window.addEventListener('pointerup', (e) => {
-        if (isWalkModeActive && e.button === 0) {
+        if (isWalkModeActive && (e.button === 0 || e.pointerType === 'touch')) {
             walkIsDraggingLook = false;
         }
 
         const deltaX = Math.abs(e.clientX - pointerDownPos.x);
         const deltaY = Math.abs(e.clientY - pointerDownPos.y);
 
-        if (deltaX < 6 && deltaY < 6 && e.button === 0) {
+        if (deltaX < 6 && deltaY < 6 && (e.button === 0 || e.pointerType === 'touch')) {
             if (isPickSlabModeActive || !isWalkModeActive) {
                 onIfcModelClick(e);
             }
@@ -2343,14 +2375,24 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
         btn.style.color = "#fff";
     }
 
-    if (container) container.style.cursor = "move";
+    if (container) {
+        container.style.cursor = "move";
+        container.style.touchAction = "none";
+        container.style.overscrollBehavior = "none";
+    }
 
     if (statusLabel) {
         statusLabel.innerHTML = "🚶 <strong>Modo Caminar:</strong> Usa <strong>W, A, S, D</strong> para moverte y arrastra el ratón para mirar";
     }
 
     if (esDispositivoTactil) {
-        if (touchDpad) touchDpad.style.display = "flex";
+        if (touchDpad) {
+            touchDpad.style.display = "flex";
+            touchDpad.style.touchAction = "none";
+            touchDpad.style.overscrollBehavior = "none";
+            touchDpad.style.webkitUserSelect = "none";
+            touchDpad.style.userSelect = "none";
+        }
         if (pcHint) pcHint.style.display = "none";
     } else {
         if (pcHint) pcHint.style.display = "flex";
@@ -2467,26 +2509,46 @@ function setupWalkKeyboardListeners() {
     });
 }
 
+/**
+ * BOTONES TÁCTILES MEJORADOS CON CAPTURA CONTINUA DE PUNTERO (setPointerCapture)
+ */
 function setupWalkTouchListeners() {
     const bindBtn = (id, direction) => {
         const btn = document.getElementById(id);
         if (!btn) return;
 
+        // Inyección inline individual para cada botón táctil
+        btn.style.touchAction = "none";
+        btn.style.webkitUserSelect = "none";
+        btn.style.userSelect = "none";
+        btn.style.webkitTouchCallout = "none";
+
         const startMove = (e) => {
-            e.preventDefault();
+            if (e.cancelable) e.preventDefault();
             e.stopPropagation();
+
+            if (btn.setPointerCapture && e.pointerId !== undefined) {
+                try { btn.setPointerCapture(e.pointerId); } catch(err){}
+            }
+
             walkMovement[direction] = true;
         };
+
         const endMove = (e) => {
-            e.preventDefault();
+            if (e.cancelable) e.preventDefault();
             e.stopPropagation();
+
+            if (btn.releasePointerCapture && e.pointerId !== undefined) {
+                try { btn.releasePointerCapture(e.pointerId); } catch(err){}
+            }
+
             walkMovement[direction] = false;
         };
 
-        btn.addEventListener('pointerdown', startMove);
-        btn.addEventListener('pointerup', endMove);
-        btn.addEventListener('pointercancel', endMove);
-        btn.addEventListener('pointerleave', endMove);
+        btn.addEventListener('pointerdown', startMove, { passive: false });
+        btn.addEventListener('pointerup', endMove, { passive: false });
+        btn.addEventListener('pointercancel', endMove, { passive: false });
+        btn.addEventListener('pointerleave', endMove, { passive: false });
     };
 
     bindBtn('btnWalkForward', 'forward');
