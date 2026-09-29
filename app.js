@@ -34,7 +34,7 @@ let ifcAnimationId = null;
 let ifcApiInstance = null;
 let ifcGridHelper = null;
 let ifcCurrentGroup = null;
-let ifcModelBounds = { center: new THREE.Vector3(), size: new THREE.Vector3(), maxDim: 30, minY: 0 };
+let ifcModelBounds = { center: new THREE.Vector3(), size: new THREE.Vector3(), maxDim: 30, minY: 0, maxY: 30 };
 let currentLoadedModelID = null;
 
 // ÁRBOL DE NIVELES BIM
@@ -974,7 +974,7 @@ async function procesarAprobacionCliente(estadoAprobacion) {
         return;
     }
     if (estadoAprobacion === "RECHAZADO" && !observaciones) {
-        alert("⚠️️ Por favor ingrese sus observaciones detalladas.");
+        alert("⚠ Por favor ingrese sus observaciones detalladas.");
         return;
     }
 
@@ -1671,7 +1671,7 @@ async function inicializarVisorIFC(fileUrl, container) {
     const bytesArray = new Uint8Array(buffer);
 
     const modelSettings = {
-        COORDINATE_TO_ORIGIN: true,
+        COORDINATE_TO_ORIGIN: false,
         USE_FAST_BOOLS: true
     };
 
@@ -1786,6 +1786,7 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcModelBounds.size.copy(size);
     ifcModelBounds.maxDim = Math.max(size.x, size.y, size.z);
     ifcModelBounds.minY = box.min.y;
+    ifcModelBounds.maxY = box.max.y;
 
     extraerNivelesDelModeloIFC();
     configurarEscuchadoresVisorDiferidos();
@@ -2171,7 +2172,7 @@ function extraerNivelesDelModeloIFC() {
                 id: lvl.id,
                 nombre: lvl.nombre,
                 cotaNativa: cotaMetros,
-                cotaEscena: cotaMetros // Correspondencia 1:1 nativa
+                cotaEscena: cotaMetros
             };
         });
     } else {
@@ -2241,6 +2242,7 @@ function cerrarPanelNivelesIFC() {
     }
 }
 
+// CORTE EXACTO EN LA COTA NATIVA
 function cortarEnNivel(cotaLosaEscena) {
     if (!ifcClippingPlane) return;
 
@@ -2254,14 +2256,14 @@ function cortarEnNivel(cotaLosaEscena) {
     radios.forEach(r => { if (r.value === 'Y') r.checked = true; });
     ifcClipAxis = 'Y';
     ifcClipInverted = false;
+    
+    // Normal hacia abajo y corte a 1.20 metros sobre el nivel
     ifcClippingPlane.normal.set(0, -1, 0);
-
-    // Corte exacto a 1.20 metros sobre el nivel de piso terminado
     const cotaCorte = cotaLosaEscena + 1.20;
     ifcClippingPlane.constant = cotaCorte;
 
-    const min = ifcModelBounds.minY || 0;
-    const max = min + (ifcModelBounds.size.y || 20);
+    const min = ifcModelBounds.minY || -5;
+    const max = ifcModelBounds.maxY || 25;
     const pct = Math.min(100, Math.max(0, ((cotaCorte - min) / (max - min)) * 100));
     const slider = document.getElementById("clipSlider");
     if (slider) slider.value = pct;
@@ -2279,7 +2281,7 @@ function caminarEnNivel(cotaLosaEscena) {
         if (!mesh.visible || mesh.userData.esPuerta) return false;
         mesh.updateWorldMatrix(true, false);
         const boxMesh = new THREE.Box3().setFromObject(mesh);
-        return Math.abs(boxMesh.max.y - cotaLosaEscena) < 0.6;
+        return Math.abs(boxMesh.max.y - cotaLosaEscena) < 0.8;
     });
 
     let posX = 0;
@@ -2297,7 +2299,7 @@ function caminarEnNivel(cotaLosaEscena) {
         posZ = ifcModelBounds.center.z;
     }
 
-    // 3. Teletransportar con cota estricta (cotaLosaEscena + 1.65m)
+    // 3. Teletransportar con cota nativa oficial estricta
     iniciarModoCaminarEnCoordenadas(posX, cotaLosaEscena, posZ);
 }
 
@@ -2385,7 +2387,6 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
     const container = document.getElementById("modalIfcContainer");
     const esDispositivoTactil = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 992);
 
-    // Conservar la dirección horizontal previa para mirar hacia el espacio
     if (ifcCamera && ifcControls) {
         const direccionPrevia = new THREE.Vector3();
         ifcCamera.getWorldDirection(direccionPrevia);
@@ -2401,7 +2402,6 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
         ifcControls.enableZoom = false;
     }
 
-    // Cota vertical fija para la planta
     walkFixedY = yLosa + 1.65;
     ifcCamera.position.set(x, walkFixedY, z);
     aplicarRotacionCaminar();
@@ -2799,8 +2799,8 @@ function actualizarPosicionCorte(valPercent) {
     let min = 0, max = 0;
 
     if (ifcClipAxis === 'Y') {
-        min = ifcModelBounds.minY || 0;
-        max = min + (ifcModelBounds.size.y || 20);
+        min = ifcModelBounds.minY || -5;
+        max = ifcModelBounds.maxY || 25;
     } else if (ifcClipAxis === 'X') {
         min = -ifcModelBounds.size.x / 2;
         max = ifcModelBounds.size.x / 2;
@@ -2850,7 +2850,6 @@ function onIfcModelClick(event) {
 
         if (!hit) return;
 
-        // BOTÓN "CAMINAR" MANUAL: se apoya exactamente sobre la cara donde se hizo clic/toque
         if (isPickSlabModeActive) {
             iniciarModoCaminarEnCoordenadas(hit.point.x, hit.point.y, hit.point.z);
             return;
