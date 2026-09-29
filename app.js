@@ -1302,7 +1302,7 @@ async function desplegarModalIFC(driveUrl, titulo) {
 
     ifcCont.style.display = "block";
 
-    // BLINDAJE DINÁMICO TÁCTIL EN MEMORIA (SIN ALTERAR STYLES.CSS)
+    // BLINDAJE DINÁMICO TÁCTIL EN MEMORIA (SIN TOCAR STYLES.CSS)
     ifcCont.style.touchAction = "none";
     ifcCont.style.overscrollBehavior = "none";
     modal.style.overscrollBehavior = "none";
@@ -1530,13 +1530,13 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcRenderer.localClippingEnabled = true;
     container.insertBefore(ifcRenderer.domElement, container.firstChild);
 
-    // Inyección inline directa en el elemento canvas de Three.js
+    // Inyección inline directa en el canvas de Three.js
     ifcRenderer.domElement.style.touchAction = "none";
     ifcRenderer.domElement.style.overscrollBehavior = "none";
     ifcRenderer.domElement.style.webkitUserSelect = "none";
     ifcRenderer.domElement.style.userSelect = "none";
 
-    // Evitar recarga de página por pull-to-refresh al arrastrar dentro del canvas
+    // Evitar recarga involuntaria por pull-to-refresh
     ifcRenderer.domElement.addEventListener('touchmove', (e) => {
         if (e.cancelable) e.preventDefault();
     }, { passive: false });
@@ -1646,7 +1646,7 @@ async function inicializarVisorIFC(fileUrl, container) {
             walkLastMousePos.x = e.clientX;
             walkLastMousePos.y = e.clientY;
 
-            // Sensibilidad dinámica: 0.0075 en táctil para giro fluido, 0.0035 en ratón de PC
+            // Sensibilidad adaptativa: 0.0075 en táctil (ágil y cómodo), 0.0035 en ratón de PC
             const factorSensibilidad = (e.pointerType === 'touch') ? 0.0075 : 0.0035;
 
             walkYaw -= deltaX * factorSensibilidad;
@@ -1768,9 +1768,31 @@ async function inicializarVisorIFC(fileUrl, container) {
             const matrix = new THREE.Matrix4().fromArray(placedGeometry.flatTransformation);
             mesh.applyMatrix4(matrix);
 
+            // DETECCIÓN DINÁMICA DE PUERTAS (IFCDOOR) PARA ATRAVESARLAS EN LA FÍSICA
+            let esPuerta = false;
+            try {
+                const tipoLinea = ifcApiInstance.GetLine(currentLoadedModelID, placedGeometry.geometryExpressID);
+                if (tipoLinea) {
+                    const nombreConstructor = (tipoLinea.__proto__ && tipoLinea.__proto__.constructor) ? tipoLinea.__proto__.constructor.name : "";
+                    const nombreEntidad = (tipoLinea.Name && tipoLinea.Name.value) ? String(tipoLinea.Name.value).toUpperCase() : "";
+                    const objetoEntidad = (tipoLinea.ObjectType && tipoLinea.ObjectType.value) ? String(tipoLinea.ObjectType.value).toUpperCase() : "";
+                    
+                    if (
+                        nombreConstructor.includes("Door") || 
+                        nombreEntidad.includes("PUERTA") || 
+                        nombreEntidad.includes("DOOR") || 
+                        objetoEntidad.includes("DOOR") || 
+                        objetoEntidad.includes("PUERTA")
+                    ) {
+                        esPuerta = true;
+                    }
+                }
+            } catch (errCheck) {}
+
             mesh.userData = {
                 expressID: placedGeometry.geometryExpressID,
-                modelID: currentLoadedModelID
+                modelID: currentLoadedModelID,
+                esPuerta: esPuerta
             };
 
             if (!esTransparente && posFloats.length < 6000) {
@@ -2292,7 +2314,8 @@ function detectarAlturaRealLosa(x, cotaAproximadaY, z) {
     const direccionAbajo = new THREE.Vector3(0, -1, 0);
     const rayoVertical = new THREE.Raycaster(origenRayo, direccionAbajo, 0, 10.0);
 
-    const mallasValidas = ifcMeshesList.filter(m => m.visible);
+    // Se excluyen puertas para no generar falsos pisos
+    const mallasValidas = ifcMeshesList.filter(m => m.visible && !m.userData.esPuerta);
     const intersecciones = rayoVertical.intersectObjects(mallasValidas, false);
 
     if (intersecciones.length > 0) {
@@ -2392,6 +2415,16 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
             touchDpad.style.overscrollBehavior = "none";
             touchDpad.style.webkitUserSelect = "none";
             touchDpad.style.userSelect = "none";
+
+            // AJUSTE DINÁMICO EXCLUSIVO PARA MÓVIL (<= 600px) SIN TOCAR STYLES.CSS
+            if (window.innerWidth < 600) {
+                touchDpad.style.bottom = "85px";
+                touchDpad.style.transform = "scale(0.85)";
+                touchDpad.style.transformOrigin = "bottom left";
+            } else {
+                touchDpad.style.bottom = "20px";
+                touchDpad.style.transform = "none";
+            }
         }
         if (pcHint) pcHint.style.display = "none";
     } else {
@@ -2459,7 +2492,8 @@ function actualizarFisicaCaminar(delta) {
         const origenRayo = new THREE.Vector3(siguientePos.x, ifcCamera.position.y + 0.5, siguientePos.z);
         const rayoPiso = new THREE.Raycaster(origenRayo, new THREE.Vector3(0, -1, 0), 0, 4.0);
 
-        const mallasValidas = ifcMeshesList.filter(m => m.visible);
+        // SE FILTRAN PUERTAS PARA PODER ATRAVESARLAS, PERO SE CONSERVAN MUROS Y MUEBLES ALTOS
+        const mallasValidas = ifcMeshesList.filter(m => m.visible && !m.userData.esPuerta);
         const hits = rayoPiso.intersectObjects(mallasValidas, false);
 
         if (hits.length > 0) {
@@ -2468,6 +2502,7 @@ function actualizarFisicaCaminar(delta) {
             const cotaSueloActual = cotaOjoActual - 1.65;
             const deltaAltura = cotaSueloObjetivo - cotaSueloActual;
 
+            // Escalares y desniveles <= 25 cm son transitables
             if (deltaAltura <= MAX_STEP_HEIGHT && deltaAltura >= -1.2) {
                 ifcCamera.position.x = siguientePos.x;
                 ifcCamera.position.z = siguientePos.z;
@@ -2475,7 +2510,9 @@ function actualizarFisicaCaminar(delta) {
                 const cotaOjoDeseada = cotaSueloObjetivo + 1.65;
                 ifcCamera.position.y += (cotaOjoDeseada - ifcCamera.position.y) * Math.min(1.0, delta * 12.0);
             }
+            // Si el desnivel supera 25 cm (mueble o pared), se bloquea el paso automáticamente
         } else {
+            // Avance libre en huecos o pasillos sin obstáculo inmediato
             ifcCamera.position.x = siguientePos.x;
             ifcCamera.position.z = siguientePos.z;
         }
@@ -2510,14 +2547,14 @@ function setupWalkKeyboardListeners() {
 }
 
 /**
- * BOTONES TÁCTILES MEJORADOS CON CAPTURA CONTINUA DE PUNTERO (setPointerCapture)
+ * BOTONERA TÁCTIL CORREGIDA: RESPUESTA DIRECTA Y ROBUSTA SIN BLOQUEO DE CAPTURA
  */
 function setupWalkTouchListeners() {
     const bindBtn = (id, direction) => {
         const btn = document.getElementById(id);
         if (!btn) return;
 
-        // Inyección inline individual para cada botón táctil
+        // Estilos inline de protección táctil
         btn.style.touchAction = "none";
         btn.style.webkitUserSelect = "none";
         btn.style.userSelect = "none";
@@ -2526,29 +2563,24 @@ function setupWalkTouchListeners() {
         const startMove = (e) => {
             if (e.cancelable) e.preventDefault();
             e.stopPropagation();
-
-            if (btn.setPointerCapture && e.pointerId !== undefined) {
-                try { btn.setPointerCapture(e.pointerId); } catch(err){}
-            }
-
             walkMovement[direction] = true;
         };
 
         const endMove = (e) => {
             if (e.cancelable) e.preventDefault();
             e.stopPropagation();
-
-            if (btn.releasePointerCapture && e.pointerId !== undefined) {
-                try { btn.releasePointerCapture(e.pointerId); } catch(err){}
-            }
-
             walkMovement[direction] = false;
         };
 
+        // Soporte universal doble: Eventos Pointer + Eventos Touch nativos
         btn.addEventListener('pointerdown', startMove, { passive: false });
         btn.addEventListener('pointerup', endMove, { passive: false });
-        btn.addEventListener('pointercancel', endMove, { passive: false });
         btn.addEventListener('pointerleave', endMove, { passive: false });
+        btn.addEventListener('pointercancel', endMove, { passive: false });
+
+        btn.addEventListener('touchstart', startMove, { passive: false });
+        btn.addEventListener('touchend', endMove, { passive: false });
+        btn.addEventListener('touchcancel', endMove, { passive: false });
     };
 
     bindBtn('btnWalkForward', 'forward');
