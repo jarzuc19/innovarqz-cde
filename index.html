@@ -19,7 +19,7 @@
     <style>
         /* Contención nativa de scroll para neutralizar pull-to-refresh sin JavaScript */
         #viewerModal {
-            overscroll-behavior: contain !important;
+            overscroll-behavior-y: contain !important;
         }
 
         /* Bloqueo estricto de selección de texto en la botonera flotante */
@@ -534,17 +534,6 @@
                         <button type="button" class="btn-exit-walk" onclick="desactivarModoCaminar()">✕ Salir</button>
                     </div>
 
-                    <!-- Joystick táctil virtual para Móviles y Tablets con botón de salida -->
-                    <div id="walkTouchContainer" class="walk-touch-container">
-                        <button type="button" class="btn-exit-walk" onclick="desactivarModoCaminar()" style="margin-bottom: 6px; padding: 4px 12px; font-size: 0.75rem;">✕ Salir</button>
-                        <button type="button" class="walk-btn-dir" id="btnWalkForward">▲</button>
-                        <div class="walk-touch-row">
-                            <button type="button" class="walk-btn-dir" id="btnWalkLeft">◄</button>
-                            <button type="button" class="walk-btn-dir" id="btnWalkBackward">▼</button>
-                            <button type="button" class="walk-btn-dir" id="btnWalkRight">►</button>
-                        </div>
-                    </div>
-
                     <!-- Panel Flotante de Árbol de Niveles IFC -->
                     <div id="ifcLevelsCard">
                         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 4px;">
@@ -635,6 +624,17 @@
                 <div id="viewerLoadingIndicator" class="viewer-loading-banner" style="display: none;">
                     <div style="margin-bottom: 6px;">⏳ Cargando entregable...</div>
                     <small style="color: #94a3b8; font-weight: normal;">(Espere un momento)</small>
+                </div>
+            </div>
+
+            <!-- JOYSTICK TÁCTIL VIRTUAL EXTRAÍDO DEL CONTEXTO WEBGL (HIJO DIRECTO DEL MODAL) -->
+            <div id="walkTouchContainer" class="walk-touch-container">
+                <button type="button" class="btn-exit-walk" onclick="desactivarModoCaminar()" style="margin-bottom: 6px; padding: 4px 12px; font-size: 0.75rem;">✕ Salir</button>
+                <button type="button" class="walk-btn-dir" id="btnWalkForward">▲</button>
+                <div class="walk-touch-row">
+                    <button type="button" class="walk-btn-dir" id="btnWalkLeft">◄</button>
+                    <button type="button" class="walk-btn-dir" id="btnWalkBackward">▼</button>
+                    <button type="button" class="walk-btn-dir" id="btnWalkRight">►</button>
                 </div>
             </div>
         </div>
