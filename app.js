@@ -2277,36 +2277,37 @@ function cortarEnNivel(cotaLosaEscena) {
 }
 
 // ==============================================================================
-// DETECCIÓN FÍSICA DE FORJADO / ESCALERAS Y FÍSICA PEATONAL
+// DETECCIÓN DETERMINISTA DE FORJADOS Y FÍSICA PEATONAL
 // ==============================================================================
-function detectarAlturaRealLosa(x, cotaAproximadaY, z) {
-    if (!ifcScene) return cotaAproximadaY;
-
-    // Disparar rayo vertical hacia abajo buscando la cota real del forjado
-    const origenRayo = new THREE.Vector3(x, cotaAproximadaY + 3.0, z);
-    const direccionAbajo = new THREE.Vector3(0, -1, 0);
-    const rayoVertical = new THREE.Raycaster(origenRayo, direccionAbajo, 0.05, 20.0);
-
-    const mallasValidas = ifcMeshesList.filter(m => m.visible && !m.userData.esPuerta);
-    const intersecciones = rayoVertical.intersectObjects(mallasValidas, false);
-
-    if (intersecciones.length > 0) {
-        return intersecciones[0].point.y;
-    }
-
-    return cotaAproximadaY;
-}
-
 function caminarEnNivel(cotaLosaEscena) {
     cerrarPanelNivelesIFC();
     desactivarSeleccionLosa();
 
-    // Centrar la posición peatonal en el volumen del piso seleccionado
-    const posX = (ifcModelBounds && ifcModelBounds.center) ? ifcModelBounds.center.x : 0;
-    const posZ = (ifcModelBounds && ifcModelBounds.center) ? ifcModelBounds.center.z : 0.5;
-    const cotaFisicaLosa = detectarAlturaRealLosa(posX, cotaLosaEscena, posZ);
+    // 1. Filtrar mallas de forjado/piso situadas en la franja del nivel seleccionado
+    const losasNivel = ifcMeshesList.filter(mesh => {
+        if (!mesh.visible || mesh.userData.esPuerta) return false;
+        const boxMesh = new THREE.Box3().setFromObject(mesh);
+        // Validar que la superficie superior de la malla coincida con la cota de la losa (+- 0.85m de tolerancia)
+        return Math.abs(boxMesh.max.y - cotaLosaEscena) < 0.85;
+    });
 
-    iniciarModoCaminarEnCoordenadas(posX, cotaFisicaLosa, posZ);
+    let posX = 0;
+    let posZ = 0.5;
+
+    // 2. Extraer el centroide horizontal exacto de las losas de esa planta
+    if (losasNivel.length > 0) {
+        const boxPlanta = new THREE.Box3();
+        losasNivel.forEach(m => boxPlanta.expandByObject(m));
+        const centroPlanta = boxPlanta.getCenter(new THREE.Vector3());
+        posX = centroPlanta.x;
+        posZ = centroPlanta.z;
+    } else if (ifcModelBounds && ifcModelBounds.center) {
+        posX = ifcModelBounds.center.x;
+        posZ = ifcModelBounds.center.z;
+    }
+
+    // 3. Teletransportar directamente con cotaLosaEscena + 1.65m (desnivel inicial cero)
+    iniciarModoCaminarEnCoordenadas(posX, cotaLosaEscena, posZ);
 }
 
 function activarSeleccionLosaCaminar() {
@@ -2842,6 +2843,7 @@ function onIfcModelClick(event) {
 
         if (!hit) return;
 
+        // BOTÓN "CAMINAR" MANUAL: se apoya exactamente sobre la cara donde se hizo clic/toque
         if (isPickSlabModeActive) {
             iniciarModoCaminarEnCoordenadas(hit.point.x, hit.point.y, hit.point.z);
             return;
