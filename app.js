@@ -1266,7 +1266,6 @@ function desplegarModalImagen(driveUrl, titulo) {
     imgWrapper.style.display = "flex";
     if (zoomControls) zoomControls.style.display = "flex";
 
-    // Extraer ID del archivo en Google Drive y consultar endpoint con GOOGLE_DRIVE_API_KEY
     let imgDirectUrl = driveUrl;
     const match = driveUrl.match(/[-\w]{25,}/);
     if (match) {
@@ -1301,11 +1300,6 @@ async function desplegarModalIFC(driveUrl, titulo) {
     activeZoomTarget = null;
 
     ifcCont.style.display = "block";
-
-    // BLINDAJE DINÁMICO TÁCTIL EN MEMORIA (SIN TOCAR STYLES.CSS)
-    ifcCont.style.touchAction = "none";
-    ifcCont.style.overscrollBehavior = "none";
-    modal.style.overscrollBehavior = "none";
 
     if (loading) {
         loading.style.display = "block";
@@ -1342,15 +1336,6 @@ function closeViewerModal(triggerHistory = true) {
     if (zoomControls) zoomControls.style.display = "none";
     if (dragOverlay) dragOverlay.style.display = "none";
     if (loading) loading.style.display = "none";
-
-    // RESTABLECIMIENTO DINÁMICO LIMPIO
-    if (ifcCont) {
-        ifcCont.style.touchAction = "";
-        ifcCont.style.overscrollBehavior = "";
-    }
-    if (modal) {
-        modal.style.overscrollBehavior = "";
-    }
 
     resetActiveZoom();
     ocultarMenuContextualIFC();
@@ -1530,17 +1515,6 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcRenderer.localClippingEnabled = true;
     container.insertBefore(ifcRenderer.domElement, container.firstChild);
 
-    // Inyección inline directa en el canvas de Three.js
-    ifcRenderer.domElement.style.touchAction = "none";
-    ifcRenderer.domElement.style.overscrollBehavior = "none";
-    ifcRenderer.domElement.style.webkitUserSelect = "none";
-    ifcRenderer.domElement.style.userSelect = "none";
-
-    // Evitar recarga involuntaria por pull-to-refresh
-    ifcRenderer.domElement.addEventListener('touchmove', (e) => {
-        if (e.cancelable) e.preventDefault();
-    }, { passive: false });
-
     ifcControls = new THREE.OrbitControls(ifcCamera, ifcRenderer.domElement);
     ifcControls.enableDamping = true;
     ifcControls.dampingFactor = 0.08;
@@ -1625,6 +1599,7 @@ async function inicializarVisorIFC(fileUrl, container) {
         if (e.button === 1) isMiddleShiftOrbit = false;
     });
 
+    // EVENTOS DE NAVEGACIÓN Y GIRO DE CÁMARA
     ifcRenderer.domElement.addEventListener('pointerdown', (e) => {
         pointerDownPos.x = e.clientX;
         pointerDownPos.y = e.clientY;
@@ -1633,20 +1608,17 @@ async function inicializarVisorIFC(fileUrl, container) {
             walkIsDraggingLook = true;
             walkLastMousePos.x = e.clientX;
             walkLastMousePos.y = e.clientY;
-            if (e.pointerType === 'touch' && e.cancelable) e.preventDefault();
         }
     });
 
     window.addEventListener('pointermove', (e) => {
         if (isWalkModeActive && walkIsDraggingLook && !isPickSlabModeActive) {
-            if (e.cancelable) e.preventDefault();
-
             const deltaX = e.clientX - walkLastMousePos.x;
             const deltaY = e.clientY - walkLastMousePos.y;
             walkLastMousePos.x = e.clientX;
             walkLastMousePos.y = e.clientY;
 
-            // Sensibilidad adaptativa: 0.0075 en táctil (ágil y cómodo), 0.0035 en ratón de PC
+            // Sensibilidad: 0.0075 en táctil (giro cómodo) y 0.0035 en ratón de PC
             const factorSensibilidad = (e.pointerType === 'touch') ? 0.0075 : 0.0035;
 
             walkYaw -= deltaX * factorSensibilidad;
@@ -1655,7 +1627,7 @@ async function inicializarVisorIFC(fileUrl, container) {
 
             aplicarRotacionCaminar();
         }
-    }, { passive: false });
+    });
 
     window.addEventListener('pointerup', (e) => {
         if (isWalkModeActive && (e.button === 0 || e.pointerType === 'touch')) {
@@ -2310,7 +2282,7 @@ function cortarEnNivel(cotaLosaEscena) {
 function detectarAlturaRealLosa(x, cotaAproximadaY, z) {
     if (!ifcScene) return cotaAproximadaY;
 
-    // Disparar desde 3 metros arriba de la cota indicada hasta 15 metros abajo
+    // Disparar desde 3 metros arriba de la cota indicada hacia abajo
     const origenRayo = new THREE.Vector3(x, cotaAproximadaY + 3.0, z);
     const direccionAbajo = new THREE.Vector3(0, -1, 0);
     const rayoVertical = new THREE.Raycaster(origenRayo, direccionAbajo, 0.05, 20.0);
@@ -2405,8 +2377,6 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
 
     if (container) {
         container.style.cursor = "move";
-        container.style.touchAction = "none";
-        container.style.overscrollBehavior = "none";
     }
 
     if (statusLabel) {
@@ -2416,26 +2386,6 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
     if (esDispositivoTactil) {
         if (touchDpad) {
             touchDpad.style.display = "flex";
-            touchDpad.style.touchAction = "none";
-            touchDpad.style.overscrollBehavior = "none";
-            touchDpad.style.webkitUserSelect = "none";
-            touchDpad.style.userSelect = "none";
-            touchDpad.style.zIndex = "999999";
-            touchDpad.style.pointerEvents = "auto";
-
-            // POSICIONAMIENTO FIXED ROBUSTO: SE ELEVA COMPLETAMENTE SOBRE EL BOTÓN SALIR Y EL BORDE DEL TELÉFONO
-            if (window.innerWidth < 600) {
-                touchDpad.style.position = "fixed";
-                touchDpad.style.bottom = "85px";
-                touchDpad.style.left = "15px";
-                touchDpad.style.transform = "scale(0.85)";
-                touchDpad.style.transformOrigin = "bottom left";
-            } else {
-                touchDpad.style.position = "absolute";
-                touchDpad.style.bottom = "25px";
-                touchDpad.style.left = "25px";
-                touchDpad.style.transform = "none";
-            }
         }
         if (pcHint) pcHint.style.display = "none";
     } else {
@@ -2443,7 +2393,6 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
         if (touchDpad) touchDpad.style.display = "none";
     }
 
-    // Configurar o refrescar escuchadores táctiles
     configurarEscuchadoresVisorDiferidos();
 }
 
@@ -2503,7 +2452,7 @@ function actualizarFisicaCaminar(delta) {
         const pasoDistancia = walkSpeed * delta;
         const siguientePos = ifcCamera.position.clone().add(moveVector.clone().multiplyScalar(pasoDistancia));
 
-        // Origen del rayo: 1 metro sobre la cabeza, buscando hasta 10 metros abajo para no perder forjados de pisos altos
+        // Origen del rayo: 1 metro sobre la cabeza, buscando forjado bajo los pies en cualquier piso
         const origenRayo = new THREE.Vector3(siguientePos.x, ifcCamera.position.y + 1.0, siguientePos.z);
         const rayoPiso = new THREE.Raycaster(origenRayo, new THREE.Vector3(0, -1, 0), 0.05, 12.0);
 
@@ -2562,18 +2511,12 @@ function setupWalkKeyboardListeners() {
 }
 
 /**
- * BOTONERA TÁCTIL UNIVERSAL: ESCUCHA DIRECTA Y CONFIABLE CON RESTABLECIMIENTO EN WINDOW
+ * BOTONERA TÁCTIL BLINDADA: CAPTURA DIRECTA Y UNIVERSAL
  */
 function setupWalkTouchListeners() {
     const bindBtn = (id, direction) => {
         const btn = document.getElementById(id);
         if (!btn) return;
-
-        btn.style.touchAction = "none";
-        btn.style.webkitUserSelect = "none";
-        btn.style.userSelect = "none";
-        btn.style.pointerEvents = "auto";
-        btn.style.cursor = "pointer";
 
         const start = (e) => {
             if (e.cancelable) e.preventDefault();
@@ -2595,7 +2538,7 @@ function setupWalkTouchListeners() {
         btn.addEventListener('touchend', stop, { passive: false });
         btn.addEventListener('touchcancel', stop, { passive: false });
 
-        // Mouse events para pruebas en PC
+        // Mouse events para PC
         btn.addEventListener('mousedown', start);
         btn.addEventListener('mouseup', stop);
     };
