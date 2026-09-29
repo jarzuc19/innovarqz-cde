@@ -1618,7 +1618,7 @@ async function inicializarVisorIFC(fileUrl, container) {
             walkLastMousePos.x = e.clientX;
             walkLastMousePos.y = e.clientY;
 
-            // Sensibilidad: 0.0075 en táctil (giro cómodo) y 0.0035 en ratón de PC
+            // Sensibilidad ágil (0.0075) para pantalla táctil y suave (0.0035) para ratón de PC
             const factorSensibilidad = (e.pointerType === 'touch') ? 0.0075 : 0.0035;
 
             walkYaw -= deltaX * factorSensibilidad;
@@ -2282,12 +2282,11 @@ function cortarEnNivel(cotaLosaEscena) {
 function detectarAlturaRealLosa(x, cotaAproximadaY, z) {
     if (!ifcScene) return cotaAproximadaY;
 
-    // Disparar desde 3 metros arriba de la cota indicada hacia abajo
+    // Disparar rayo vertical hacia abajo buscando la cota real del forjado
     const origenRayo = new THREE.Vector3(x, cotaAproximadaY + 3.0, z);
     const direccionAbajo = new THREE.Vector3(0, -1, 0);
     const rayoVertical = new THREE.Raycaster(origenRayo, direccionAbajo, 0.05, 20.0);
 
-    // Se excluyen puertas para no generar falsos pisos
     const mallasValidas = ifcMeshesList.filter(m => m.visible && !m.userData.esPuerta);
     const intersecciones = rayoVertical.intersectObjects(mallasValidas, false);
 
@@ -2302,7 +2301,7 @@ function caminarEnNivel(cotaLosaEscena) {
     cerrarPanelNivelesIFC();
     desactivarSeleccionLosa();
 
-    // Centrar la posición en el volumen del edificio
+    // Centrar la posición peatonal en el volumen del piso seleccionado
     const posX = (ifcModelBounds && ifcModelBounds.center) ? ifcModelBounds.center.x : 0;
     const posZ = (ifcModelBounds && ifcModelBounds.center) ? ifcModelBounds.center.z : 0.5;
     const cotaFisicaLosa = detectarAlturaRealLosa(posX, cotaLosaEscena, posZ);
@@ -2452,11 +2451,11 @@ function actualizarFisicaCaminar(delta) {
         const pasoDistancia = walkSpeed * delta;
         const siguientePos = ifcCamera.position.clone().add(moveVector.clone().multiplyScalar(pasoDistancia));
 
-        // Origen del rayo: 1 metro sobre la cabeza, buscando forjado bajo los pies en cualquier piso
+        // Origen del rayo: 1 metro sobre los ojos con amplio alcance para detectar forjados en cualquier nivel
         const origenRayo = new THREE.Vector3(siguientePos.x, ifcCamera.position.y + 1.0, siguientePos.z);
         const rayoPiso = new THREE.Raycaster(origenRayo, new THREE.Vector3(0, -1, 0), 0.05, 12.0);
 
-        // SE FILTRAN PUERTAS PARA PODER ATRAVESARLAS, PERO SE CONSERVAN MUROS Y MUEBLES ALTOS
+        // Se excluyen puertas para atravesarlas, pero se preservan muros y muebles
         const mallasValidas = ifcMeshesList.filter(m => m.visible && !m.userData.esPuerta);
         const hits = rayoPiso.intersectObjects(mallasValidas, false);
 
@@ -2466,7 +2465,7 @@ function actualizarFisicaCaminar(delta) {
             const cotaSueloActual = cotaOjoActual - 1.65;
             const deltaAltura = cotaSueloObjetivo - cotaSueloActual;
 
-            // Escalares y desniveles <= 25 cm son transitables, permitiendo bajadas de hasta -1.5m
+            // Tolerancia para escaleras/rampas (<= 25 cm) y desniveles hacia abajo de hasta -1.5m
             if (deltaAltura <= MAX_STEP_HEIGHT && deltaAltura >= -1.5) {
                 ifcCamera.position.x = siguientePos.x;
                 ifcCamera.position.z = siguientePos.z;
@@ -2474,7 +2473,7 @@ function actualizarFisicaCaminar(delta) {
                 const cotaOjoDeseada = cotaSueloObjetivo + 1.65;
                 ifcCamera.position.y += (cotaOjoDeseada - ifcCamera.position.y) * Math.min(1.0, delta * 12.0);
             }
-            // Si el desnivel supera 25 cm (mueble o pared), se bloquea el paso automáticamente
+            // Si el desnivel supera 25 cm (mueble o pared), se bloquea el paso frontal
         } else {
             // Avance horizontal fluido si no hay detección inmediata bajo los pies
             ifcCamera.position.x = siguientePos.x;
@@ -2511,7 +2510,7 @@ function setupWalkKeyboardListeners() {
 }
 
 /**
- * BOTONERA TÁCTIL BLINDADA: CAPTURA DIRECTA Y UNIVERSAL
+ * BOTONERA TÁCTIL AISLADA: ESCUCHA DIRECTA CON STOPPROPAGATION PARA NO CONFUNDIRSE CON LA MIRADA
  */
 function setupWalkTouchListeners() {
     const bindBtn = (id, direction) => {
@@ -2525,15 +2524,16 @@ function setupWalkTouchListeners() {
         };
 
         const stop = (e) => {
+            e.stopPropagation();
             walkMovement[direction] = false;
         };
 
-        // Pointer events directos en el botón
+        // Pointer events directos y aislados
         btn.addEventListener('pointerdown', start, { passive: false });
         btn.addEventListener('pointerup', stop, { passive: false });
         btn.addEventListener('pointercancel', stop, { passive: false });
 
-        // Touch events de respaldo directo
+        // Touch events de respaldo
         btn.addEventListener('touchstart', start, { passive: false });
         btn.addEventListener('touchend', stop, { passive: false });
         btn.addEventListener('touchcancel', stop, { passive: false });
@@ -2548,7 +2548,7 @@ function setupWalkTouchListeners() {
     bindBtn('btnWalkLeft', 'left');
     bindBtn('btnWalkRight', 'right');
 
-    // Seguridad global: si se levanta el dedo en cualquier punto de la pantalla, se detiene el movimiento
+    // Seguridad global: si se levanta el dedo o ratón fuera del botón, se detiene el avance
     window.addEventListener('pointerup', () => {
         walkMovement.forward = false;
         walkMovement.backward = false;
