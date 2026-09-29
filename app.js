@@ -1618,8 +1618,8 @@ async function inicializarVisorIFC(fileUrl, container) {
             walkLastMousePos.x = e.clientX;
             walkLastMousePos.y = e.clientY;
 
-            // Sensibilidad ágil (0.0075) para pantalla táctil y suave (0.0035) para ratón de PC
-            const factorSensibilidad = (e.pointerType === 'touch') ? 0.0075 : 0.0035;
+            // Sensibilidad ágil y cómoda (0.0125) para pantalla táctil, conservando suavidad (0.0035) para ratón de PC
+            const factorSensibilidad = (e.pointerType === 'touch') ? 0.0125 : 0.0035;
 
             walkYaw -= deltaX * factorSensibilidad;
             walkPitch -= deltaY * factorSensibilidad;
@@ -2283,18 +2283,17 @@ function caminarEnNivel(cotaLosaEscena) {
     cerrarPanelNivelesIFC();
     desactivarSeleccionLosa();
 
-    // 1. Filtrar mallas de forjado/piso situadas en la franja del nivel seleccionado
+    // 1. Filtrar las mallas de losas/pisos que pertenezcan a la cota del nivel seleccionado
     const losasNivel = ifcMeshesList.filter(mesh => {
         if (!mesh.visible || mesh.userData.esPuerta) return false;
         const boxMesh = new THREE.Box3().setFromObject(mesh);
-        // Validar que la superficie superior de la malla coincida con la cota de la losa (+- 0.85m de tolerancia)
-        return Math.abs(boxMesh.max.y - cotaLosaEscena) < 0.85;
+        return Math.abs(boxMesh.max.y - cotaLosaEscena) < 1.2;
     });
 
     let posX = 0;
     let posZ = 0.5;
 
-    // 2. Extraer el centroide horizontal exacto de las losas de esa planta
+    // 2. Extraer el centroide en planta de las losas de ese piso específico
     if (losasNivel.length > 0) {
         const boxPlanta = new THREE.Box3();
         losasNivel.forEach(m => boxPlanta.expandByObject(m));
@@ -2306,7 +2305,7 @@ function caminarEnNivel(cotaLosaEscena) {
         posZ = ifcModelBounds.center.z;
     }
 
-    // 3. Teletransportar directamente con cotaLosaEscena + 1.65m (desnivel inicial cero)
+    // 3. Teletransportar directamente: Cota Y estricta e innegociable a nivel oficial del piso
     iniciarModoCaminarEnCoordenadas(posX, cotaLosaEscena, posZ);
 }
 
@@ -2330,7 +2329,7 @@ function activarSeleccionLosaCaminar() {
         if (container) container.style.cursor = "pointer";
 
         if (pcHint && statusLabel) {
-            statusLabel.innerHTML = "🎯 <strong>Haz clic con botón izquierdo sobre la losa o forjado</strong> donde deseas pararte...";
+            statusLabel.innerHTML = "🎯 <strong>Toca o haz clic sobre la losa o forjado</strong> donde deseas pararte...";
             pcHint.style.display = "flex";
         }
     } else {
@@ -2358,6 +2357,17 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
     const container = document.getElementById("modalIfcContainer");
     const esDispositivoTactil = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 992);
 
+    // Conservar la orientación frontal previa de la cámara en el plano XZ para no rotar a ciegas hacia paredes
+    if (ifcCamera && ifcControls) {
+        const direccionPrevia = new THREE.Vector3();
+        ifcCamera.getWorldDirection(direccionPrevia);
+        walkYaw = Math.atan2(-direccionPrevia.x, -direccionPrevia.z);
+        walkPitch = 0; // Mirada nivelada al frente horizontal
+    } else {
+        walkYaw = Math.PI;
+        walkPitch = 0;
+    }
+
     if (ifcControls) {
         ifcControls.enabled = false;
         ifcControls.enableZoom = false;
@@ -2365,9 +2375,6 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
 
     const alturaOjoHumano = yLosa + 1.65;
     ifcCamera.position.set(x, alturaOjoHumano, z);
-
-    walkYaw = Math.PI;
-    walkPitch = 0;
     aplicarRotacionCaminar();
 
     if (btn) {
