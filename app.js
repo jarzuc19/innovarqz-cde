@@ -2310,9 +2310,10 @@ function cortarEnNivel(cotaLosaEscena) {
 function detectarAlturaRealLosa(x, cotaAproximadaY, z) {
     if (!ifcScene) return cotaAproximadaY;
 
-    const origenRayo = new THREE.Vector3(x, cotaAproximadaY + 2.5, z);
+    // Disparar desde arriba hacia abajo con margen amplio de 3.5m
+    const origenRayo = new THREE.Vector3(x, cotaAproximadaY + 3.5, z);
     const direccionAbajo = new THREE.Vector3(0, -1, 0);
-    const rayoVertical = new THREE.Raycaster(origenRayo, direccionAbajo, 0, 10.0);
+    const rayoVertical = new THREE.Raycaster(origenRayo, direccionAbajo, 0.1, 15.0);
 
     // Se excluyen puertas para no generar falsos pisos
     const mallasValidas = ifcMeshesList.filter(m => m.visible && !m.userData.esPuerta);
@@ -2329,8 +2330,12 @@ function caminarEnNivel(cotaLosaEscena) {
     cerrarPanelNivelesIFC();
     desactivarSeleccionLosa();
 
-    const cotaFisicaLosa = detectarAlturaRealLosa(0, cotaLosaEscena, 0.5);
-    iniciarModoCaminarEnCoordenadas(0, cotaFisicaLosa, 0.5);
+    // Ubicarse en el centro del modelo respetando la cota de ese piso
+    const posX = (ifcModelBounds && ifcModelBounds.center) ? ifcModelBounds.center.x : 0;
+    const posZ = (ifcModelBounds && ifcModelBounds.center) ? ifcModelBounds.center.z : 0.5;
+    const cotaFisicaLosa = detectarAlturaRealLosa(posX, cotaLosaEscena, posZ);
+
+    iniciarModoCaminarEnCoordenadas(posX, cotaFisicaLosa, posZ);
 }
 
 function activarSeleccionLosaCaminar() {
@@ -2418,14 +2423,16 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
             touchDpad.style.zIndex = "100000";
             touchDpad.style.pointerEvents = "auto";
 
-            // REUBICACIÓN EN MÓVIL: ELEVADA PARA NO CORTARSE Y COMPLETAMENTE VISIBLE
+            // POSICIONAMIENTO ELEVADO EN MÓVIL (<= 600px) PARA EVITAR QUE SE CORTE
             if (window.innerWidth < 600) {
-                touchDpad.style.bottom = "125px";
-                touchDpad.style.left = "18px";
+                touchDpad.style.position = "absolute";
+                touchDpad.style.bottom = "120px";
+                touchDpad.style.left = "16px";
                 touchDpad.style.transform = "scale(0.85)";
                 touchDpad.style.transformOrigin = "bottom left";
             } else {
-                touchDpad.style.bottom = "30px";
+                touchDpad.style.position = "absolute";
+                touchDpad.style.bottom = "28px";
                 touchDpad.style.left = "25px";
                 touchDpad.style.transform = "none";
             }
@@ -2496,8 +2503,9 @@ function actualizarFisicaCaminar(delta) {
         const pasoDistancia = walkSpeed * delta;
         const siguientePos = ifcCamera.position.clone().add(moveVector.clone().multiplyScalar(pasoDistancia));
 
-        const origenRayo = new THREE.Vector3(siguientePos.x, ifcCamera.position.y + 0.5, siguientePos.z);
-        const rayoPiso = new THREE.Raycaster(origenRayo, new THREE.Vector3(0, -1, 0), 0, 4.0);
+        // Origen del rayo: 1 metro sobre los ojos con amplio alcance para cubrir pisos altos
+        const origenRayo = new THREE.Vector3(siguientePos.x, ifcCamera.position.y + 1.0, siguientePos.z);
+        const rayoPiso = new THREE.Raycaster(origenRayo, new THREE.Vector3(0, -1, 0), 0.1, 15.0);
 
         // SE FILTRAN PUERTAS PARA PODER ATRAVESARLAS, PERO SE CONSERVAN MUROS Y MUEBLES ALTOS
         const mallasValidas = ifcMeshesList.filter(m => m.visible && !m.userData.esPuerta);
@@ -2509,17 +2517,17 @@ function actualizarFisicaCaminar(delta) {
             const cotaSueloActual = cotaOjoActual - 1.65;
             const deltaAltura = cotaSueloObjetivo - cotaSueloActual;
 
-            // Escalares y desniveles <= 25 cm son transitables
-            if (deltaAltura <= MAX_STEP_HEIGHT && deltaAltura >= -1.2) {
+            // Escalares y desniveles <= 25 cm son transitables, permitiendo descensos de hasta -1.5m
+            if (deltaAltura <= MAX_STEP_HEIGHT && deltaAltura >= -1.5) {
                 ifcCamera.position.x = siguientePos.x;
                 ifcCamera.position.z = siguientePos.z;
 
                 const cotaOjoDeseada = cotaSueloObjetivo + 1.65;
                 ifcCamera.position.y += (cotaOjoDeseada - ifcCamera.position.y) * Math.min(1.0, delta * 12.0);
             }
-            // Si el obstáculo supera 25 cm (mueble o pared), se bloquea el paso automáticamente
+            // Si el desnivel supera 25 cm (mueble o pared), se bloquea el paso automáticamente
         } else {
-            // Avance libre en huecos o pasillos sin obstáculo inmediato
+            // Avance horizontal fluido si no hay detección inmediata bajo los pies
             ifcCamera.position.x = siguientePos.x;
             ifcCamera.position.z = siguientePos.z;
         }
