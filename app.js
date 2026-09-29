@@ -34,7 +34,7 @@ let ifcAnimationId = null;
 let ifcApiInstance = null;
 let ifcGridHelper = null;
 let ifcCurrentGroup = null;
-let ifcModelBounds = { center: new THREE.Vector3(), size: new THREE.Vector3(), maxDim: 30, offsetY: 0 };
+let ifcModelBounds = { center: new THREE.Vector3(), size: new THREE.Vector3(), maxDim: 30, minY: 0 };
 let currentLoadedModelID = null;
 
 // ÁRBOL DE NIVELES BIM
@@ -55,7 +55,7 @@ let isMeasureToolActive = false;
 let measurePoints = [];
 const measureVisualObjects = [];
 
-// HERRAMIENTA DE RECORRIDO EN PRIMERA PERSONA (WALK MODE CON SUBIDA DE ESCALERAS)
+// HERRAMIENTA DE RECORRIDO EN PRIMERA PERSONA (WALK MODE)
 let isWalkModeActive = false;
 let isPickSlabModeActive = false;
 const walkMovement = { forward: false, backward: false, left: false, right: false };
@@ -67,6 +67,7 @@ let walkIsDraggingLook = false;
 let walkLastMousePos = { x: 0, y: 0 };
 let walkListenersConfigured = false;
 const MAX_STEP_HEIGHT = 0.25; // 25 cm tolerancia de escalón / rampa
+const highlightedSlabs = [];
 
 // BANDEJA DE CAPTURAS 3D (OPCIÓN A - CARRITO DE INSPECCIÓN)
 const capturasBandeja = [];
@@ -1238,9 +1239,6 @@ function desplegarModalIframe(url, titulo, mostrarZoomControls) {
     }, 40);
 }
 
-/**
- * VISOR DE IMÁGENES ACTUALIZADO (CONSULTA BINARIA DRIVE API SIN BLOQUEO 403)
- */
 function desplegarModalImagen(driveUrl, titulo) {
     const modal = document.getElementById("viewerModal");
     const scalerWrapper = document.getElementById("iframeScalerWrapper");
@@ -1471,7 +1469,7 @@ function applyActiveTransform() {
 }
 
 // ==============================================================================
-// MOTOR BIM OPEN SOURCE 3D (THAT OPEN COMPANY WEB-IFC v0.0.78 CON CLIPPING Y VISTAS)
+// MOTOR BIM OPEN SOURCE 3D (PARAMÉTRICO 1:1 CON COTAS NATIVAS)
 // ==============================================================================
 async function obtenerConstructorIfcAPI() {
     if (window.WebIFC && window.WebIFC.IfcAPI) return window.WebIFC.IfcAPI;
@@ -1536,10 +1534,6 @@ async function inicializarVisorIFC(fileUrl, container) {
     const fillLight = new THREE.DirectionalLight(0xe2e8f0, 0.4);
     fillLight.position.set(-50, 20, -40);
     ifcScene.add(fillLight);
-
-    ifcGridHelper = new THREE.GridHelper(60, 60, 0x94a3b8, 0xe2e8f0);
-    ifcGridHelper.position.y = -0.01;
-    ifcScene.add(ifcGridHelper);
 
     raycaster = new THREE.Raycaster();
     mousePointer = new THREE.Vector2();
@@ -1618,7 +1612,7 @@ async function inicializarVisorIFC(fileUrl, container) {
             walkLastMousePos.x = e.clientX;
             walkLastMousePos.y = e.clientY;
 
-            // Sensibilidad ágil y cómoda (0.0125) para pantalla táctil, conservando suavidad (0.0035) para ratón de PC
+            // Sensibilidad ágil (0.0125) en táctil y suave (0.0035) para ratón de PC
             const factorSensibilidad = (e.pointerType === 'touch') ? 0.0125 : 0.0035;
 
             walkYaw -= deltaX * factorSensibilidad;
@@ -1690,7 +1684,7 @@ async function inicializarVisorIFC(fileUrl, container) {
     currentLoadedModelID = ifcApiInstance.OpenModel(bytesArray, modelSettings);
     ifcCurrentGroup = new THREE.Group();
 
-    ifcClippingPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 100);
+    ifcClippingPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1000);
 
     const edgeLineMaterial = new THREE.LineBasicMaterial({
         color: 0x334155,
@@ -1740,23 +1734,26 @@ async function inicializarVisorIFC(fileUrl, container) {
             const matrix = new THREE.Matrix4().fromArray(placedGeometry.flatTransformation);
             mesh.applyMatrix4(matrix);
 
-            // DETECCIÓN DINÁMICA DE PUERTAS (IFCDOOR) PARA ATRAVESARLAS EN LA FÍSICA
+            // DETECCIÓN DINÁMICA PARAMÉTRICA DE ELEMENTOS
             let esPuerta = false;
+            let esLosa = false;
+            let esMueble = false;
+
             try {
                 const tipoLinea = ifcApiInstance.GetLine(currentLoadedModelID, placedGeometry.geometryExpressID);
                 if (tipoLinea) {
-                    const nombreConstructor = (tipoLinea.__proto__ && tipoLinea.__proto__.constructor) ? tipoLinea.__proto__.constructor.name : "";
-                    const nombreEntidad = (tipoLinea.Name && tipoLinea.Name.value) ? String(tipoLinea.Name.value).toUpperCase() : "";
-                    const objetoEntidad = (tipoLinea.ObjectType && tipoLinea.ObjectType.value) ? String(tipoLinea.ObjectType.value).toUpperCase() : "";
+                    const constructorName = (tipoLinea.__proto__ && tipoLinea.__proto__.constructor) ? tipoLinea.__proto__.constructor.name.toUpperCase() : "";
+                    const entityName = (tipoLinea.Name && tipoLinea.Name.value) ? String(tipoLinea.Name.value).toUpperCase() : "";
+                    const objectType = (tipoLinea.ObjectType && tipoLinea.ObjectType.value) ? String(tipoLinea.ObjectType.value).toUpperCase() : "";
                     
-                    if (
-                        nombreConstructor.includes("Door") || 
-                        nombreEntidad.includes("PUERTA") || 
-                        nombreEntidad.includes("DOOR") || 
-                        objetoEntidad.includes("DOOR") || 
-                        objetoEntidad.includes("PUERTA")
-                    ) {
+                    if (constructorName.includes("DOOR") || entityName.includes("DOOR") || entityName.includes("PUERTA") || objectType.includes("DOOR") || objectType.includes("PUERTA")) {
                         esPuerta = true;
+                    }
+                    if (constructorName.includes("SLAB") || entityName.includes("SLAB") || entityName.includes("LOSA") || entityName.includes("FORJADO") || entityName.includes("PISO") || objectType.includes("SLAB") || objectType.includes("LOSA")) {
+                        esLosa = true;
+                    }
+                    if (constructorName.includes("FURNISHING") || entityName.includes("CAMA") || entityName.includes("BED") || entityName.includes("TABLE") || entityName.includes("MESA") || entityName.includes("SOFA") || entityName.includes("SILLA") || objectType.includes("FURNISHING")) {
+                        esMueble = true;
                     }
                 }
             } catch (errCheck) {}
@@ -1764,7 +1761,10 @@ async function inicializarVisorIFC(fileUrl, container) {
             mesh.userData = {
                 expressID: placedGeometry.geometryExpressID,
                 modelID: currentLoadedModelID,
-                esPuerta: esPuerta
+                esPuerta: esPuerta,
+                esLosa: esLosa,
+                esMueble: esMueble,
+                matOriginal: material
             };
 
             if (!esTransparente && posFloats.length < 6000) {
@@ -1780,25 +1780,29 @@ async function inicializarVisorIFC(fileUrl, container) {
         }
     });
 
+    // ARQUITECTURA PARAMÉTRICA: CENTRADO HORIZONTAL EXCLUSIVO (Y NATIVO 1:1)
     const box = new THREE.Box3().setFromObject(ifcCurrentGroup);
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
 
-    const offsetGroupY = -(center.y - (size.y / 2));
     ifcCurrentGroup.position.x -= center.x;
-    ifcCurrentGroup.position.y += offsetGroupY;
     ifcCurrentGroup.position.z -= center.z;
+    ifcCurrentGroup.position.y = 0; // Escala vertical 100% nativa con cotas IFC
 
     ifcScene.add(ifcCurrentGroup);
 
-    ifcModelBounds.center.set(0, size.y / 2, 0);
+    // Rejilla adaptativa al punto más bajo del modelo
+    ifcGridHelper = new THREE.GridHelper(Math.max(size.x, size.z) * 1.5, 50, 0x94a3b8, 0xe2e8f0);
+    ifcGridHelper.position.y = box.min.y - 0.05;
+    ifcScene.add(ifcGridHelper);
+
+    ifcModelBounds.center.set(0, center.y, 0);
     ifcModelBounds.size.copy(size);
     ifcModelBounds.maxDim = Math.max(size.x, size.y, size.z);
-    ifcModelBounds.offsetY = offsetGroupY;
+    ifcModelBounds.minY = box.min.y;
 
     extraerNivelesDelModeloIFC();
     configurarEscuchadoresVisorDiferidos();
-
     configurarPlanoCorte();
     ajustarVistaModeloIFC();
 }
@@ -2125,14 +2129,13 @@ function UtilitiesBase64ToUint8(base64) {
 }
 
 // ==============================================================================
-// GESTIÓN DEL ÁRBOL DE NIVELES BIM
+// GESTIÓN PARAMÉTRICA DE NIVELES BIM
 // ==============================================================================
 function extraerNivelesDelModeloIFC() {
     ifcBuildingStoreys = [];
     if (!ifcApiInstance || currentLoadedModelID === null) return;
 
     const listaNivelesRaw = [];
-    const offsetGroupY = (ifcModelBounds && ifcModelBounds.offsetY) ? ifcModelBounds.offsetY : 0;
 
     try {
         const TYPE_BUILDING_STOREY = (window.WebIFC && window.WebIFC.IFCBUILDINGSTOREY) 
@@ -2164,7 +2167,7 @@ function extraerNivelesDelModeloIFC() {
             });
         }
     } catch (e) {
-        console.warn("Consulta directa de IfcBuildingStorey con constante numérica falló:", e);
+        console.warn("Consulta de IfcBuildingStorey falló:", e);
     }
 
     if (listaNivelesRaw.length > 0) {
@@ -2182,7 +2185,7 @@ function extraerNivelesDelModeloIFC() {
                 id: lvl.id,
                 nombre: lvl.nombre,
                 cotaNativa: cotaMetros,
-                cotaEscena: cotaMetros + offsetGroupY
+                cotaEscena: cotaMetros // Correspondencia 1:1 estricta sin offsets
             };
         });
     } else {
@@ -2193,7 +2196,7 @@ function extraerNivelesDelModeloIFC() {
         for (let p = 0; p < pisosEstimados; p++) {
             ifcBuildingStoreys.push({
                 id: p,
-                nombre: (p === 0) ? "Nivel 1" : `Piso ${p + 1}`,
+                nombre: (p === 0) ? "1. Piso" : `Piso ${p + 1}`,
                 cotaNativa: p * pasoPiso,
                 cotaEscena: p * pasoPiso
             });
@@ -2267,33 +2270,36 @@ function cortarEnNivel(cotaLosaEscena) {
     ifcClipInverted = false;
     ifcClippingPlane.normal.set(0, -1, 0);
 
+    // Corte exacto a 1.20 metros sobre el nivel de piso terminado
     const cotaCorte = cotaLosaEscena + 1.20;
     ifcClippingPlane.constant = cotaCorte;
 
-    const max = ifcModelBounds.size.y || 20;
-    const pct = Math.min(100, Math.max(0, (cotaCorte / max) * 100));
+    const min = ifcModelBounds.minY || 0;
+    const max = (ifcModelBounds.minY || 0) + (ifcModelBounds.size.y || 20);
+    const pct = Math.min(100, Math.max(0, ((cotaCorte - min) / (max - min)) * 100));
     const slider = document.getElementById("clipSlider");
     if (slider) slider.value = pct;
 }
 
 // ==============================================================================
-// DETECCIÓN DETERMINISTA DE FORJADOS Y FÍSICA PEATONAL
+// TELETRANSPORTACIÓN DETERMINISTA Y FÍSICA PEATONAL
 // ==============================================================================
 function caminarEnNivel(cotaLosaEscena) {
     cerrarPanelNivelesIFC();
     desactivarSeleccionLosa();
 
-    // 1. Filtrar las mallas de losas/pisos que pertenezcan a la cota del nivel seleccionado
+    // 1. Filtrar losas o forjados en la franja del piso seleccionado
     const losasNivel = ifcMeshesList.filter(mesh => {
         if (!mesh.visible || mesh.userData.esPuerta) return false;
+        mesh.updateWorldMatrix(true, false);
         const boxMesh = new THREE.Box3().setFromObject(mesh);
-        return Math.abs(boxMesh.max.y - cotaLosaEscena) < 1.2;
+        return Math.abs(boxMesh.max.y - cotaLosaEscena) < 0.6;
     });
 
     let posX = 0;
     let posZ = 0.5;
 
-    // 2. Extraer el centroide en planta de las losas de ese piso específico
+    // 2. Extraer el centroide horizontal de la losa del nivel
     if (losasNivel.length > 0) {
         const boxPlanta = new THREE.Box3();
         losasNivel.forEach(m => boxPlanta.expandByObject(m));
@@ -2305,7 +2311,7 @@ function caminarEnNivel(cotaLosaEscena) {
         posZ = ifcModelBounds.center.z;
     }
 
-    // 3. Teletransportar directamente: Cota Y estricta e innegociable a nivel oficial del piso
+    // 3. Posicionar cámara a cotaLosaEscena + 1.65 m oficiales
     iniciarModoCaminarEnCoordenadas(posX, cotaLosaEscena, posZ);
 }
 
@@ -2329,16 +2335,53 @@ function activarSeleccionLosaCaminar() {
         if (container) container.style.cursor = "pointer";
 
         if (pcHint && statusLabel) {
-            statusLabel.innerHTML = "🎯 <strong>Toca o haz clic sobre la losa o forjado</strong> donde deseas pararte...";
+            statusLabel.innerHTML = "🎯 <strong>Toca o haz clic sobre la losa resaltada</strong> donde deseas pararte...";
             pcHint.style.display = "flex";
         }
+
+        // Resaltar sutilmente todas las losas transitables del modelo
+        resaltarLosasTransitables(true);
     } else {
         desactivarModoCaminar();
     }
 }
 
+function resaltarLosasTransitables(activar) {
+    if (activar) {
+        highlightedSlabs.length = 0;
+        ifcMeshesList.forEach(mesh => {
+            if (!mesh.visible || mesh.userData.esPuerta) return;
+            // Si está identificada como losa o si es una superficie plana horizontal predominante
+            const box = new THREE.Box3().setFromObject(mesh);
+            const size = box.getSize(new THREE.Vector3());
+            const esHorizontal = (size.y < 0.6 && (size.x > 1.2 || size.z > 1.2));
+
+            if (mesh.userData.esLosa || esHorizontal) {
+                highlightedSlabs.push({ mesh: mesh, matOriginal: mesh.material });
+                mesh.material = new THREE.MeshStandardMaterial({
+                    color: 0x10b981,
+                    roughness: 0.3,
+                    metalness: 0.1,
+                    transparent: true,
+                    opacity: 0.65,
+                    side: THREE.DoubleSide,
+                    clippingPlanes: [ifcClippingPlane]
+                });
+            }
+        });
+    } else {
+        highlightedSlabs.forEach(item => {
+            if (item.mesh && item.matOriginal) {
+                item.mesh.material = item.matOriginal;
+            }
+        });
+        highlightedSlabs.length = 0;
+    }
+}
+
 function desactivarSeleccionLosa() {
     isPickSlabModeActive = false;
+    resaltarLosasTransitables(false);
     const btn = document.getElementById("btnToggleWalk");
     if (btn && !isWalkModeActive) {
         btn.style.background = "#1e293b";
@@ -2349,6 +2392,7 @@ function desactivarSeleccionLosa() {
 function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
     isWalkModeActive = true;
     isPickSlabModeActive = false;
+    resaltarLosasTransitables(false);
 
     const btn = document.getElementById("btnToggleWalk");
     const pcHint = document.getElementById("walkPcHint");
@@ -2357,12 +2401,12 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
     const container = document.getElementById("modalIfcContainer");
     const esDispositivoTactil = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 992);
 
-    // Conservar la orientación frontal previa de la cámara en el plano XZ para no rotar a ciegas hacia paredes
+    // Conservar la dirección frontal de la cámara en el plano horizontal para no rotar contra paredes
     if (ifcCamera && ifcControls) {
         const direccionPrevia = new THREE.Vector3();
         ifcCamera.getWorldDirection(direccionPrevia);
         walkYaw = Math.atan2(-direccionPrevia.x, -direccionPrevia.z);
-        walkPitch = 0; // Mirada nivelada al frente horizontal
+        walkPitch = 0;
     } else {
         walkYaw = Math.PI;
         walkPitch = 0;
@@ -2387,7 +2431,7 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
     }
 
     if (statusLabel) {
-        statusLabel.innerHTML = "🚶 <strong>Modo Caminar:</strong> Usa <strong>W, A, S, D</strong> para moverte y arrastra el ratón para mirar";
+        statusLabel.innerHTML = "🚶 <strong>Modo Caminar:</strong> Usa <strong>W, A, S, D</strong> para moverte y arrastra para mirar";
     }
 
     if (esDispositivoTactil) {
@@ -2406,6 +2450,7 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
 function desactivarModoCaminar() {
     isWalkModeActive = false;
     isPickSlabModeActive = false;
+    resaltarLosasTransitables(false);
     walkMovement.forward = false;
     walkMovement.backward = false;
     walkMovement.left = false;
@@ -2459,13 +2504,13 @@ function actualizarFisicaCaminar(delta) {
         const pasoDistancia = walkSpeed * delta;
         const siguientePos = ifcCamera.position.clone().add(moveVector.clone().multiplyScalar(pasoDistancia));
 
-        // Origen del rayo: 1 metro sobre los ojos con amplio alcance para detectar forjados en cualquier nivel
+        // Origen del rayo: 1 metro sobre los ojos
         const origenRayo = new THREE.Vector3(siguientePos.x, ifcCamera.position.y + 1.0, siguientePos.z);
         const rayoPiso = new THREE.Raycaster(origenRayo, new THREE.Vector3(0, -1, 0), 0.05, 12.0);
 
-        // Se excluyen puertas para atravesarlas, pero se preservan muros y muebles
-        const mallasValidas = ifcMeshesList.filter(m => m.visible && !m.userData.esPuerta);
-        const hits = rayoPiso.intersectObjects(mallasValidas, false);
+        // Se excluyen puertas y muebles para caminar con fluidez sin trabas de cama o zócalo
+        const mallasSuelo = ifcMeshesList.filter(m => m.visible && !m.userData.esPuerta && !m.userData.esMueble);
+        const hits = rayoPiso.intersectObjects(mallasSuelo, false);
 
         if (hits.length > 0) {
             const cotaSueloObjetivo = hits[0].point.y;
@@ -2473,7 +2518,7 @@ function actualizarFisicaCaminar(delta) {
             const cotaSueloActual = cotaOjoActual - 1.65;
             const deltaAltura = cotaSueloObjetivo - cotaSueloActual;
 
-            // Tolerancia para escaleras/rampas (<= 25 cm) y desniveles hacia abajo de hasta -1.5m
+            // Tolerancia para escaleras/rampas (<= 25 cm) y desniveles de bajada
             if (deltaAltura <= MAX_STEP_HEIGHT && deltaAltura >= -1.5) {
                 ifcCamera.position.x = siguientePos.x;
                 ifcCamera.position.z = siguientePos.z;
@@ -2481,9 +2526,8 @@ function actualizarFisicaCaminar(delta) {
                 const cotaOjoDeseada = cotaSueloObjetivo + 1.65;
                 ifcCamera.position.y += (cotaOjoDeseada - ifcCamera.position.y) * Math.min(1.0, delta * 12.0);
             }
-            // Si el desnivel supera 25 cm (mueble o pared), se bloquea el paso frontal
         } else {
-            // Avance horizontal fluido si no hay detección inmediata bajo los pies
+            // Avance horizontal si no hay colisión directa
             ifcCamera.position.x = siguientePos.x;
             ifcCamera.position.z = siguientePos.z;
         }
@@ -2518,7 +2562,7 @@ function setupWalkKeyboardListeners() {
 }
 
 /**
- * BOTONERA TÁCTIL AISLADA: ESCUCHA DIRECTA CON STOPPROPAGATION PARA NO CONFUNDIRSE CON LA MIRADA
+ * BOTONERA TÁCTIL AISLADA: ESCUCHA DIRECTA CON STOPPROPAGATION
  */
 function setupWalkTouchListeners() {
     const bindBtn = (id, direction) => {
@@ -2556,7 +2600,6 @@ function setupWalkTouchListeners() {
     bindBtn('btnWalkLeft', 'left');
     bindBtn('btnWalkRight', 'right');
 
-    // Seguridad global: si se levanta el dedo o ratón fuera del botón, se detiene el avance
     window.addEventListener('pointerup', () => {
         walkMovement.forward = false;
         walkMovement.backward = false;
@@ -2586,7 +2629,8 @@ function ajustarVistaModeloIFC() {
     cerrarPanelNivelesIFC();
     ocultarMenuContextualIFC();
     const d = ifcModelBounds.maxDim || 25;
-    ifcCamera.position.set(d * 1.3, d * 1.0, d * 1.3);
+    const cy = ifcModelBounds.center.y;
+    ifcCamera.position.set(d * 1.3, cy + (d * 0.8), d * 1.3);
     ifcControls.target.copy(ifcModelBounds.center);
     ifcControls.update();
 }
@@ -2600,7 +2644,7 @@ function cambiarVistaIFC(tipo) {
     const cy = ifcModelBounds.center.y;
 
     if (tipo === 'ISO') {
-        ifcCamera.position.set(d * 1.3, d * 1.0, d * 1.3);
+        ifcCamera.position.set(d * 1.3, cy + (d * 0.8), d * 1.3);
     } else if (tipo === 'FRONTAL') {
         ifcCamera.position.set(0, cy, d * 1.8);
     } else if (tipo === 'POSTERIOR') {
@@ -2610,9 +2654,9 @@ function cambiarVistaIFC(tipo) {
     } else if (tipo === 'LATERAL_DER') {
         ifcCamera.position.set(d * 1.8, cy, 0);
     } else if (tipo === 'PLANTA') {
-        ifcCamera.position.set(0, d * 2.2, 0.001);
+        ifcCamera.position.set(0, cy + (d * 2.2), 0.001);
     } else if (tipo === 'INFERIOR') {
-        ifcCamera.position.set(0, -d * 2.2, 0.001);
+        ifcCamera.position.set(0, cy - (d * 2.2), 0.001);
     }
 
     ifcControls.target.copy(ifcModelBounds.center);
@@ -2799,8 +2843,8 @@ function actualizarPosicionCorte(valPercent) {
     let min = 0, max = 0;
 
     if (ifcClipAxis === 'Y') {
-        min = 0;
-        max = ifcModelBounds.size.y || 20;
+        min = ifcModelBounds.minY || 0;
+        max = min + (ifcModelBounds.size.y || 20);
     } else if (ifcClipAxis === 'X') {
         min = -ifcModelBounds.size.x / 2;
         max = ifcModelBounds.size.x / 2;
