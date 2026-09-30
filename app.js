@@ -707,7 +707,7 @@ async function cargarTimelineActividad() {
 }
 
 // ==============================================================================
-// GESTIÓN DE SUBIDAS Y VALIDACIÓN RIGUROSA ISO 19650
+// GESTIÓN DE SUBIDAS Y VALIDACIÓN RIGUROSA ISO 19650 CON ARCHIVADO AUTOMÁTICO
 // ==============================================================================
 function openUploadModal() {
     registrarAperturaModalEnHistorial("uploadModal");
@@ -859,12 +859,60 @@ async function handleFileUpload(e) {
     btnSubmit.innerText = "Procesando e integrando al CDE...";
 
     try {
+        // DETECCIÓN AUTOMÁTICA DE VERSIÓN PREVIA (RAÍZ DE 5 CAMPOS ISO 19650)
+        let idArchivoViejo = null;
+        let nombreViejoArchivado = null;
+
+        const partesSinExt = isoNameInput.split('.').slice(0, -1).join('.').split('_');
+        if (partesSinExt.length >= 6) {
+            const raizCincoCampos = partesSinExt.slice(0, 5).join('_');
+
+            const { data: registrosPrevios } = await supabaseClient
+                .from("audit_logs")
+                .select("*")
+                .eq("proyecto_id", activeProjectId)
+                .eq("activo", true)
+                .ilike("archivo_nombre", `${raizCincoCampos}_%`);
+
+            if (registrosPrevios && registrosPrevios.length > 0) {
+                const prev = registrosPrevios[0];
+                
+                // Extraer el fileId de Drive desde la URL
+                const matchOld = (prev.drive_file_url || "").match(/[-\w]{25,}/);
+                if (matchOld) idArchivoViejo = matchOld[0];
+
+                // Contar cuántas versiones archivadas existen para calcular _OLD_vX
+                const { count } = await supabaseClient
+                    .from("audit_logs")
+                    .select("*", { count: 'exact', head: true })
+                    .eq("proyecto_id", activeProjectId)
+                    .ilike("archivo_nombre", `${raizCincoCampos}%_OLD_%`);
+
+                const versionIndex = (count || 0) + 1;
+                const extOld = prev.archivo_nombre.split('.').pop();
+                const baseVieja = prev.archivo_nombre.substring(0, prev.archivo_nombre.lastIndexOf('.'));
+                nombreViejoArchivado = `${baseVieja}_OLD_v${versionIndex}.${extOld}`;
+
+                // Archivar de forma lógica el registro anterior en Supabase
+                await supabaseClient
+                    .from("audit_logs")
+                    .update({
+                        archivo_nombre: nombreViejoArchivado,
+                        estado_origen: prev.estado_destino || targetTab,
+                        estado_destino: "04_ARCHIVED"
+                    })
+                    .eq("id", prev.id);
+            }
+        }
+
         let payload = {
             accion: "IMPORTAR_DESDE_URL",
             proyecto_id: activeProjectId,
             estado_destino: targetTab,
             nombre_iso: isoNameInput,
-            usuario_nombre: currentUser.nombre_completo
+            usuario_nombre: currentUser.nombre_completo,
+            id_archivo_viejo: idArchivoViejo,
+            nombre_viejo_archivado: nombreViejoArchivado
         };
 
         if (method === "LINK") {
@@ -1767,14 +1815,13 @@ async function inicializarVisorIFC(fileUrl, container) {
         }
     });
 
-    // ARQUITECTURA PARAMÉTRICA NATIVA (Y NATIVO 1:1, CENTRADO HORIZONTAL EXCLUSIVO)
     const box = new THREE.Box3().setFromObject(ifcCurrentGroup);
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
 
     ifcCurrentGroup.position.x -= center.x;
     ifcCurrentGroup.position.z -= center.z;
-    ifcCurrentGroup.position.y = 0; // Cota vertical nativa sin compensaciones artificiales
+    ifcCurrentGroup.position.y = 0;
 
     ifcScene.add(ifcCurrentGroup);
 
@@ -1936,7 +1983,6 @@ function eliminarCapturaDeBandeja(index) {
     }
 }
 
-// CIERRE AISLADO SIN DISPARAR HISTORY.BACK()
 function cerrarModalCapturasConsolidadas() {
     const modal = document.getElementById("capturaConsolidadaModal");
     if (modal) {
@@ -2239,7 +2285,6 @@ function cerrarPanelNivelesIFC() {
     }
 }
 
-// CORTE EXACTO EN LA COTA NATIVA
 function cortarEnNivel(cotaLosaEscena) {
     if (!ifcClippingPlane) return;
 
@@ -2254,7 +2299,6 @@ function cortarEnNivel(cotaLosaEscena) {
     ifcClipAxis = 'Y';
     ifcClipInverted = false;
     
-    // Normal hacia abajo y corte a 1.20 metros sobre el nivel
     ifcClippingPlane.normal.set(0, -1, 0);
     const cotaCorte = cotaLosaEscena + 1.20;
     ifcClippingPlane.constant = cotaCorte;
@@ -2273,7 +2317,6 @@ function caminarEnNivel(cotaLosaEscena) {
     cerrarPanelNivelesIFC();
     desactivarSeleccionLosa();
 
-    // 1. Filtrar las mallas de losas/pisos en la franja del nivel seleccionado
     const losasNivel = ifcMeshesList.filter(mesh => {
         if (!mesh.visible || mesh.userData.esPuerta) return false;
         mesh.updateWorldMatrix(true, false);
@@ -2284,7 +2327,6 @@ function caminarEnNivel(cotaLosaEscena) {
     let posX = 0;
     let posZ = 0.5;
 
-    // 2. Extraer el centroide horizontal de la planta
     if (losasNivel.length > 0) {
         const boxPlanta = new THREE.Box3();
         losasNivel.forEach(m => boxPlanta.expandByObject(m));
@@ -2296,7 +2338,6 @@ function caminarEnNivel(cotaLosaEscena) {
         posZ = ifcModelBounds.center.z;
     }
 
-    // 3. Teletransportar con cota nativa oficial estricta
     iniciarModoCaminarEnCoordenadas(posX, cotaLosaEscena, posZ);
 }
 
@@ -2330,7 +2371,6 @@ function activarSeleccionLosaCaminar() {
     }
 }
 
-// RESALTADO EXCLUSIVO DE LOSAS (EXCLUYENDO ESTRICTAMENTE PUERTAS Y CARPINTERÍAS)
 function resaltarLosasTransitables(activar) {
     if (activar) {
         highlightedSlabs.length = 0;
@@ -2468,7 +2508,6 @@ function aplicarRotacionCaminar() {
     ifcCamera.quaternion.setFromEuler(euler);
 }
 
-// NAVEGACIÓN EN PLANTA: DESPLAZAMIENTO HORIZONTAL LIBRE E INMEDIATO
 function actualizarFisicaCaminar(delta) {
     if (!isWalkModeActive || !ifcCamera) return;
 
@@ -2846,7 +2885,6 @@ function onIfcModelClick(event) {
 
         if (!hit) return;
 
-        // BOTÓN "CAMINAR" MANUAL
         if (isPickSlabModeActive) {
             iniciarModoCaminarEnCoordenadas(hit.point.x, hit.point.y, hit.point.z);
             return;
@@ -2922,7 +2960,7 @@ function cerrarCardPropiedadesIFC() {
 }
 
 // ==============================================================================
-// RENDERIZADO DE ENTREGABLES
+// RENDERIZADO DE ENTREGABLES (ISO 19650)
 // ==============================================================================
 async function loadFiles() {
     const tbody = document.getElementById("filesTableBody");
@@ -2954,7 +2992,7 @@ async function loadFiles() {
     let listaAProcesar = [];
 
     if (activeTab === "04_ARCHIVED") {
-        listaAProcesar = files.filter(f => f.estado_origen === "04_ARCHIVED" || f.estado_destino === "04_ARCHIVED" || f.archivo_nombre.includes("_OLD_"));
+        listaAProcesar = files.filter(f => f.estado_destino === "04_ARCHIVED" || f.archivo_nombre.includes("_OLD_"));
     } else {
         const mapaUnicos = new Map();
         files.forEach(f => {
@@ -2965,7 +3003,7 @@ async function loadFiles() {
                 f.archivo_nombre.startsWith("PROMOCIÓN_")
             ) return;
 
-            if (f.archivo_nombre.includes("_OLD_")) return;
+            if (f.archivo_nombre.includes("_OLD_") || f.estado_destino === "04_ARCHIVED") return;
 
             const eDestino = f.estado_destino || "";
             const eOrigen = f.estado_origen || "";
@@ -3030,6 +3068,7 @@ async function loadFiles() {
         const esVisualizable = ["pdf", "png", "jpg", "jpeg", "webp", "html", "htm", "mp4", "webm", "mov", "ifc"].includes(ext);
         const fechaUltimaModificacion = f.version || "N/A";
 
+        // GESTIÓN DE ACCIONES SEGÚN ISO 19650 (VER Y DESCARGAR ACTIVOS EN ARCHIVED, SIN PROMOCIÓN)
         if (activeTab === "04_ARCHIVED") {
             tbody.innerHTML += `
                 <tr style="opacity: 0.85;">
@@ -3037,7 +3076,10 @@ async function loadFiles() {
                     <td><strong>${disciplina}</strong></td>
                     <td><span class="badge" style="background:#64748b;">${estadoISO}</span></td>
                     <td><small style="color:var(--text-muted); font-size:0.75rem;">${fechaUltimaModificacion}</small></td>
-                    <td><small style="color:var(--text-muted); font-style:italic;">Solo Lectura / Histórico</small></td>
+                    <td>
+                        ${esVisualizable ? `<button class="btn-secondary" style="font-size:0.75rem; padding:0.25rem 0.5rem;" onclick="openViewerModal('${f.drive_file_url}', '${nombreCompleto}')">Ver</button>` : ''}
+                        <a href="${f.drive_file_url}" target="_blank" class="btn-primary" style="text-decoration:none; font-size: 0.75rem; padding: 0.25rem 0.5rem;">Descargar</a>
+                    </td>
                 </tr>
             `;
             return;
@@ -3181,7 +3223,7 @@ async function handleCreateProject(e) {
             alert("¡Estructura generada exitosamente!");
             loadProjects();
         } else {
-            alert("⚠️ Error en creación: " + responseData.message);
+            alert("⚠️️ Error en creación: " + responseData.message);
         }
     } catch (err) {
         alert("Error de envío: " + err.message);
