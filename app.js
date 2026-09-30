@@ -893,7 +893,7 @@ async function handleFileUpload(e) {
                 const baseVieja = prev.archivo_nombre.substring(0, prev.archivo_nombre.lastIndexOf('.'));
                 nombreViejoArchivado = `${baseVieja}_OLD_v${versionIndex}.${extOld}`;
 
-                // Archivar de forma lógica el registro anterior en Supabase
+                // Archivar lógicamente el registro anterior en Supabase
                 await supabaseClient
                     .from("audit_logs")
                     .update({
@@ -966,7 +966,7 @@ async function handleFileUpload(e) {
             loadFiles();
             cargarTimelineActividad();
         } else {
-            alert("⚠️ " + data.message);
+            alert("⚠️️ " + data.message);
         }
     } catch (err) {
         alert("Error de comunicación: " + err.message);
@@ -2960,7 +2960,7 @@ function cerrarCardPropiedadesIFC() {
 }
 
 // ==============================================================================
-// RENDERIZADO DE ENTREGABLES (ISO 19650)
+// RENDERIZADO DE ENTREGABLES (ISO 19650 ESTRICTO POR CONTENEDOR)
 // ==============================================================================
 async function loadFiles() {
     const tbody = document.getElementById("filesTableBody");
@@ -3006,19 +3006,22 @@ async function loadFiles() {
             if (f.archivo_nombre.includes("_OLD_") || f.estado_destino === "04_ARCHIVED") return;
 
             const eDestino = f.estado_destino || "";
-            const eOrigen = f.estado_origen || "";
-            let perteneceAPestana = (eDestino === activeTab || eOrigen === activeTab);
-
             const partes = f.archivo_nombre.split("_");
-            if (!perteneceAPestana && partes.length >= 6) {
-                const codigoEstado = partes[5].split(".")[0].toUpperCase();
-                const estadosValidosPublished = ["CR", "ACT", "AP", "CON"];
-                if (activeTab === "01_WIP" && (codigoEstado === "S0" || eOrigen === "01_WIP")) perteneceAPestana = true;
-                if (activeTab === "02_SHARED" && (codigoEstado.startsWith("S") || eOrigen === "02_SHARED")) perteneceAPestana = true;
-                if (activeTab === "03_PUBLISHED" && (codigoEstado.startsWith("A") || estadosValidosPublished.includes(codigoEstado) || eOrigen === "03_PUBLISHED")) perteneceAPestana = true;
+            const codigoEstado = (partes.length >= 6) ? partes[5].split(".")[0].toUpperCase() : "";
+            const estadosValidosPublished = ["CR", "ACT", "AP", "CON"];
+
+            let cumpleNormaPestana = false;
+
+            // SEGREGACIÓN RIGUROSA ISO 19650
+            if (activeTab === "01_WIP") {
+                cumpleNormaPestana = (eDestino === "01_WIP") && (codigoEstado === "S0" || codigoEstado.startsWith("P0"));
+            } else if (activeTab === "02_SHARED") {
+                cumpleNormaPestana = (eDestino === "02_SHARED") && codigoEstado.startsWith("S") && codigoEstado !== "S0";
+            } else if (activeTab === "03_PUBLISHED") {
+                cumpleNormaPestana = (eDestino === "03_PUBLISHED") && (codigoEstado.startsWith("A") || estadosValidosPublished.includes(codigoEstado));
             }
 
-            if (perteneceAPestana && !mapaUnicos.has(f.archivo_nombre)) {
+            if (cumpleNormaPestana && !mapaUnicos.has(f.archivo_nombre)) {
                 mapaUnicos.set(f.archivo_nombre, f);
             }
         });
@@ -3223,7 +3226,7 @@ async function handleCreateProject(e) {
             alert("¡Estructura generada exitosamente!");
             loadProjects();
         } else {
-            alert("⚠️️ Error en creación: " + responseData.message);
+            alert("⚠️ Error en creación: " + responseData.message);
         }
     } catch (err) {
         alert("Error de envío: " + err.message);
