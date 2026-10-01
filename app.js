@@ -287,7 +287,7 @@ function actualizarPistaSubcarpetaModal() {
             subDetectada = "02_SHARED / 01_Modelos_3D";
         } else if (tipoISO === "PL" || tipoISO === "DR") {
             subDetectada = "02_SHARED / 02_Planos_Coordinados";
-        } else if (tipoISO === "INF" || tipoISO === "MEM") {
+        } else if (tipoISO === "INF" || tipoISO === "MEM" || tipoISO === "VI" || tipoISO === "IM") {
             subDetectada = "02_SHARED / 03_Informes_Interferencias";
         } else {
             if (isoName.endsWith(".IFC") || isoName.endsWith(".RVT")) subDetectada = "02_SHARED / 01_Modelos_3D";
@@ -299,11 +299,11 @@ function actualizarPistaSubcarpetaModal() {
             subDetectada = "03_PUBLISHED / 01_Modelos_Aprobados";
         } else if (tipoISO === "PL" || tipoISO === "DR") {
             subDetectada = "03_PUBLISHED / 02_Planos_Contractuales";
-        } else if (tipoISO === "ACT" || tipoISO === "CON" || tipoISO === "INF" || tipoISO === "MEM") {
+        } else if (tipoISO === "ACT" || tipoISO === "CON" || tipoISO === "INF" || tipoISO === "MEM" || tipoISO === "VI" || tipoISO === "IM") {
             subDetectada = "03_PUBLISHED / 03_Actas_y_Memorias";
         } else {
             if (isoName.endsWith(".IFC") || isoName.endsWith(".RVT")) subDetectada = "03_PUBLISHED / 01_Modelos_Aprobados";
-            else if (isoName.endsWith(".DWG") || isoName.endsWith(".DXF")) subDetectada = "03_PUBLISHED / 02_Planos_Contractuales";
+            else if (isoName.endsWith(".DWG") || isoName.endsWith(".DXF")) subDetectada = "02_Planos_Contractuales";
             else subDetectada = "03_PUBLISHED / 03_Actas_y_Memorias (Default Admin)";
         }
     }
@@ -774,7 +774,9 @@ function validarNomenclaturaISO19650(nombreArchivo) {
 function extraerEstadoDeNombre(nombreArchivo) {
     const nombreSinExt = nombreArchivo.split('.').slice(0, -1).join('.');
     const partes = nombreSinExt.split('_');
-    return (partes.length >= 6) ? partes[5].toUpperCase() : "";
+    if (partes.length < 6) return "";
+    var rawEstado = partes[5].toUpperCase();
+    return rawEstado.split('-')[0];
 }
 
 function extraerTipoDeNombre(nombreArchivo) {
@@ -805,7 +807,13 @@ function recalcularEstadoEnNombre(nombreOriginal, nuevoEstadoISO) {
     const nombreSinExt = partesExt.join('.');
     const comp = nombreSinExt.split('_');
     if (comp.length >= 6) {
-        comp[5] = nuevoEstadoISO;
+        var estadoActual = comp[5];
+        var partesGuion = estadoActual.split('-');
+        if (partesGuion.length > 1) {
+            comp[5] = nuevoEstadoISO + '-' + partesGuion.slice(1).join('-');
+        } else {
+            comp[5] = nuevoEstadoISO;
+        }
         return comp.join('_') + '.' + ext;
     }
     return nombreOriginal;
@@ -859,20 +867,28 @@ async function handleFileUpload(e) {
     btnSubmit.innerText = "Procesando e integrando al CDE...";
 
     try {
-        // DETECCIÓN AUTOMÁTICA DE VERSIÓN PREVIA (RAÍZ DE 5 CAMPOS ISO 19650)
+        // DETECCIÓN AUTOMÁTICA DE VERSIÓN PREVIA (RAÍZ EXACTA CON O SIN SUFIJO -01 A -99)
         let idArchivoViejo = null;
         let nombreViejoArchivado = null;
 
         const partesSinExt = isoNameInput.split('.').slice(0, -1).join('.').split('_');
         if (partesSinExt.length >= 6) {
             const raizCincoCampos = partesSinExt.slice(0, 5).join('_');
+            const estadoCompletoSexto = partesSinExt[5];
+            const partesGuionSexto = estadoCompletoSexto.split('-');
+            const sufijoNumerico = (partesGuionSexto.length > 1) ? `-${partesGuionSexto[1]}` : "";
+
+            let queryFiltro = `${raizCincoCampos}_%`;
+            if (sufijoNumerico) {
+                queryFiltro = `${raizCincoCampos}_%${sufijoNumerico}.%`;
+            }
 
             const { data: registrosPrevios } = await supabaseClient
                 .from("audit_logs")
                 .select("*")
                 .eq("proyecto_id", activeProjectId)
                 .eq("activo", true)
-                .ilike("archivo_nombre", `${raizCincoCampos}_%`);
+                .ilike("archivo_nombre", queryFiltro);
 
             if (registrosPrevios && registrosPrevios.length > 0) {
                 const prev = registrosPrevios[0];
@@ -966,7 +982,7 @@ async function handleFileUpload(e) {
             loadFiles();
             cargarTimelineActividad();
         } else {
-            alert("⚠️️ " + data.message);
+            alert("⚠️ " + data.message);
         }
     } catch (err) {
         alert("Error de comunicación: " + err.message);
@@ -3007,7 +3023,8 @@ async function loadFiles() {
 
             const eDestino = f.estado_destino || "";
             const partes = f.archivo_nombre.split("_");
-            const codigoEstado = (partes.length >= 6) ? partes[5].split(".")[0].toUpperCase() : "";
+            let rawSexto = (partes.length >= 6) ? partes[5].split(".")[0].toUpperCase() : "";
+            const codigoEstado = rawSexto.split('-')[0];
             const estadosValidosPublished = ["CR", "ACT", "AP", "CON"];
 
             let cumpleNormaPestana = false;
@@ -3046,11 +3063,11 @@ async function loadFiles() {
             } else if (activeTab === "02_SHARED") {
                 if (activeSubfolder === "01_Modelos_3D") return tipoISO === "M3" || (!tipoISO && (nameUpper.endsWith(".IFC") || nameUpper.endsWith(".RVT")));
                 if (activeSubfolder === "02_Planos_Coordinados") return tipoISO === "PL" || tipoISO === "DR" || (!tipoISO && (nameUpper.endsWith(".DWG") || nameUpper.endsWith(".DXF")));
-                if (activeSubfolder === "03_Informes_Interferencias") return tipoISO === "INF" || tipoISO === "MEM" || (!tipoISO && !nameUpper.endsWith(".IFC") && !nameUpper.endsWith(".RVT") && !nameUpper.endsWith(".DWG"));
+                if (activeSubfolder === "03_Informes_Interferencias") return tipoISO === "INF" || tipoISO === "MEM" || tipoISO === "VI" || tipoISO === "IM" || (!tipoISO && !nameUpper.endsWith(".IFC") && !nameUpper.endsWith(".RVT") && !nameUpper.endsWith(".DWG"));
             } else if (activeTab === "03_PUBLISHED") {
                 if (activeSubfolder === "01_Modelos_Aprobados") return tipoISO === "M3" || (!tipoISO && (nameUpper.endsWith(".IFC") || nameUpper.endsWith(".RVT")));
                 if (activeSubfolder === "02_Planos_Contractuales") return tipoISO === "PL" || tipoISO === "DR" || (!tipoISO && (nameUpper.endsWith(".DWG") || nameUpper.endsWith(".DXF")));
-                if (activeSubfolder === "03_Actas_y_Memorias") return tipoISO === "ACT" || tipoISO === "CON" || tipoISO === "INF" || tipoISO === "MEM" || nameUpper.includes("ACTA");
+                if (activeSubfolder === "03_Actas_y_Memorias") return tipoISO === "ACT" || tipoISO === "CON" || tipoISO === "INF" || tipoISO === "MEM" || tipoISO === "VI" || tipoISO === "IM" || nameUpper.includes("ACTA");
             }
             return true;
         });
