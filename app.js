@@ -26,8 +26,8 @@ const SUBCARPETAS_MAP = {
 // SELECCIÓN MÚLTIPLE PARA PROMOCIÓN POR LOTE
 const selectedFilesForBatch = new Map();
 
-// ESTADO DE PRECARGA / STAGING
-let stagedUploadPayload = null;
+// BANDEJA DE PRECARGA / STAGING MULTI-ARCHIVO
+const stagedUploadList = [];
 
 // ==============================================================================
 // VARIABLES DEL MOTOR 3D IFC (THAT OPEN COMPANY WEB-IFC v0.0.78)
@@ -319,7 +319,7 @@ function actualizarPistaSubcarpetaModal() {
             subDetectada = "03_PUBLISHED / 03_Actas_y_Memorias";
         } else {
             if (isoName.endsWith(".IFC") || isoName.endsWith(".RVT")) subDetectada = "03_PUBLISHED / 01_Modelos_Aprobados";
-            else if (isoName.endsWith(".DWG") || isoName.endsWith(".DXF")) subDetectada = "03_PUBLISHED / 02_Planos_Contractuales";
+            else if (isoName.endsWith(".DWG") || isoName.endsWith(".DXF")) subDetectada = "02_Planos_Contractuales";
             else subDetectada = "03_PUBLISHED / 03_Actas_y_Memorias (Default Admin)";
         }
     }
@@ -453,6 +453,7 @@ async function handleProjectChange(e) {
 
     activeSubfolder = "TODAS";
     selectedFilesForBatch.clear();
+    stagedUploadList.length = 0;
     aplicarRestriccionPestanasVisuales();
     renderizarBarraSubcarpetas();
     actualizarBarraAccionesPorLote();
@@ -838,7 +839,7 @@ function recalcularEstadoEnNombre(nombreOriginal, nuevoEstadoISO) {
 }
 
 // ------------------------------------------------------------------------------
-// PRE-VALIDACIÓN Y APERTURA DE BANDEJA DE STAGING (PASO 1 DE CARGA)
+// PRE-VALIDACIÓN Y APERTURA DE BANDEJA DE STAGING MULTI-ARCHIVO
 // ------------------------------------------------------------------------------
 function handlePrevalidarSubida(e) {
     e.preventDefault();
@@ -883,10 +884,12 @@ function handlePrevalidarSubida(e) {
         return;
     }
 
-    // Validación de origen sin congelar la interfaz
+    let urlOrigen = null;
+    let fileObj = null;
+
     if (method === "LINK") {
-        const driveUrlInput = document.getElementById("driveUrlInput").value.trim();
-        if (!driveUrlInput) {
+        urlOrigen = document.getElementById("driveUrlInput").value.trim();
+        if (!urlOrigen) {
             alert("⚠️ Por favor ingrese el enlace público de Google Drive.");
             return;
         }
@@ -896,27 +899,47 @@ function handlePrevalidarSubida(e) {
             alert("⚠️ Por favor seleccione un archivo local.");
             return;
         }
-        const file = fileInput.files[0];
-        const extReal = file.name.split('.').pop().toLowerCase();
+        fileObj = fileInput.files[0];
+        const extReal = fileObj.name.split('.').pop().toLowerCase();
         if (extReal !== extEscrita) {
             alert(`❌ CONFLICTO DE EXTENSIÓN:\n\nEl archivo seleccionado es (.${extReal}) pero en el CDE escribió (.${extEscrita}).`);
             return;
         }
     }
 
-    stagedUploadPayload = {
+    const partesSinExt = isoNameInput.split('.').slice(0, -1).join('.').split('_');
+    const itemData = {
         isoName: isoNameInput,
         targetTab: targetTab,
-        method: method
+        method: method,
+        urlOrigen: urlOrigen,
+        fileObj: fileObj,
+        fProy: partesSinExt[0] || '---',
+        fOrig: partesSinExt[1] || '---',
+        fZona: partesSinExt[2] || '---',
+        fTipo: partesSinExt[3] || '---',
+        fDisc: partesSinExt[4] || '---',
+        fEstado: partesSinExt[5] || '---',
+        ext: extEscrita,
+        hintFolder: document.getElementById("hintFolderName") ? document.getElementById("hintFolderName").innerText : targetTab
     };
 
-    abrirModalStagingPrecarga(stagedUploadPayload);
+    // Agregar a la cola de staging
+    stagedUploadList.push(itemData);
+
+    // Limpiar campos para permitir otro archivo
+    document.getElementById("isoNameInput").value = "";
+    if (document.getElementById("driveUrlInput")) document.getElementById("driveUrlInput").value = "";
+    if (document.getElementById("fileLocalInput")) document.getElementById("fileLocalInput").value = "";
+    actualizarPistaSubcarpetaModal();
+
+    abrirModalStagingPrecarga();
 }
 
 // ------------------------------------------------------------------------------
-// MODAL DE INSPECCIÓN PREVIA / STAGING
+// MODAL DE INSPECCIÓN PREVIA / STAGING (COLA DINÁMICA DE LOTES)
 // ------------------------------------------------------------------------------
-function abrirModalStagingPrecarga(stagingData) {
+function abrirModalStagingPrecarga() {
     let modal = document.getElementById("stagingModal");
     if (!modal) {
         modal = document.createElement("div");
@@ -924,7 +947,6 @@ function abrirModalStagingPrecarga(stagingData) {
         document.body.appendChild(modal);
     }
 
-    // Ocultar modal de subida original para despejar la vista
     const uploadModal = document.getElementById("uploadModal");
     if (uploadModal) {
         uploadModal.style.display = "none";
@@ -932,77 +954,79 @@ function abrirModalStagingPrecarga(stagingData) {
         uploadModal.classList.add("modal-hidden");
     }
 
-    const isoName = stagingData.isoName;
-    const partesSinExt = isoName.split('.').slice(0, -1).join('.').split('_');
-    const ext = isoName.split('.').pop().toLowerCase();
-
-    const fProy = partesSinExt[0] || '---';
-    const fOrig = partesSinExt[1] || '---';
-    const fZona = partesSinExt[2] || '---';
-    const fTipo = partesSinExt[3] || '---';
-    const fDisc = partesSinExt[4] || '---';
-    const fEstado = partesSinExt[5] || '---';
-
-    const hintFolder = document.getElementById("hintFolderName") ? document.getElementById("hintFolderName").innerText : stagingData.targetTab;
-
     modal.className = "modal-overlay";
     modal.classList.remove("modal-hidden");
     modal.style.display = "flex";
     modal.style.zIndex = "100000";
 
-    modal.innerHTML = `
-        <div class="modal-content card" style="max-width: 560px; border-left: 4px solid var(--accent-copper, #d97706); box-shadow: 0 10px 30px rgba(0,0,0,0.7); position: relative; z-index: 100001;">
-            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #334155; padding-bottom:8px; margin-bottom:12px;">
-                <h3 style="color:var(--accent-copper, #d97706); margin:0;">🔍 Bandeja de Pre-Validación (ISO 19650)</h3>
-                <button type="button" onclick="closeStagingModal()" style="background:none; border:none; color:#94a3b8; font-size:1.1rem; cursor:pointer;">✕</button>
-            </div>
-            
-            <p style="font-size:0.8rem; color:#cbd5e1; margin-bottom:12px;">
-                Verificación técnica aprobada. Al confirmar, el entregable se archivará e integrará en Google Drive y se notificará en un solo correo estructurado.
-            </p>
-
-            <div style="background:#0b1120; border:1px solid #1e293b; border-radius:6px; padding:10px 12px; margin-bottom:12px;">
-                <div style="font-size:0.75rem; color:#94a3b8; margin-bottom:4px;">Nombre Verificado:</div>
-                <div style="font-size:0.88rem; color:#f8fafc; font-weight:bold; word-break:break-all;">${isoName}</div>
-            </div>
-
-            <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:6px; margin-bottom:12px; font-size:0.72rem;">
-                <div style="background:#0f172a; padding:6px; border-radius:4px; border:1px solid #334155;">
-                    <span style="color:#94a3b8;">Proyecto:</span> <strong style="color:#38bdf8;">${fProy}</strong>
-                </div>
-                <div style="background:#0f172a; padding:6px; border-radius:4px; border:1px solid #334155;">
-                    <span style="color:#94a3b8;">Originador:</span> <strong style="color:#f8fafc;">${fOrig}</strong>
-                </div>
-                <div style="background:#0f172a; padding:6px; border-radius:4px; border:1px solid #334155;">
-                    <span style="color:#94a3b8;">Zona:</span> <strong style="color:#f8fafc;">${fZona}</strong>
-                </div>
-                <div style="background:#0f172a; padding:6px; border-radius:4px; border:1px solid #334155;">
-                    <span style="color:#94a3b8;">Tipo:</span> <strong style="color:#10b981;">${fTipo} (.${ext})</strong>
-                </div>
-                <div style="background:#0f172a; padding:6px; border-radius:4px; border:1px solid #334155;">
-                    <span style="color:#94a3b8;">Disciplina:</span> <strong style="color:#f8fafc;">${fDisc}</strong>
-                </div>
-                <div style="background:#0f172a; padding:6px; border-radius:4px; border:1px solid #334155;">
-                    <span style="color:#94a3b8;">Estado:</span> <strong style="color:#d97706;">${fEstado}</strong>
-                </div>
-            </div>
-
-            <div style="background:rgba(16, 185, 129, 0.08); border-left:3px solid #10b981; padding:8px 10px; border-radius:4px; font-size:0.78rem; margin-bottom:16px;">
-                <span style="color:#94a3b8;">Destino Físico Drive:</span><br>
-                <strong style="color:#10b981;">${hintFolder}</strong>
-            </div>
-
-            <div style="display:flex; justify-content:flex-end; gap:8px;">
-                <button type="button" class="btn-secondary" onclick="regresarAUploadModal()">Ajustar Parámetros</button>
-                <button type="button" class="btn-primary" id="btnConfirmStagingSubmit" onclick="ejecutarSubidaConfirmada()">🚀 Confirmar y Cargar</button>
-            </div>
-        </div>
-    `;
-
+    renderizarContenidoStagingModal(modal);
     registrarAperturaModalEnHistorial("stagingModal");
 }
 
-function regresarAUploadModal() {
+function renderizarContenidoStagingModal(modalElement) {
+    if (!modalElement) modalElement = document.getElementById("stagingModal");
+    if (!modalElement) return;
+
+    let itemsHtml = "";
+    stagedUploadList.forEach((it, idx) => {
+        itemsHtml += `
+            <div style="background:#0b1120; border:1px solid #1e293b; border-radius:6px; padding:10px 12px; margin-bottom:8px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <span style="font-size:0.75rem; color:#38bdf8; font-weight:bold;">#${idx + 1} • ${it.hintFolder}</span>
+                    <button type="button" onclick="eliminarItemStaging(${idx})" style="background:none; border:none; color:#ef4444; font-size:0.75rem; cursor:pointer; font-weight:bold;">✕ Quitar</button>
+                </div>
+                <div style="font-size:0.86rem; color:#f8fafc; font-weight:bold; word-break:break-all; margin-bottom:6px;">${it.isoName}</div>
+                <div style="display:grid; grid-template-columns: repeat(6, 1fr); gap:4px; font-size:0.68rem; text-align:center;">
+                    <span style="background:#0f172a; padding:2px; border-radius:3px; border:1px solid #334155; color:#38bdf8;">${it.fProy}</span>
+                    <span style="background:#0f172a; padding:2px; border-radius:3px; border:1px solid #334155;">${it.fOrig}</span>
+                    <span style="background:#0f172a; padding:2px; border-radius:3px; border:1px solid #334155;">${it.fZona}</span>
+                    <span style="background:#0f172a; padding:2px; border-radius:3px; border:1px solid #334155; color:#10b981; font-weight:bold;">${it.fTipo}</span>
+                    <span style="background:#0f172a; padding:2px; border-radius:3px; border:1px solid #334155;">${it.fDisc}</span>
+                    <span style="background:#0f172a; padding:2px; border-radius:3px; border:1px solid #334155; color:#d97706; font-weight:bold;">${it.fEstado}</span>
+                </div>
+            </div>
+        `;
+    });
+
+    modalElement.innerHTML = `
+        <div class="modal-content card" style="max-width: 600px; border-left: 4px solid var(--accent-copper, #d97706); box-shadow: 0 10px 30px rgba(0,0,0,0.7); position: relative; z-index: 100001; max-height:85vh; display:flex; flex-direction:column;">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #334155; padding-bottom:8px; margin-bottom:10px;">
+                <h3 style="color:var(--accent-copper, #d97706); margin:0;">🔍 Bandeja de Pre-Validación en Lote</h3>
+                <button type="button" onclick="closeStagingModal()" style="background:none; border:none; color:#94a3b8; font-size:1.1rem; cursor:pointer;">✕</button>
+            </div>
+            
+            <p style="font-size:0.78rem; color:#cbd5e1; margin-bottom:10px;">
+                Tiene <strong>${stagedUploadList.length} entregable(s)</strong> listos en cola. Puede agregar otro archivo para compilar un paquete o cargarlos en bloque ahora (notificación única).
+            </p>
+
+            <div style="overflow-y:auto; flex-grow:1; max-height:360px; margin-bottom:12px; padding-right:4px;">
+                ${itemsHtml}
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; border-top:1px solid #1e293b; padding-top:10px;">
+                <button type="button" class="btn-secondary" style="font-size:0.75rem; border-color:#38bdf8; color:#38bdf8;" onclick="agregarOtroEntregableAlLote()">➕ Agregar otro entregable</button>
+                <div style="display:flex; gap:8px;">
+                    <button type="button" class="btn-secondary" onclick="closeStagingModal()">Cancelar</button>
+                    <button type="button" class="btn-primary" id="btnConfirmStagingSubmit" onclick="ejecutarSubidaConfirmada()" ${stagedUploadList.length === 0 ? 'disabled' : ''}>
+                        🚀 Confirmar y Cargar Lote (${stagedUploadList.length})
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function eliminarItemStaging(index) {
+    stagedUploadList.splice(index, 1);
+    if (stagedUploadList.length === 0) {
+        closeStagingModal(false);
+        openUploadModal();
+    } else {
+        renderizarContenidoStagingModal();
+    }
+}
+
+function agregarOtroEntregableAlLote() {
     const modal = document.getElementById("stagingModal");
     if (modal) {
         modal.style.display = "none";
@@ -1030,120 +1054,120 @@ function closeStagingModal(triggerHistory = true) {
 }
 
 // ------------------------------------------------------------------------------
-// EJECUCIÓN DEFINITIVA DE LA CARGA VALIDADA
+// EJECUCIÓN DEFINITIVA DE LA CARGA VALIDADA (EN LOTE CON UN SOLO CORREO)
 // ------------------------------------------------------------------------------
 async function ejecutarSubidaConfirmada() {
-    if (!stagedUploadPayload) return;
+    if (stagedUploadList.length === 0) return;
 
     const btnSubmit = document.getElementById("btnConfirmStagingSubmit");
     if (btnSubmit) {
         btnSubmit.disabled = true;
-        btnSubmit.innerText = "Procesando e integrando al CDE...";
+        btnSubmit.innerText = `Procesando lote (0/${stagedUploadList.length})...`;
     }
 
     try {
-        const isoNameInput = stagedUploadPayload.isoName;
-        const targetTab = stagedUploadPayload.targetTab;
-        const method = stagedUploadPayload.method;
+        let totalCompletados = 0;
 
-        let payloadFinal = {
-            accion: "IMPORTAR_DESDE_URL",
-            proyecto_id: activeProjectId,
-            estado_destino: targetTab,
-            nombre_iso: isoNameInput,
-            usuario_nombre: currentUser.nombre_completo,
-            tipo_carga: method === "LINK" ? "URL" : "DIRECTA"
-        };
+        for (let i = 0; i < stagedUploadList.length; i++) {
+            const item = stagedUploadList[i];
+            if (btnSubmit) btnSubmit.innerText = `Procesando (${i + 1}/${stagedUploadList.length}): ${item.isoName}...`;
 
-        if (method === "LINK") {
-            payloadFinal.url_origen = document.getElementById("driveUrlInput").value.trim();
-        } else {
-            const file = document.getElementById("fileLocalInput").files[0];
-            const base64File = await new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result.split(',')[1]);
-                reader.readAsDataURL(file);
-            });
-            payloadFinal.file_base64 = base64File;
-            payloadFinal.mime_type = file.type || "application/octet-stream";
-        }
+            let payloadFinal = {
+                accion: "IMPORTAR_DESDE_URL",
+                proyecto_id: activeProjectId,
+                estado_destino: item.targetTab,
+                nombre_iso: item.isoName,
+                usuario_nombre: currentUser.nombre_completo,
+                tipo_carga: item.method === "LINK" ? "URL" : "DIRECTA"
+            };
 
-        // DETECCIÓN AUTOMÁTICA DE VERSIÓN PREVIA
-        let idArchivoViejo = null;
-        let nombreViejoArchivado = null;
-
-        const partesSinExt = isoNameInput.split('.').slice(0, -1).join('.').split('_');
-        if (partesSinExt.length >= 6) {
-            const raizCincoCampos = partesSinExt.slice(0, 5).join('_');
-            const estadoCompletoSexto = partesSinExt[5];
-            const partesGuionSexto = estadoCompletoSexto.split('-');
-            const sufijoNumerico = (partesGuionSexto.length > 1) ? `-${partesGuionSexto[1]}` : "";
-
-            let queryFiltro = `${raizCincoCampos}_%`;
-            if (sufijoNumerico) {
-                queryFiltro = `${raizCincoCampos}_%${sufijoNumerico}.%`;
+            if (item.method === "LINK") {
+                payloadFinal.url_origen = item.urlOrigen;
+            } else {
+                const base64File = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result.split(',')[1]);
+                    reader.readAsDataURL(item.fileObj);
+                });
+                payloadFinal.file_base64 = base64File;
+                payloadFinal.mime_type = item.fileObj.type || "application/octet-stream";
             }
 
-            const { data: registrosPrevios } = await supabaseClient
-                .from("audit_logs")
-                .select("*")
-                .eq("proyecto_id", activeProjectId)
-                .eq("activo", true)
-                .ilike("archivo_nombre", queryFiltro);
+            // DETECCIÓN AUTOMÁTICA DE VERSIÓN PREVIA
+            let idArchivoViejo = null;
+            let nombreViejoArchivado = null;
 
-            if (registrosPrevios && registrosPrevios.length > 0) {
-                const prev = registrosPrevios[0];
-                const matchOld = (prev.drive_file_url || "").match(/[-\w]{25,}/);
-                if (matchOld) idArchivoViejo = matchOld[0];
+            const partesSinExt = item.isoName.split('.').slice(0, -1).join('.').split('_');
+            if (partesSinExt.length >= 6) {
+                const raizCincoCampos = partesSinExt.slice(0, 5).join('_');
+                const estadoCompletoSexto = partesSinExt[5];
+                const partesGuionSexto = estadoCompletoSexto.split('-');
+                const sufijoNumerico = (partesGuionSexto.length > 1) ? `-${partesGuionSexto[1]}` : "";
 
-                const { count } = await supabaseClient
+                let queryFiltro = `${raizCincoCampos}_%`;
+                if (sufijoNumerico) {
+                    queryFiltro = `${raizCincoCampos}_%${sufijoNumerico}.%`;
+                }
+
+                const { data: registrosPrevios } = await supabaseClient
                     .from("audit_logs")
-                    .select("*", { count: 'exact', head: true })
+                    .select("*")
                     .eq("proyecto_id", activeProjectId)
-                    .ilike("archivo_nombre", `${raizCincoCampos}%_OLD_%`);
+                    .eq("activo", true)
+                    .ilike("archivo_nombre", queryFiltro);
 
-                const versionIndex = (count || 0) + 1;
-                const extOld = prev.archivo_nombre.split('.').pop();
-                const baseVieja = prev.archivo_nombre.substring(0, prev.archivo_nombre.lastIndexOf('.'));
-                nombreViejoArchivado = `${baseVieja}_OLD_v${versionIndex}.${extOld}`;
+                if (registrosPrevios && registrosPrevios.length > 0) {
+                    const prev = registrosPrevios[0];
+                    const matchOld = (prev.drive_file_url || "").match(/[-\w]{25,}/);
+                    if (matchOld) idArchivoViejo = matchOld[0];
 
-                await supabaseClient
-                    .from("audit_logs")
-                    .update({
-                        archivo_nombre: nombreViejoArchivado,
-                        estado_origen: prev.estado_destino || targetTab,
-                        estado_destino: "04_ARCHIVED"
-                    })
-                    .eq("id", prev.id);
+                    const { count } = await supabaseClient
+                        .from("audit_logs")
+                        .select("*", { count: 'exact', head: true })
+                        .eq("proyecto_id", activeProjectId)
+                        .ilike("archivo_nombre", `${raizCincoCampos}%_OLD_%`);
+
+                    const versionIndex = (count || 0) + 1;
+                    const extOld = prev.archivo_nombre.split('.').pop();
+                    const baseVieja = prev.archivo_nombre.substring(0, prev.archivo_nombre.lastIndexOf('.'));
+                    nombreViejoArchivado = `${baseVieja}_OLD_v${versionIndex}.${extOld}`;
+
+                    await supabaseClient
+                        .from("audit_logs")
+                        .update({
+                            archivo_nombre: nombreViejoArchivado,
+                            estado_origen: prev.estado_destino || item.targetTab,
+                            estado_destino: "04_ARCHIVED"
+                        })
+                        .eq("id", prev.id);
+                }
+            }
+
+            payloadFinal.id_archivo_viejo = idArchivoViejo;
+            payloadFinal.nombre_viejo_archivado = nombreViejoArchivado;
+
+            const res = await fetch(WEBHOOK_APPS_SCRIPT, {
+                method: "POST",
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify(payloadFinal)
+            });
+            const data = await res.json();
+            if (data.status === "success") {
+                totalCompletados++;
             }
         }
 
-        payloadFinal.id_archivo_viejo = idArchivoViejo;
-        payloadFinal.nombre_viejo_archivado = nombreViejoArchivado;
-
-        const res = await fetch(WEBHOOK_APPS_SCRIPT, {
-            method: "POST",
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify(payloadFinal)
-        });
-        const data = await res.json();
-
-        if (data.status === "success") {
-            alert(`✅ ¡Entregable "${isoNameInput}" procesado e integrado al CDE!`);
-            closeStagingModal(false);
-            stagedUploadPayload = null;
-            document.getElementById("uploadForm").reset();
-            loadFiles();
-            cargarTimelineActividad();
-        } else {
-            alert("⚠️ " + data.message);
-        }
+        alert(`✅ ¡Lote de ${totalCompletados} entregable(s) procesado e integrado al CDE exitosamente!`);
+        stagedUploadList.length = 0;
+        closeStagingModal(false);
+        loadFiles();
+        cargarTimelineActividad();
     } catch (err) {
         alert("Error de comunicación: " + err.message);
     } finally {
         if (btnSubmit) {
             btnSubmit.disabled = false;
-            btnSubmit.innerText = "🚀 Confirmar y Cargar";
+            btnSubmit.innerText = "🚀 Confirmar y Cargar Lote";
         }
     }
 }
@@ -1324,7 +1348,7 @@ async function procesarAprobacionCliente(estadoAprobacion) {
         return;
     }
     if (estadoAprobacion === "RECHAZADO" && !observaciones) {
-        alert("⚠️ Por favor ingrese sus observaciones detalladas.");
+        alert("⚠️️ Por favor ingrese sus observaciones detalladas.");
         return;
     }
 
@@ -2390,7 +2414,7 @@ async function handleEnviarCapturasAlCDE(e) {
             cargarTimelineActividad();
             loadFiles();
         } else {
-            alert("⚠️ " + data.message);
+            alert("⚠️️ " + data.message);
         }
     } catch (err) {
         alert("Error de comunicación: " + err.message);
