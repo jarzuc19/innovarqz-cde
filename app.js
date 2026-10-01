@@ -726,7 +726,7 @@ async function cargarTimelineActividad() {
 }
 
 // ==============================================================================
-// GESTIÓN DE SUBIDAS Y BANDEJA DE PRECARGA / STAGING (ISO 19650)
+// GESTIÓN DE SUBIDAS Y BANDEJA DE PRECARGA / STAGING MULTI-ARCHIVO (ISO 19650)
 // ==============================================================================
 function openUploadModal() {
     registrarAperturaModalEnHistorial("uploadModal");
@@ -924,10 +924,8 @@ function handlePrevalidarSubida(e) {
         hintFolder: document.getElementById("hintFolderName") ? document.getElementById("hintFolderName").innerText : targetTab
     };
 
-    // Agregar a la cola de staging
     stagedUploadList.push(itemData);
 
-    // Limpiar campos para permitir otro archivo
     document.getElementById("isoNameInput").value = "";
     if (document.getElementById("driveUrlInput")) document.getElementById("driveUrlInput").value = "";
     if (document.getElementById("fileLocalInput")) document.getElementById("fileLocalInput").value = "";
@@ -1054,7 +1052,7 @@ function closeStagingModal(triggerHistory = true) {
 }
 
 // ------------------------------------------------------------------------------
-// EJECUCIÓN DEFINITIVA DE LA CARGA VALIDADA (EN LOTE CON UN SOLO CORREO)
+// EJECUCIÓN DEFINITIVA DE LA CARGA VALIDADA (EN LOTE - UN SOLO FETCH, UN SOLO CORREO)
 // ------------------------------------------------------------------------------
 async function ejecutarSubidaConfirmada() {
     if (stagedUploadList.length === 0) return;
@@ -1062,35 +1060,26 @@ async function ejecutarSubidaConfirmada() {
     const btnSubmit = document.getElementById("btnConfirmStagingSubmit");
     if (btnSubmit) {
         btnSubmit.disabled = true;
-        btnSubmit.innerText = `Procesando lote (0/${stagedUploadList.length})...`;
+        btnSubmit.innerText = "Preparando y codificando paquete...";
     }
 
     try {
-        let totalCompletados = 0;
+        const itemsPayload = [];
 
         for (let i = 0; i < stagedUploadList.length; i++) {
             const item = stagedUploadList[i];
-            if (btnSubmit) btnSubmit.innerText = `Procesando (${i + 1}/${stagedUploadList.length}): ${item.isoName}...`;
+            if (btnSubmit) btnSubmit.innerText = `Preparando (${i + 1}/${stagedUploadList.length}): ${item.isoName}...`;
 
-            let payloadFinal = {
-                accion: "IMPORTAR_DESDE_URL",
-                proyecto_id: activeProjectId,
-                estado_destino: item.targetTab,
-                nombre_iso: item.isoName,
-                usuario_nombre: currentUser.nombre_completo,
-                tipo_carga: item.method === "LINK" ? "URL" : "DIRECTA"
-            };
+            let fileBase64 = null;
+            let mimeType = "application/octet-stream";
 
-            if (item.method === "LINK") {
-                payloadFinal.url_origen = item.urlOrigen;
-            } else {
-                const base64File = await new Promise((resolve) => {
+            if (item.method !== "LINK") {
+                fileBase64 = await new Promise((resolve) => {
                     const reader = new FileReader();
                     reader.onload = () => resolve(reader.result.split(',')[1]);
                     reader.readAsDataURL(item.fileObj);
                 });
-                payloadFinal.file_base64 = base64File;
-                payloadFinal.mime_type = item.fileObj.type || "application/octet-stream";
+                mimeType = item.fileObj.type || "application/octet-stream";
             }
 
             // DETECCIÓN AUTOMÁTICA DE VERSIÓN PREVIA
@@ -1105,9 +1094,7 @@ async function ejecutarSubidaConfirmada() {
                 const sufijoNumerico = (partesGuionSexto.length > 1) ? `-${partesGuionSexto[1]}` : "";
 
                 let queryFiltro = `${raizCincoCampos}_%`;
-                if (sufijoNumerico) {
-                    queryFiltro = `${raizCincoCampos}_%${sufijoNumerico}.%`;
-                }
+                if (sufijoNumerico) queryFiltro = `${raizCincoCampos}_%${sufijoNumerico}.%`;
 
                 const { data: registrosPrevios } = await supabaseClient
                     .from("audit_logs")
@@ -1143,25 +1130,44 @@ async function ejecutarSubidaConfirmada() {
                 }
             }
 
-            payloadFinal.id_archivo_viejo = idArchivoViejo;
-            payloadFinal.nombre_viejo_archivado = nombreViejoArchivado;
-
-            const res = await fetch(WEBHOOK_APPS_SCRIPT, {
-                method: "POST",
-                headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: JSON.stringify(payloadFinal)
+            itemsPayload.push({
+                nombre_iso: item.isoName,
+                estado_destino: item.targetTab,
+                tipo_carga: item.method === "LINK" ? "URL" : "DIRECTA",
+                url_origen: item.urlOrigen,
+                file_base64: fileBase64,
+                mime_type: mimeType,
+                id_archivo_viejo: idArchivoViejo,
+                nombre_viejo_archivado: nombreViejoArchivado
             });
-            const data = await res.json();
-            if (data.status === "success") {
-                totalCompletados++;
-            }
         }
 
-        alert(`✅ ¡Lote de ${totalCompletados} entregable(s) procesado e integrado al CDE exitosamente!`);
-        stagedUploadList.length = 0;
-        closeStagingModal(false);
-        loadFiles();
-        cargarTimelineActividad();
+        if (btnSubmit) btnSubmit.innerText = `Subiendo paquete completo al CDE...`;
+
+        const payloadLote = {
+            accion: "IMPORTAR_LOTE",
+            proyecto_id: activeProjectId,
+            codigo_proyecto: activeProjectCode,
+            usuario_nombre: currentUser.nombre_completo,
+            items: itemsPayload
+        };
+
+        const res = await fetch(WEBHOOK_APPS_SCRIPT, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify(payloadLote)
+        });
+        const data = await res.json();
+
+        if (data.status === "success") {
+            alert(`✅ ¡Paquete de ${data.total_cargados} entregables integrado con éxito y notificación única enviada!`);
+            stagedUploadList.length = 0;
+            closeStagingModal(false);
+            loadFiles();
+            cargarTimelineActividad();
+        } else {
+            alert("⚠️ " + data.message);
+        }
     } catch (err) {
         alert("Error de comunicación: " + err.message);
     } finally {
@@ -1348,7 +1354,7 @@ async function procesarAprobacionCliente(estadoAprobacion) {
         return;
     }
     if (estadoAprobacion === "RECHAZADO" && !observaciones) {
-        alert("⚠️️ Por favor ingrese sus observaciones detalladas.");
+        alert("⚠️ Por favor ingrese sus observaciones detalladas.");
         return;
     }
 
@@ -2414,7 +2420,7 @@ async function handleEnviarCapturasAlCDE(e) {
             cargarTimelineActividad();
             loadFiles();
         } else {
-            alert("⚠️️ " + data.message);
+            alert("⚠️ " + data.message);
         }
     } catch (err) {
         alert("Error de comunicación: " + err.message);
@@ -3326,7 +3332,8 @@ async function loadFiles() {
                 f.archivo_nombre.startsWith("ACTA_DECISION_CLIENTE") || 
                 f.archivo_nombre.startsWith("NOTA_TECNICA_") ||
                 f.archivo_nombre.startsWith("CARGA DE ENTREGABLE") ||
-                f.archivo_nombre.startsWith("PROMOCIÓN_")
+                f.archivo_nombre.startsWith("PROMOCIÓN_") ||
+                f.archivo_nombre.startsWith("CARGA_LOTE_ENTREGABLES")
             ) return;
 
             if (f.archivo_nombre.includes("_OLD_") || f.estado_destino === "04_ARCHIVED") return;
@@ -3402,7 +3409,6 @@ async function loadFiles() {
         const fechaUltimaModificacion = f.version || "N/A";
         const isChecked = selectedFilesForBatch.has(nombreCompleto);
 
-        // GESTIÓN DE ACCIONES SEGÚN ISO 19650 EN 04_ARCHIVED
         if (activeTab === "04_ARCHIVED") {
             tbody.innerHTML += `
                 <tr style="opacity: 0.85;">
