@@ -413,9 +413,15 @@
 
                     <!-- TABLA PRINCIPAL DE ENTREGABLES -->
                     <div class="card table-card scrollable-panel">
+                        <!-- BARRA DE ACCIÓN POR LOTE (BATCH PROMOTION) -->
+                        <div id="batchActionsBar" style="display: none; padding: 8px 12px; margin-bottom: 8px; background: #0b1120; border: 1px solid var(--accent-copper, #d97706); border-radius: 6px; align-items: center; justify-content: space-between;"></div>
+
                         <table id="filesTable">
                             <thead>
                                 <tr>
+                                    <th style="width: 36px; text-align: center;">
+                                        <input type="checkbox" id="selectAllCheckbox" title="Seleccionar todos los entregables visibles" onchange="alternarSeleccionTodos(this)" style="cursor: pointer;">
+                                    </th>
                                     <th>Entregable (ISO 19650)</th>
                                     <th>Disc.</th>
                                     <th>Est.</th>
@@ -424,7 +430,7 @@
                                 </tr>
                             </thead>
                             <tbody id="filesTableBody">
-                                <tr><td colspan="5">Seleccione un proyecto para cargar archivos.</td></tr>
+                                <tr><td colspan="6">Seleccione un proyecto para cargar archivos.</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -497,11 +503,14 @@
 
                 <div class="modal-actions" style="margin-top:15px; display: flex; justify-content: flex-end; gap: 10px;">
                     <button type="button" class="btn-secondary" onclick="closeUploadModal()">Cancelar</button>
-                    <button type="submit" class="btn-primary" id="btnSubmitUpload">Procesar Entregable</button>
+                    <button type="submit" class="btn-primary" id="btnSubmitUpload">Pre-Validar Entregable</button>
                 </div>
             </form>
         </div>
     </div>
+
+    <!-- BANDEJA DE PRE-VALIDACIÓN / STAGING MODAL (ISO 19650) -->
+    <div id="stagingModal" class="modal-hidden" style="display: none;"></div>
 
     <!-- MODAL REVISOR -->
     <div id="revisorInstructionModal" class="modal-hidden">
@@ -572,7 +581,7 @@
                     <div id="ifcLevelsCard">
                         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 4px;">
                             <strong style="color: #10b981; font-size: 0.8rem;">🏢 Pisos y Niveles BIM</strong>
-                            <button type="button" onclick="alternarPanelNivelesIFC()" style="background: none; border: none; color: #94a3b8; cursor: font-size: 0.9rem;">✕</button>
+                            <button type="button" onclick="alternarPanelNivelesIFC()" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 0.9rem;">✕</button>
                         </div>
                         <div id="ifcLevelsList" class="ifc-levels-list">
                             <small style="color: #94a3b8;">Cargando niveles del archivo...</small>
@@ -601,7 +610,7 @@
                     <!-- Panel Flotante de Herramienta de Sección / Corte (Clipping) -->
                     <div id="ifcSectionToolPanel" style="position: absolute; bottom: 12px; left: 12px; z-index: 20; display: none; background: rgba(15, 23, 42, 0.95); padding: 10px 14px; border-radius: 8px; backdrop-filter: blur(6px); border: 1px solid #38bdf8; color: #fff; box-shadow: 0 4px 14px rgba(0,0,0,0.4); min-width: 250px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                            <strong style="font-size: 0.75rem; color: #38bdf8;">✂️️ Caja de Sección / Cortes</strong>
+                            <strong style="font-size: 0.75rem; color: #38bdf8;">✂ Caja de Sección / Cortes</strong>
                             <button type="button" onclick="alternarPanelCorteIFC()" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 0.85rem;">✕</button>
                         </div>
                         <div style="display: flex; gap: 6px; margin-bottom: 8px; font-size: 0.72rem;">
