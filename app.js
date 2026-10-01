@@ -23,6 +23,12 @@ const SUBCARPETAS_MAP = {
     "04_ARCHIVED": []
 };
 
+// SELECCIÓN MÚLTIPLE PARA PROMOCIÓN POR LOTE
+const selectedFilesForBatch = new Map();
+
+// ESTADO DE PRECARGA / STAGING
+let stagedUploadPayload = null;
+
 // ==============================================================================
 // VARIABLES DEL MOTOR 3D IFC (THAT OPEN COMPANY WEB-IFC v0.0.78)
 // ==============================================================================
@@ -69,7 +75,7 @@ let walkLastMousePos = { x: 0, y: 0 };
 let walkListenersConfigured = false;
 const highlightedSlabs = [];
 
-// BANDEJA DE CAPTURAS 3D (OPCIÓN A - CARRITO DE INSPECCIÓN)
+// BANDEJA DE CAPTURAS 3D (CARRITO DE INSPECCIÓN)
 const capturasBandeja = [];
 
 // INTERACCIÓN Y SELECCIÓN DE PROPIEDADES BIM
@@ -114,7 +120,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (createProjectForm) createProjectForm.addEventListener("submit", handleCreateProject);
 
     const uploadForm = document.getElementById("uploadForm");
-    if (uploadForm) uploadForm.addEventListener("submit", handleFileUpload);
+    if (uploadForm) uploadForm.addEventListener("submit", handlePrevalidarSubida);
 
     const revisorForm = document.getElementById("revisorInstructionForm");
     if (revisorForm) revisorForm.addEventListener("submit", handleRevisorInstructionSubmit);
@@ -157,6 +163,8 @@ document.addEventListener("DOMContentLoaded", () => {
             e.target.classList.add("active");
             activeTab = requestedTab;
             activeSubfolder = "TODAS";
+            selectedFilesForBatch.clear();
+            actualizarBarraAccionesPorLote();
             
             const clientCard = document.getElementById("clientApprovalCard");
             if (clientCard && currentUser) {
@@ -176,6 +184,12 @@ function registrarAperturaModalEnHistorial(modalId) {
 
 function cerrarCualquierModalAbierto(triggerHistoryBack = true) {
     let seCerro = false;
+
+    const sModal = document.getElementById("stagingModal");
+    if (sModal && (sModal.style.display === "flex" || sModal.classList.contains("modal-overlay"))) {
+        closeStagingModal(false);
+        seCerro = true;
+    }
 
     const cModal = document.getElementById("capturaConsolidadaModal");
     if (cModal && (cModal.style.display === "flex" || cModal.classList.contains("modal-overlay"))) {
@@ -253,6 +267,8 @@ function renderizarBarraSubcarpetas() {
 
 function filtrarPorSubcarpeta(sub) {
     activeSubfolder = sub;
+    selectedFilesForBatch.clear();
+    actualizarBarraAccionesPorLote();
     renderizarBarraSubcarpetas();
     loadFiles();
 }
@@ -303,7 +319,7 @@ function actualizarPistaSubcarpetaModal() {
             subDetectada = "03_PUBLISHED / 03_Actas_y_Memorias";
         } else {
             if (isoName.endsWith(".IFC") || isoName.endsWith(".RVT")) subDetectada = "03_PUBLISHED / 01_Modelos_Aprobados";
-            else if (isoName.endsWith(".DWG") || isoName.endsWith(".DXF")) subDetectada = "02_Planos_Contractuales";
+            else if (isoName.endsWith(".DWG") || isoName.endsWith(".DXF")) subDetectada = "03_PUBLISHED / 02_Planos_Contractuales";
             else subDetectada = "03_PUBLISHED / 03_Actas_y_Memorias (Default Admin)";
         }
     }
@@ -436,8 +452,10 @@ async function handleProjectChange(e) {
     }
 
     activeSubfolder = "TODAS";
+    selectedFilesForBatch.clear();
     aplicarRestriccionPestanasVisuales();
     renderizarBarraSubcarpetas();
+    actualizarBarraAccionesPorLote();
     evaluarNotasTecnicasActivas();
     cargarTimelineActividad();
     loadFiles();
@@ -707,7 +725,7 @@ async function cargarTimelineActividad() {
 }
 
 // ==============================================================================
-// GESTIÓN DE SUBIDAS Y VALIDACIÓN RIGUROSA ISO 19650 CON ARCHIVADO AUTOMÁTICO
+// GESTIÓN DE SUBIDAS Y BANDEJA DE PRECARGA / STAGING (ISO 19650)
 // ==============================================================================
 function openUploadModal() {
     registrarAperturaModalEnHistorial("uploadModal");
@@ -819,12 +837,14 @@ function recalcularEstadoEnNombre(nombreOriginal, nuevoEstadoISO) {
     return nombreOriginal;
 }
 
-async function handleFileUpload(e) {
+// ------------------------------------------------------------------------------
+// PRE-VALIDACIÓN Y APERTURA DE BANDEJA DE STAGING (PASO 1 DE CARGA)
+// ------------------------------------------------------------------------------
+async function handlePrevalidarSubida(e) {
     e.preventDefault();
     const method = document.getElementById("uploadMethodSelect").value;
     const isoNameInput = document.getElementById("isoNameInput").value.trim();
     const targetTab = document.getElementById("uploadTargetTab").value;
-    const btnSubmit = document.getElementById("btnSubmitUpload");
 
     if (!isoNameInput) {
         alert("⚠️ Debe ingresar el nombre normado ISO 19650 con su extensión.");
@@ -863,10 +883,153 @@ async function handleFileUpload(e) {
         return;
     }
 
-    btnSubmit.disabled = true;
-    btnSubmit.innerText = "Procesando e integrando al CDE...";
+    let payloadStaging = {
+        accion: "IMPORTAR_DESDE_URL",
+        proyecto_id: activeProjectId,
+        estado_destino: targetTab,
+        nombre_iso: isoNameInput,
+        usuario_nombre: currentUser.nombre_completo,
+        tipo_carga: method === "LINK" ? "URL" : "DIRECTA"
+    };
+
+    if (method === "LINK") {
+        const driveUrlInput = document.getElementById("driveUrlInput").value.trim();
+        if (!driveUrlInput) {
+            alert("⚠️ Por favor ingrese el enlace público de Google Drive.");
+            return;
+        }
+        payloadStaging.url_origen = driveUrlInput;
+    } else {
+        const fileInput = document.getElementById("fileLocalInput");
+        if (!fileInput.files || fileInput.files.length === 0) {
+            alert("⚠️ Por favor seleccione un archivo local.");
+            return;
+        }
+        const file = fileInput.files[0];
+        const extReal = file.name.split('.').pop().toLowerCase();
+        if (extReal !== extEscrita) {
+            alert(`❌ CONFLICTO DE EXTENSIÓN:\n\nEl archivo seleccionado es (.${extReal}) pero en el CDE escribió (.${extEscrita}).`);
+            return;
+        }
+
+        const base64File = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result.split(',')[1]);
+            reader.readAsDataURL(file);
+        });
+
+        payloadStaging.file_base64 = base64File;
+        payloadStaging.mime_type = file.type || "application/octet-stream";
+    }
+
+    stagedUploadPayload = payloadStaging;
+    abrirModalStagingPrecarga(payloadStaging);
+}
+
+// ------------------------------------------------------------------------------
+// MODAL DE INSPECCIÓN PREVIA / STAGING
+// ------------------------------------------------------------------------------
+function abrirModalStagingPrecarga(stagingData) {
+    let modal = document.getElementById("stagingModal");
+    if (!modal) {
+        modal = document.createElement("div");
+        modal.id = "stagingModal";
+        modal.className = "modal-overlay";
+        modal.style.display = "flex";
+        document.body.appendChild(modal);
+    }
+
+    const isoName = stagingData.nombre_iso;
+    const partesSinExt = isoName.split('.').slice(0, -1).join('.').split('_');
+    const ext = isoName.split('.').pop().toLowerCase();
+
+    const fProy = partesSinExt[0] || '---';
+    const fOrig = partesSinExt[1] || '---';
+    const fZona = partesSinExt[2] || '---';
+    const fTipo = partesSinExt[3] || '---';
+    const fDisc = partesSinExt[4] || '---';
+    const fEstado = partesSinExt[5] || '---';
+
+    const hintFolder = document.getElementById("hintFolderName") ? document.getElementById("hintFolderName").innerText : stagingData.estado_destino;
+
+    modal.innerHTML = `
+        <div class="modal-content card" style="max-width: 560px; border-left: 4px solid var(--accent-copper, #d97706); box-shadow: 0 10px 30px rgba(0,0,0,0.7);">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #334155; padding-bottom:8px; margin-bottom:12px;">
+                <h3 style="color:var(--accent-copper, #d97706); margin:0;">🔍 Bandeja de Pre-Validación (ISO 19650)</h3>
+                <button type="button" onclick="closeStagingModal()" style="background:none; border:none; color:#94a3b8; font-size:1.1rem; cursor:pointer;">✕</button>
+            </div>
+            
+            <p style="font-size:0.8rem; color:#cbd5e1; margin-bottom:12px;">
+                Revise la estructura del entregable antes de indexarlo en la nube. Al confirmar, se integrará en Drive y se notificará en un solo correo estructurado.
+            </p>
+
+            <div style="background:#0b1120; border:1px solid #1e293b; border-radius:6px; padding:10px 12px; margin-bottom:12px;">
+                <div style="font-size:0.75rem; color:#94a3b8; margin-bottom:4px;">Nombre Verificado:</div>
+                <div style="font-size:0.9rem; color:#f8fafc; font-weight:bold; word-break:break-all;">${isoName}</div>
+            </div>
+
+            <!-- DESGLOSE ISO 19650 -->
+            <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:6px; margin-bottom:12px; font-size:0.72rem;">
+                <div style="background:#0f172a; padding:6px; border-radius:4px; border:1px solid #334155;">
+                    <span style="color:#94a3b8;">Proyecto:</span> <strong style="color:#38bdf8;">${fProy}</strong>
+                </div>
+                <div style="background:#0f172a; padding:6px; border-radius:4px; border:1px solid #334155;">
+                    <span style="color:#94a3b8;">Originador:</span> <strong style="color:#f8fafc;">${fOrig}</strong>
+                </div>
+                <div style="background:#0f172a; padding:6px; border-radius:4px; border:1px solid #334155;">
+                    <span style="color:#94a3b8;">Zona:</span> <strong style="color:#f8fafc;">${fZona}</strong>
+                </div>
+                <div style="background:#0f172a; padding:6px; border-radius:4px; border:1px solid #334155;">
+                    <span style="color:#94a3b8;">Tipo:</span> <strong style="color:#10b981;">${fTipo} (.${ext})</strong>
+                </div>
+                <div style="background:#0f172a; padding:6px; border-radius:4px; border:1px solid #334155;">
+                    <span style="color:#94a3b8;">Disciplina:</span> <strong style="color:#f8fafc;">${fDisc}</strong>
+                </div>
+                <div style="background:#0f172a; padding:6px; border-radius:4px; border:1px solid #334155;">
+                    <span style="color:#94a3b8;">Estado:</span> <strong style="color:#d97706;">${fEstado}</strong>
+                </div>
+            </div>
+
+            <div style="background:rgba(16, 185, 129, 0.08); border-left:3px solid #10b981; padding:8px 10px; border-radius:4px; font-size:0.78rem; margin-bottom:16px;">
+                <span style="color:#94a3b8;">Destino Físico Drive:</span><br>
+                <strong style="color:#10b981;">${hintFolder}</strong>
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:8px;">
+                <button type="button" class="btn-secondary" onclick="closeStagingModal()">Ajustar Parámetros</button>
+                <button type="button" class="btn-primary" id="btnConfirmStagingSubmit" onclick="ejecutarSubidaConfirmada()">🚀 Confirmar y Cargar</button>
+            </div>
+        </div>
+    `;
+
+    modal.style.display = "flex";
+    registrarAperturaModalEnHistorial("stagingModal");
+}
+
+function closeStagingModal(triggerHistory = true) {
+    const modal = document.getElementById("stagingModal");
+    if (modal) modal.style.display = "none";
+    if (triggerHistory && window.history.state && window.history.state.modalOpen) {
+        window.history.back();
+    }
+}
+
+// ------------------------------------------------------------------------------
+// EJECUCIÓN DEFINITIVA DE LA CARGA VALIDADA
+// ------------------------------------------------------------------------------
+async function ejecutarSubidaConfirmada() {
+    if (!stagedUploadPayload) return;
+
+    const btnSubmit = document.getElementById("btnConfirmStagingSubmit");
+    if (btnSubmit) {
+        btnSubmit.disabled = true;
+        btnSubmit.innerText = "Integrando al CDE...";
+    }
 
     try {
+        const isoNameInput = stagedUploadPayload.nombre_iso;
+        const targetTab = stagedUploadPayload.estado_destino;
+
         // DETECCIÓN AUTOMÁTICA DE VERSIÓN PREVIA (RAÍZ EXACTA CON O SIN SUFIJO -01 A -99)
         let idArchivoViejo = null;
         let nombreViejoArchivado = null;
@@ -892,12 +1055,9 @@ async function handleFileUpload(e) {
 
             if (registrosPrevios && registrosPrevios.length > 0) {
                 const prev = registrosPrevios[0];
-                
-                // Extraer el fileId de Drive desde la URL
                 const matchOld = (prev.drive_file_url || "").match(/[-\w]{25,}/);
                 if (matchOld) idArchivoViejo = matchOld[0];
 
-                // Contar cuántas versiones archivadas existen para calcular _OLD_vX
                 const { count } = await supabaseClient
                     .from("audit_logs")
                     .select("*", { count: 'exact', head: true })
@@ -909,7 +1069,6 @@ async function handleFileUpload(e) {
                 const baseVieja = prev.archivo_nombre.substring(0, prev.archivo_nombre.lastIndexOf('.'));
                 nombreViejoArchivado = `${baseVieja}_OLD_v${versionIndex}.${extOld}`;
 
-                // Archivar lógicamente el registro anterior en Supabase
                 await supabaseClient
                     .from("audit_logs")
                     .update({
@@ -921,64 +1080,21 @@ async function handleFileUpload(e) {
             }
         }
 
-        let payload = {
-            accion: "IMPORTAR_DESDE_URL",
-            proyecto_id: activeProjectId,
-            estado_destino: targetTab,
-            nombre_iso: isoNameInput,
-            usuario_nombre: currentUser.nombre_completo,
-            id_archivo_viejo: idArchivoViejo,
-            nombre_viejo_archivado: nombreViejoArchivado
-        };
-
-        if (method === "LINK") {
-            const driveUrlInput = document.getElementById("driveUrlInput").value.trim();
-            if (!driveUrlInput) {
-                alert("⚠️ Por favor ingrese el enlace público de Google Drive.");
-                btnSubmit.disabled = false;
-                btnSubmit.innerText = "Procesar Entregable";
-                return;
-            }
-            payload.tipo_carga = "URL";
-            payload.url_origen = driveUrlInput;
-        } else {
-            const fileInput = document.getElementById("fileLocalInput");
-            if (!fileInput.files || fileInput.files.length === 0) {
-                alert("⚠️ Por favor seleccione un archivo local.");
-                btnSubmit.disabled = false;
-                btnSubmit.innerText = "Procesar Entregable";
-                return;
-            }
-            const file = fileInput.files[0];
-            const extReal = file.name.split('.').pop().toLowerCase();
-            if (extReal !== extEscrita) {
-                alert(`❌ CONFLICTO DE EXTENSIÓN:\n\nEl archivo seleccionado es (.${extReal}) pero en el CDE escribió (.${extEscrita}).`);
-                btnSubmit.disabled = false;
-                btnSubmit.innerText = "Procesar Entregable";
-                return;
-            }
-
-            const base64File = await new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result.split(',')[1]);
-                reader.readAsDataURL(file);
-            });
-
-            payload.tipo_carga = "DIRECTA";
-            payload.file_base64 = base64File;
-            payload.mime_type = file.type || "application/octet-stream";
-        }
+        stagedUploadPayload.id_archivo_viejo = idArchivoViejo;
+        stagedUploadPayload.nombre_viejo_archivado = nombreViejoArchivado;
 
         const res = await fetch(WEBHOOK_APPS_SCRIPT, {
             method: "POST",
             headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(stagedUploadPayload)
         });
         const data = await res.json();
 
         if (data.status === "success") {
             alert(`✅ ¡Entregable "${isoNameInput}" procesado e integrado al CDE!`);
+            closeStagingModal(false);
             closeUploadModal();
+            stagedUploadPayload = null;
             loadFiles();
             cargarTimelineActividad();
         } else {
@@ -987,8 +1103,140 @@ async function handleFileUpload(e) {
     } catch (err) {
         alert("Error de comunicación: " + err.message);
     } finally {
-        btnSubmit.disabled = false;
-        btnSubmit.innerText = "Procesar Entregable";
+        if (btnSubmit) {
+            btnSubmit.disabled = false;
+            btnSubmit.innerText = "🚀 Confirmar y Cargar";
+        }
+    }
+}
+
+// ==============================================================================
+// GESTIÓN DE PROMOCIÓN POR LOTE (BATCH PROMOTION - UN SOLO CORREO)
+// ==============================================================================
+function alternarSeleccionFila(nombreArchivo, estadoOrigen, estadoDestino) {
+    if (selectedFilesForBatch.has(nombreArchivo)) {
+        selectedFilesForBatch.delete(nombreArchivo);
+    } else {
+        selectedFilesForBatch.set(nombreArchivo, {
+            nombre_archivo: nombreArchivo,
+            estado_origen: estadoOrigen,
+            estado_destino: estadoDestino,
+            nuevo_nombre_archivo: recalcularEstadoEnNombre(nombreArchivo, (estadoDestino === "02_SHARED") ? "S1" : "A1")
+        });
+    }
+    actualizarBarraAccionesPorLote();
+}
+
+function alternarSeleccionTodos(checkboxHeader) {
+    const todosCheckboxes = document.querySelectorAll('.batch-checkbox-row');
+    todosCheckboxes.forEach(cb => {
+        cb.checked = checkboxHeader.checked;
+        const nombre = cb.dataset.nombre;
+        const origen = cb.dataset.origen;
+        const destino = cb.dataset.destino;
+
+        if (checkboxHeader.checked) {
+            selectedFilesForBatch.set(nombre, {
+                nombre_archivo: nombre,
+                estado_origen: origen,
+                estado_destino: destino,
+                nuevo_nombre_archivo: recalcularEstadoEnNombre(nombre, (destino === "02_SHARED") ? "S1" : "A1")
+            });
+        } else {
+            selectedFilesForBatch.delete(nombre);
+        }
+    });
+    actualizarBarraAccionesPorLote();
+}
+
+function actualizarBarraAccionesPorLote() {
+    let bar = document.getElementById("batchActionsBar");
+    if (!bar) {
+        const tableCard = document.querySelector(".table-card");
+        if (tableCard) {
+            bar = document.createElement("div");
+            bar.id = "batchActionsBar";
+            bar.style.display = "none";
+            bar.style.padding = "8px 12px";
+            bar.style.marginBottom = "8px";
+            bar.style.background = "#0b1120";
+            bar.style.border = "1px solid var(--accent-copper, #d97706)";
+            bar.style.borderRadius = "6px";
+            bar.style.alignItems = "center";
+            bar.style.justifyContent = "space-between";
+            tableCard.insertBefore(bar, tableCard.firstChild);
+        }
+    }
+
+    if (!bar) return;
+
+    const count = selectedFilesForBatch.size;
+    if (count === 0 || activeTab === "03_PUBLISHED" || activeTab === "04_ARCHIVED") {
+        bar.style.display = "none";
+        return;
+    }
+
+    const estadoDestino = (activeTab === "01_WIP") ? "02_SHARED" : "03_PUBLISHED";
+    const etiquetaBtn = (activeTab === "01_WIP") ? "Promover a SHARED" : "Publicar a Cliente";
+
+    bar.style.display = "flex";
+    bar.innerHTML = `
+        <div style="font-size:0.78rem; color:#f8fafc;">
+            📦 <strong>${count}</strong> entregable(s) seleccionado(s) para promoción.
+        </div>
+        <div style="display:flex; gap:8px;">
+            <button type="button" class="btn-secondary" style="font-size:0.72rem; padding:4px 8px;" onclick="cancelarSeleccionLote()">Desmarcar</button>
+            <button type="button" class="btn-primary" style="font-size:0.75rem; padding:4px 12px; background:${(estadoDestino==='03_PUBLISHED')?'#10b981':'var(--accent-copper, #d97706)'};" onclick="ejecutarPromocionPorLote('${activeTab}', '${estadoDestino}')">
+                🚀 ${etiquetaBtn} (${count})
+            </button>
+        </div>
+    `;
+}
+
+function cancelarSeleccionLote() {
+    selectedFilesForBatch.clear();
+    const chkAll = document.getElementById("selectAllCheckbox");
+    if (chkAll) chkAll.checked = false;
+    document.querySelectorAll('.batch-checkbox-row').forEach(cb => cb.checked = false);
+    actualizarBarraAccionesPorLote();
+}
+
+async function ejecutarPromocionPorLote(estadoOrigen, estadoDestino) {
+    if (selectedFilesForBatch.size === 0) return;
+
+    const listaLote = Array.from(selectedFilesForBatch.values());
+    const confirmMsg = `¿Confirma promover este lote de ${listaLote.length} entregable(s) a ${estadoDestino}?\n\nSe emitirá UN SOLO correo estructurado para todo el paquete.`;
+    if (!confirm(confirmMsg)) return;
+
+    const payload = {
+        accion: "PROMOVER_LOTE",
+        proyecto_id: activeProjectId,
+        codigo_proyecto: activeProjectCode,
+        estado_origen: estadoOrigen,
+        estado_destino: estadoDestino,
+        usuario_email: currentUser.email,
+        usuario_nombre: currentUser.nombre_completo,
+        archivos: listaLote
+    };
+
+    try {
+        const res = await fetch(WEBHOOK_APPS_SCRIPT, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify(payload)
+        });
+        const responseData = await res.json();
+        if (responseData.status === "success") {
+            alert(`✅ ¡Lote de ${listaLote.length} entregable(s) promovido exitosamente con notificación única!`);
+            selectedFilesForBatch.clear();
+            actualizarBarraAccionesPorLote();
+            loadFiles();
+            cargarTimelineActividad();
+        } else {
+            alert("⚠️ " + responseData.message);
+        }
+    } catch (err) {
+        alert("Error de comunicación: " + err.message);
     }
 }
 
@@ -2976,14 +3224,14 @@ function cerrarCardPropiedadesIFC() {
 }
 
 // ==============================================================================
-// RENDERIZADO DE ENTREGABLES (ISO 19650 ESTRICTO POR CONTENEDOR)
+// RENDERIZADO DE ENTREGABLES (ISO 19650 ESTRICTO POR CONTENEDOR CON LOTES)
 // ==============================================================================
 async function loadFiles() {
     const tbody = document.getElementById("filesTableBody");
     if (!tbody || !activeProjectId) return;
 
     if (!validarAccesoPestana(activeTab)) {
-        tbody.innerHTML = `<tr><td colspan="5" style="color:#ef4444; font-weight:bold;">⛔ Acceso restringido a ${activeTab}.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="color:#ef4444; font-weight:bold;">⛔ Acceso restringido a ${activeTab}.</td></tr>`;
         return;
     }
 
@@ -2996,12 +3244,12 @@ async function loadFiles() {
 
     tbody.innerHTML = "";
     if (error) {
-        tbody.innerHTML = `<tr><td colspan="5" style="color:#ef4444;">Error al cargar datos: ${error.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="color:#ef4444;">Error al cargar datos: ${error.message}</td></tr>`;
         return;
     }
 
     if (!files || files.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5">No hay entregables activos en esta carpeta.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6">No hay entregables activos en esta carpeta.</td></tr>`;
         return;
     }
 
@@ -3074,9 +3322,12 @@ async function loadFiles() {
     }
 
     if (listaAProcesar.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5">No hay entregables en ${activeTab} ${activeSubfolder !== "TODAS" ? `(${activeSubfolder.replace(/_/g, " ")})` : ''}.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6">No hay entregables en ${activeTab} ${activeSubfolder !== "TODAS" ? `(${activeSubfolder.replace(/_/g, " ")})` : ''}.</td></tr>`;
         return;
     }
+
+    const permiteLote = currentUser && currentUser.cargo !== "CLIENTE" && (activeTab === "01_WIP" || activeTab === "02_SHARED");
+    const estadoDestinoDefault = (activeTab === "01_WIP") ? "02_SHARED" : "03_PUBLISHED";
 
     listaAProcesar.forEach(f => {
         const nombreCompleto = f.archivo_nombre || "";
@@ -3087,11 +3338,13 @@ async function loadFiles() {
         const ext = nombreCompleto.split('.').pop().toLowerCase();
         const esVisualizable = ["pdf", "png", "jpg", "jpeg", "webp", "html", "htm", "mp4", "webm", "mov", "ifc"].includes(ext);
         const fechaUltimaModificacion = f.version || "N/A";
+        const isChecked = selectedFilesForBatch.has(nombreCompleto);
 
-        // GESTIÓN DE ACCIONES SEGÚN ISO 19650 (VER Y DESCARGAR ACTIVOS EN ARCHIVED, SIN PROMOCIÓN)
+        // GESTIÓN DE ACCIONES SEGÚN ISO 19650 EN 04_ARCHIVED
         if (activeTab === "04_ARCHIVED") {
             tbody.innerHTML += `
                 <tr style="opacity: 0.85;">
+                    <td style="width:36px; text-align:center; color:#64748b;">—</td>
                     <td style="font-size:0.85rem;">${nombreCompleto}</td>
                     <td><strong>${disciplina}</strong></td>
                     <td><span class="badge" style="background:#64748b;">${estadoISO}</span></td>
@@ -3103,6 +3356,24 @@ async function loadFiles() {
                 </tr>
             `;
             return;
+        }
+
+        let celdaCheckbox = `<td style="width:36px; text-align:center;">—</td>`;
+        if (permiteLote) {
+            celdaCheckbox = `
+                <td style="width:36px; text-align:center;">
+                    <input 
+                        type="checkbox" 
+                        class="batch-checkbox-row" 
+                        data-nombre="${nombreCompleto}" 
+                        data-origen="${activeTab}" 
+                        data-destino="${estadoDestinoDefault}"
+                        ${isChecked ? 'checked' : ''} 
+                        onchange="alternarSeleccionFila('${nombreCompleto}', '${activeTab}', '${estadoDestinoDefault}')"
+                        style="cursor:pointer;"
+                    >
+                </td>
+            `;
         }
 
         let botonPromocion = "";
@@ -3117,6 +3388,7 @@ async function loadFiles() {
         if (esValidoISO || ext === "html") {
             tbody.innerHTML += `
                 <tr>
+                    ${celdaCheckbox}
                     <td style="font-size:0.85rem;">${nombreCompleto}</td>
                     <td><strong>${disciplina}</strong></td>
                     <td><span class="badge">${estadoISO}</span></td>
@@ -3131,6 +3403,7 @@ async function loadFiles() {
         } else {
             tbody.innerHTML += `
                 <tr style="background-color: rgba(239, 68, 68, 0.05);">
+                    <td style="width:36px; text-align:center;">—</td>
                     <td style="color: #ef4444; font-size:0.85rem;">${nombreCompleto}</td>
                     <td><strong style="color: #ef4444;">${disciplina}</strong></td>
                     <td><span class="badge" style="background: #ef4444;">NO_CONFORME</span></td>
@@ -3140,6 +3413,8 @@ async function loadFiles() {
             `;
         }
     });
+
+    actualizarBarraAccionesPorLote();
 }
 
 // Helpers Modales Proyectos
