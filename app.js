@@ -840,7 +840,7 @@ function recalcularEstadoEnNombre(nombreOriginal, nuevoEstadoISO) {
 // ------------------------------------------------------------------------------
 // PRE-VALIDACIÓN Y APERTURA DE BANDEJA DE STAGING (PASO 1 DE CARGA)
 // ------------------------------------------------------------------------------
-async function handlePrevalidarSubida(e) {
+function handlePrevalidarSubida(e) {
     e.preventDefault();
     const method = document.getElementById("uploadMethodSelect").value;
     const isoNameInput = document.getElementById("isoNameInput").value.trim();
@@ -883,22 +883,13 @@ async function handlePrevalidarSubida(e) {
         return;
     }
 
-    let payloadStaging = {
-        accion: "IMPORTAR_DESDE_URL",
-        proyecto_id: activeProjectId,
-        estado_destino: targetTab,
-        nombre_iso: isoNameInput,
-        usuario_nombre: currentUser.nombre_completo,
-        tipo_carga: method === "LINK" ? "URL" : "DIRECTA"
-    };
-
+    // Validación de origen sin congelar la interfaz
     if (method === "LINK") {
         const driveUrlInput = document.getElementById("driveUrlInput").value.trim();
         if (!driveUrlInput) {
             alert("⚠️ Por favor ingrese el enlace público de Google Drive.");
             return;
         }
-        payloadStaging.url_origen = driveUrlInput;
     } else {
         const fileInput = document.getElementById("fileLocalInput");
         if (!fileInput.files || fileInput.files.length === 0) {
@@ -911,19 +902,15 @@ async function handlePrevalidarSubida(e) {
             alert(`❌ CONFLICTO DE EXTENSIÓN:\n\nEl archivo seleccionado es (.${extReal}) pero en el CDE escribió (.${extEscrita}).`);
             return;
         }
-
-        const base64File = await new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result.split(',')[1]);
-            reader.readAsDataURL(file);
-        });
-
-        payloadStaging.file_base64 = base64File;
-        payloadStaging.mime_type = file.type || "application/octet-stream";
     }
 
-    stagedUploadPayload = payloadStaging;
-    abrirModalStagingPrecarga(payloadStaging);
+    stagedUploadPayload = {
+        isoName: isoNameInput,
+        targetTab: targetTab,
+        method: method
+    };
+
+    abrirModalStagingPrecarga(stagedUploadPayload);
 }
 
 // ------------------------------------------------------------------------------
@@ -934,12 +921,18 @@ function abrirModalStagingPrecarga(stagingData) {
     if (!modal) {
         modal = document.createElement("div");
         modal.id = "stagingModal";
-        modal.className = "modal-overlay";
-        modal.style.display = "flex";
         document.body.appendChild(modal);
     }
 
-    const isoName = stagingData.nombre_iso;
+    // Ocultar modal de subida original para despejar la vista
+    const uploadModal = document.getElementById("uploadModal");
+    if (uploadModal) {
+        uploadModal.style.display = "none";
+        uploadModal.classList.remove("modal-overlay");
+        uploadModal.classList.add("modal-hidden");
+    }
+
+    const isoName = stagingData.isoName;
     const partesSinExt = isoName.split('.').slice(0, -1).join('.').split('_');
     const ext = isoName.split('.').pop().toLowerCase();
 
@@ -950,25 +943,29 @@ function abrirModalStagingPrecarga(stagingData) {
     const fDisc = partesSinExt[4] || '---';
     const fEstado = partesSinExt[5] || '---';
 
-    const hintFolder = document.getElementById("hintFolderName") ? document.getElementById("hintFolderName").innerText : stagingData.estado_destino;
+    const hintFolder = document.getElementById("hintFolderName") ? document.getElementById("hintFolderName").innerText : stagingData.targetTab;
+
+    modal.className = "modal-overlay";
+    modal.classList.remove("modal-hidden");
+    modal.style.display = "flex";
+    modal.style.zIndex = "100000";
 
     modal.innerHTML = `
-        <div class="modal-content card" style="max-width: 560px; border-left: 4px solid var(--accent-copper, #d97706); box-shadow: 0 10px 30px rgba(0,0,0,0.7);">
+        <div class="modal-content card" style="max-width: 560px; border-left: 4px solid var(--accent-copper, #d97706); box-shadow: 0 10px 30px rgba(0,0,0,0.7); position: relative; z-index: 100001;">
             <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #334155; padding-bottom:8px; margin-bottom:12px;">
                 <h3 style="color:var(--accent-copper, #d97706); margin:0;">🔍 Bandeja de Pre-Validación (ISO 19650)</h3>
                 <button type="button" onclick="closeStagingModal()" style="background:none; border:none; color:#94a3b8; font-size:1.1rem; cursor:pointer;">✕</button>
             </div>
             
             <p style="font-size:0.8rem; color:#cbd5e1; margin-bottom:12px;">
-                Revise la estructura del entregable antes de indexarlo en la nube. Al confirmar, se integrará en Drive y se notificará en un solo correo estructurado.
+                Verificación técnica aprobada. Al confirmar, el entregable se archivará e integrará en Google Drive y se notificará en un solo correo estructurado.
             </p>
 
             <div style="background:#0b1120; border:1px solid #1e293b; border-radius:6px; padding:10px 12px; margin-bottom:12px;">
                 <div style="font-size:0.75rem; color:#94a3b8; margin-bottom:4px;">Nombre Verificado:</div>
-                <div style="font-size:0.9rem; color:#f8fafc; font-weight:bold; word-break:break-all;">${isoName}</div>
+                <div style="font-size:0.88rem; color:#f8fafc; font-weight:bold; word-break:break-all;">${isoName}</div>
             </div>
 
-            <!-- DESGLOSE ISO 19650 -->
             <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:6px; margin-bottom:12px; font-size:0.72rem;">
                 <div style="background:#0f172a; padding:6px; border-radius:4px; border:1px solid #334155;">
                     <span style="color:#94a3b8;">Proyecto:</span> <strong style="color:#38bdf8;">${fProy}</strong>
@@ -996,19 +993,37 @@ function abrirModalStagingPrecarga(stagingData) {
             </div>
 
             <div style="display:flex; justify-content:flex-end; gap:8px;">
-                <button type="button" class="btn-secondary" onclick="closeStagingModal()">Ajustar Parámetros</button>
+                <button type="button" class="btn-secondary" onclick="regresarAUploadModal()">Ajustar Parámetros</button>
                 <button type="button" class="btn-primary" id="btnConfirmStagingSubmit" onclick="ejecutarSubidaConfirmada()">🚀 Confirmar y Cargar</button>
             </div>
         </div>
     `;
 
-    modal.style.display = "flex";
     registrarAperturaModalEnHistorial("stagingModal");
+}
+
+function regresarAUploadModal() {
+    const modal = document.getElementById("stagingModal");
+    if (modal) {
+        modal.style.display = "none";
+        modal.classList.add("modal-hidden");
+        modal.classList.remove("modal-overlay");
+    }
+    const uploadModal = document.getElementById("uploadModal");
+    if (uploadModal) {
+        uploadModal.style.display = "flex";
+        uploadModal.classList.remove("modal-hidden");
+        uploadModal.classList.add("modal-overlay");
+    }
 }
 
 function closeStagingModal(triggerHistory = true) {
     const modal = document.getElementById("stagingModal");
-    if (modal) modal.style.display = "none";
+    if (modal) {
+        modal.style.display = "none";
+        modal.classList.add("modal-hidden");
+        modal.classList.remove("modal-overlay");
+    }
     if (triggerHistory && window.history.state && window.history.state.modalOpen) {
         window.history.back();
     }
@@ -1023,14 +1038,37 @@ async function ejecutarSubidaConfirmada() {
     const btnSubmit = document.getElementById("btnConfirmStagingSubmit");
     if (btnSubmit) {
         btnSubmit.disabled = true;
-        btnSubmit.innerText = "Integrando al CDE...";
+        btnSubmit.innerText = "Procesando e integrando al CDE...";
     }
 
     try {
-        const isoNameInput = stagedUploadPayload.nombre_iso;
-        const targetTab = stagedUploadPayload.estado_destino;
+        const isoNameInput = stagedUploadPayload.isoName;
+        const targetTab = stagedUploadPayload.targetTab;
+        const method = stagedUploadPayload.method;
 
-        // DETECCIÓN AUTOMÁTICA DE VERSIÓN PREVIA (RAÍZ EXACTA CON O SIN SUFIJO -01 A -99)
+        let payloadFinal = {
+            accion: "IMPORTAR_DESDE_URL",
+            proyecto_id: activeProjectId,
+            estado_destino: targetTab,
+            nombre_iso: isoNameInput,
+            usuario_nombre: currentUser.nombre_completo,
+            tipo_carga: method === "LINK" ? "URL" : "DIRECTA"
+        };
+
+        if (method === "LINK") {
+            payloadFinal.url_origen = document.getElementById("driveUrlInput").value.trim();
+        } else {
+            const file = document.getElementById("fileLocalInput").files[0];
+            const base64File = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.readAsDataURL(file);
+            });
+            payloadFinal.file_base64 = base64File;
+            payloadFinal.mime_type = file.type || "application/octet-stream";
+        }
+
+        // DETECCIÓN AUTOMÁTICA DE VERSIÓN PREVIA
         let idArchivoViejo = null;
         let nombreViejoArchivado = null;
 
@@ -1080,21 +1118,21 @@ async function ejecutarSubidaConfirmada() {
             }
         }
 
-        stagedUploadPayload.id_archivo_viejo = idArchivoViejo;
-        stagedUploadPayload.nombre_viejo_archivado = nombreViejoArchivado;
+        payloadFinal.id_archivo_viejo = idArchivoViejo;
+        payloadFinal.nombre_viejo_archivado = nombreViejoArchivado;
 
         const res = await fetch(WEBHOOK_APPS_SCRIPT, {
             method: "POST",
             headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify(stagedUploadPayload)
+            body: JSON.stringify(payloadFinal)
         });
         const data = await res.json();
 
         if (data.status === "success") {
             alert(`✅ ¡Entregable "${isoNameInput}" procesado e integrado al CDE!`);
             closeStagingModal(false);
-            closeUploadModal();
             stagedUploadPayload = null;
+            document.getElementById("uploadForm").reset();
             loadFiles();
             cargarTimelineActividad();
         } else {
