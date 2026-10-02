@@ -2107,9 +2107,9 @@ async function inicializarVisorIFC(fileUrl, container) {
             const bufferGeometry = new THREE.BufferGeometry();
             const posFloats = new Float32Array(verts.length / 2);
             for (let j = 0; j < verts.length; j += 6) {
-                posFloats[j / 2] = verts[j];
-                posFloats[j / 2 + 1] = verts[j + 2];
-                posFloats[j / 2 + 2] = verts[j + 2];
+                posFloats[j / 2]     = verts[j];     // X nativo
+                posFloats[j / 2 + 1] = verts[j + 1]; // Y nativo (Cota vertical real corregida)
+                posFloats[j / 2 + 2] = verts[j + 2]; // Z nativo
             }
 
             bufferGeometry.setAttribute('position', new THREE.BufferAttribute(posFloats, 3));
