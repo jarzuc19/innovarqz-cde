@@ -309,6 +309,22 @@ tr:hover {
     font-size: 0.78rem;
 }
 
+/* PIE DE PÁGINA CORPORATIVO (ISO 19650) */
+.cde-footer {
+    width: 100%;
+    text-align: center;
+    padding: 16px 10px 8px 10px;
+    margin-top: 14px;
+    border-top: 1px solid rgba(51, 65, 85, 0.4);
+    font-size: 0.74rem;
+    color: #64748b;
+    line-height: 1.5;
+}
+
+.cde-footer strong {
+    color: #94a3b8;
+}
+
 /* ==============================================================================
    MODAL DE VISUALIZACIÓN
    ============================================================================== */
@@ -486,6 +502,11 @@ tr:hover {
         min-height: 260px;
         max-height: 380px;
     }
+
+    .cde-footer {
+        padding: 12px 6px 14px 6px;
+        font-size: 0.7rem;
+    }
 }
 
 /* ==============================================================================
@@ -553,5 +574,10 @@ tr:hover {
         max-height: 100vh;
         border-radius: 0;
         padding: 6px;
+    }
+
+    .cde-footer {
+        padding: 10px 4px 18px 4px;
+        font-size: 0.68rem;
     }
 }
