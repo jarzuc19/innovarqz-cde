@@ -17,12 +17,7 @@
 
     <!-- ESTILOS AISLADOS EXCLUSIVOS PARA EL VISOR 3D, NIVELES, BANDEJA CAPTURAS Y MODO CAMINAR -->
     <style>
-        /* Bloqueo estricto del pull-to-refresh en la raíz del documento y en los visores */
-        html, body {
-            overscroll-behavior-y: none !important;
-            overscroll-behavior: none !important;
-        }
-
+        /* Bloqueo estricto del pull-to-refresh confinado ÚNICAMENTE al visor 3D y canvas */
         #viewerModal, #modalIfcContainer, #modalIfcContainer canvas {
             overscroll-behavior: none !important;
             overscroll-behavior-y: none !important;
