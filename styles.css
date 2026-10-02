@@ -173,7 +173,7 @@ input:focus, select:focus, textarea:focus {
 
 .cde-main-column {
     flex: 1 1 65%;
-    min-width: 0; /* Previene el desbordamiento horizontal */
+    min-width: 0;
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -258,7 +258,7 @@ input:focus, select:focus, textarea:focus {
 
 table {
     width: 100%;
-    min-width: 580px; /* Permite scroll horizontal en móvil sin romper el contenedor */
+    min-width: 580px;
     border-collapse: collapse;
     text-align: left;
     font-size: 0.8rem;
@@ -447,8 +447,20 @@ tr:hover {
    RESPONSIVE: TABLETS Y PANTALLAS MEDIANAS (<= 992px)
    ============================================================================== */
 @media (max-width: 992px) {
+    body {
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .container {
+        padding: 10px;
+        height: auto;
+    }
+
     .cde-split-layout {
         flex-direction: column;
+        height: auto;
+        gap: 16px;
     }
 
     .cde-main-column, .cde-sidebar-column {
@@ -456,14 +468,23 @@ tr:hover {
         width: 100%;
     }
 
+    .scrollable-panel {
+        max-height: 420px;
+        overflow-y: auto;
+    }
+
     .cde-sidebar-column {
         min-width: 0;
-        margin-top: 10px;
+        margin-top: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
     }
 
     .monitoring-panel {
         height: auto;
-        min-height: 220px;
+        min-height: 260px;
+        max-height: 380px;
     }
 }
 
@@ -507,11 +528,23 @@ tr:hover {
         width: 100%;
         display: flex;
         justify-content: stretch;
+        gap: 6px;
     }
 
     .action-buttons-group button {
         flex: 1;
         text-align: center;
+        padding: 8px;
+        font-size: 0.78rem;
+    }
+
+    .scrollable-panel {
+        max-height: 360px;
+    }
+
+    .monitoring-panel {
+        min-height: 240px;
+        max-height: 340px;
     }
 
     .viewer-modal-layout {
