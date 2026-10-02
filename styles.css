@@ -140,23 +140,64 @@ input:focus, select:focus, textarea:focus {
     border-color: var(--accent-blue);
 }
 
-/* LOGIN VIEW */
+/* ==============================================================================
+   LOGIN VIEW (AMPLITUD CORPORATIVA Y ERGONOMÍA TÁCTIL)
+   ============================================================================== */
 .login-card {
-    max-width: 380px;
-    margin: 60px auto;
+    width: 100%;
+    max-width: 460px;
+    margin: 70px auto 40px auto;
+    padding: 24px 28px;
     text-align: center;
 }
 
 .login-card h2 {
-    margin-bottom: 14px;
-    font-size: 1.2rem;
+    margin-bottom: 20px;
+    font-size: 1.25rem;
+    font-weight: 700;
     color: var(--accent-copper);
+    letter-spacing: 0.02em;
 }
 
 .login-card form {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 14px;
+}
+
+.login-card input[type="email"],
+.login-card input[type="password"] {
+    width: 100%;
+    padding: 10px 14px;
+    font-size: 0.88rem;
+    border-radius: 6px;
+    border: 1px solid var(--card-border);
+    background: #0f172a;
+    transition: border-color 0.2s, background-color 0.2s;
+}
+
+.login-card input[type="email"]:focus,
+.login-card input[type="password"]:focus {
+    border-color: var(--accent-blue);
+    background: #0b1120;
+}
+
+.login-card button[type="submit"] {
+    width: 100%;
+    padding: 10px 16px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    border-radius: 6px;
+    background: var(--accent-copper);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    margin-top: 4px;
+    transition: background 0.2s, opacity 0.2s;
+}
+
+.login-card button[type="submit"]:hover {
+    opacity: 0.92;
 }
 
 .dashboard-hidden {
@@ -491,6 +532,12 @@ tr:hover {
         height: auto;
     }
 
+    .login-card {
+        max-width: 420px;
+        margin: 50px auto 30px auto;
+        padding: 22px 24px;
+    }
+
     .cde-split-layout {
         flex-direction: column;
         height: auto;
@@ -551,6 +598,29 @@ tr:hover {
         padding: 6px;
     }
 
+    .login-card {
+        width: 92%;
+        max-width: 100%;
+        margin: 30px auto 20px auto;
+        padding: 20px 18px;
+    }
+
+    .login-card h2 {
+        font-size: 1.15rem;
+        margin-bottom: 16px;
+    }
+
+    .login-card input[type="email"],
+    .login-card input[type="password"] {
+        padding: 10px 12px;
+        font-size: 0.85rem;
+    }
+
+    .login-card button[type="submit"] {
+        padding: 10px 14px;
+        font-size: 0.86rem;
+    }
+
     .controls-bar {
         padding: 8px;
     }
@@ -595,7 +665,6 @@ tr:hover {
         padding: 6px;
     }
 
-    /* Footer en móvil: dos líneas compactas, 10px, centradas y sin brillo */
     .cde-footer {
         flex-direction: column;
         gap: 2px;
