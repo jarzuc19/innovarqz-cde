@@ -23,10 +23,23 @@ const SUBCARPETAS_MAP = {
     "04_ARCHIVED": []
 };
 
+// REGLAS TÉCNICAS DE EXTENSIONES COMPATIBLES POR TIPO ISO 19650
+const REGLAS_TIPO_EXTENSION = {
+    "M3": ["ifc", "rvt", "pln", "nwc", "nwd"],
+    "PL": ["dwg", "pdf", "dxf", "plt"],
+    "DR": ["dwg", "pdf", "dxf"],
+    "VI": ["mp4", "mov", "webm", "mkv", "avi"],
+    "IM": ["png", "jpg", "jpeg", "webp", "tiff", "tif"],
+    "INF": ["pdf", "xlsx", "xls", "docx", "doc", "html", "dwg"],
+    "MEM": ["pdf", "docx", "doc", "xlsx", "dwg"],
+    "ACT": ["pdf"],
+    "CON": ["pdf"]
+};
+
 // SELECCIÓN MÚLTIPLE PARA PROMOCIÓN POR LOTE
 const selectedFilesForBatch = new Map();
 
-// BANDEJA DE PRECARGA / STAGING MULTI-ARCHIVO
+// BANDEJA DE PRECARGA / COLA DE ENTREGA POR LOTE
 const stagedUploadList = [];
 
 // ==============================================================================
@@ -120,7 +133,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (createProjectForm) createProjectForm.addEventListener("submit", handleCreateProject);
 
     const uploadForm = document.getElementById("uploadForm");
-    if (uploadForm) uploadForm.addEventListener("submit", handlePrevalidarSubida);
+    if (uploadForm) uploadForm.addEventListener("submit", handleAgregarAColaEntrega);
 
     const revisorForm = document.getElementById("revisorInstructionForm");
     if (revisorForm) revisorForm.addEventListener("submit", handleRevisorInstructionSubmit);
@@ -128,11 +141,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const capturaForm = document.getElementById("formCapturaConsolidada");
     if (capturaForm) capturaForm.addEventListener("submit", handleEnviarCapturasAlCDE);
 
-    const isoNameInput = document.getElementById("isoNameInput");
-    if (isoNameInput) isoNameInput.addEventListener("input", actualizarPistaSubcarpetaModal);
-
-    const uploadTargetTab = document.getElementById("uploadTargetTab");
-    if (uploadTargetTab) uploadTargetTab.addEventListener("change", actualizarPistaSubcarpetaModal);
+    // Conectar reactividad paramétrica del formulario asistido
+    vincularEventosNomenclaturaAsistida();
 
     setupDropdownWithOther("ubicacionSelect", "ubicacionOtherInput");
     setupDropdownWithOther("tipoSelect", "tipoOtherInput");
@@ -184,12 +194,6 @@ function registrarAperturaModalEnHistorial(modalId) {
 
 function cerrarCualquierModalAbierto(triggerHistoryBack = true) {
     let seCerro = false;
-
-    const sModal = document.getElementById("stagingModal");
-    if (sModal && (sModal.style.display === "flex" || sModal.classList.contains("modal-overlay"))) {
-        closeStagingModal(false);
-        seCerro = true;
-    }
 
     const cModal = document.getElementById("capturaConsolidadaModal");
     if (cModal && (cModal.style.display === "flex" || cModal.classList.contains("modal-overlay"))) {
@@ -273,59 +277,434 @@ function filtrarPorSubcarpeta(sub) {
     loadFiles();
 }
 
-function actualizarPistaSubcarpetaModal() {
-    const isoName = document.getElementById("isoNameInput").value.trim().toUpperCase();
-    const targetTab = document.getElementById("uploadTargetTab").value;
-    const hintSpan = document.getElementById("hintFolderName");
-    if (!hintSpan) return;
+// ==============================================================================
+// GESTIÓN PARAMÉTRICA ASISTIDA (ISO 19650)
+// ==============================================================================
+function vincularEventosNomenclaturaAsistida() {
+    const camposReactivos = [
+        "isoOriginadorSelect", "isoOriginadorOtherInput", 
+        "isoZonaSelect", "isoTipoSelect", "isoDisciplinaSelect", 
+        "uploadTargetTab", "isoEstadoSelect", "isoConsecutivoSelect", 
+        "isoDriveExtSelect"
+    ];
 
-    if (!isoName) {
-        hintSpan.innerText = "Ingrese el nombre para detectar...";
-        hintSpan.style.color = "#94a3b8";
+    camposReactivos.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener("change", recalcularPrevisualizacionNomenclatura);
+            el.addEventListener("input", recalcularPrevisualizacionNomenclatura);
+        }
+    });
+
+    const fileInput = document.getElementById("fileLocalInput");
+    if (fileInput) fileInput.addEventListener("change", recalcularPrevisualizacionNomenclatura);
+
+    const origSelect = document.getElementById("isoOriginadorSelect");
+    if (origSelect) {
+        origSelect.addEventListener("change", (e) => {
+            const other = document.getElementById("isoOriginadorOtherInput");
+            if (other) {
+                other.style.display = (e.target.value === "OTRO") ? "block" : "none";
+                other.required = (e.target.value === "OTRO");
+                if (e.target.value !== "OTRO") other.value = "";
+            }
+        });
+    }
+
+    const tipoSelect = document.getElementById("isoTipoSelect");
+    if (tipoSelect) {
+        tipoSelect.addEventListener("change", actualizarOpcionesExtensionDrive);
+    }
+
+    const tabSelect = document.getElementById("uploadTargetTab");
+    if (tabSelect) {
+        tabSelect.addEventListener("change", actualizarOpcionesEstadoISO);
+    }
+}
+
+function actualizarOpcionesEstadoISO() {
+    const tabSelect = document.getElementById("uploadTargetTab");
+    const estadoSelect = document.getElementById("isoEstadoSelect");
+    if (!tabSelect || !estadoSelect) return;
+
+    const targetTab = tabSelect.value;
+    estadoSelect.innerHTML = "";
+
+    if (targetTab === "01_WIP") {
+        estadoSelect.innerHTML = `
+            <option value="S0" selected>S0 (Borrador Interno de Trabajo)</option>
+            <option value="P0.01">P0.01 (Borrador Preliminar)</option>
+        `;
+    } else if (targetTab === "02_SHARED") {
+        estadoSelect.innerHTML = `
+            <option value="S1" selected>S1 (Apto para Coordinación)</option>
+            <option value="S2">S2 (Apto para Información)</option>
+            <option value="S3">S3 (Apto para Revisión y Comentarios)</option>
+            <option value="S4">S4 (Apto para Aprobación Técnica)</option>
+        `;
+    } else if (targetTab === "03_PUBLISHED") {
+        estadoSelect.innerHTML = `
+            <option value="A1" selected>A1 (Aprobado sin Comentarios)</option>
+            <option value="A2">A2 (Aprobado con Observaciones Menores)</option>
+            <option value="CR">CR (Contractual de Construcción)</option>
+            <option value="ACT">ACT (Acta Formal / Administrativo)</option>
+            <option value="AP">AP (Aprobación Definitiva)</option>
+        `;
+    }
+
+    recalcularPrevisualizacionNomenclatura();
+}
+
+function actualizarOpcionesExtensionDrive() {
+    const tipoSelect = document.getElementById("isoTipoSelect");
+    const extDriveSelect = document.getElementById("isoDriveExtSelect");
+    if (!tipoSelect || !extDriveSelect) return;
+
+    const tipo = tipoSelect.value;
+    const extensiones = REGLAS_TIPO_EXTENSION[tipo] || ["pdf"];
+    
+    extDriveSelect.innerHTML = "";
+    extensiones.forEach((ext, idx) => {
+        extDriveSelect.innerHTML += `<option value="${ext}" ${idx === 0 ? 'selected' : ''}>.${ext}</option>`;
+    });
+
+    recalcularPrevisualizacionNomenclatura();
+}
+
+function recalcularPrevisualizacionNomenclatura() {
+    const previewSpan = document.getElementById("isoLivePreviewText");
+    const folderHintSpan = document.getElementById("hintFolderName");
+    const alertBox = document.getElementById("isoValidationWarning");
+    if (!previewSpan || !folderHintSpan) return;
+
+    const proy = activeProjectCode || "PRY";
+
+    let orig = "INNO";
+    const origSelect = document.getElementById("isoOriginadorSelect");
+    if (origSelect) {
+        if (origSelect.value === "OTRO") {
+            const otherVal = document.getElementById("isoOriginadorOtherInput")?.value.trim().toUpperCase() || "";
+            orig = otherVal ? otherVal.replace(/\s+/g, '_') : "ORIG";
+        } else {
+            orig = origSelect.value;
+        }
+    }
+
+    const zona = document.getElementById("isoZonaSelect")?.value || "ZZ";
+    const tipo = document.getElementById("isoTipoSelect")?.value || "PL";
+    const disc = document.getElementById("isoDisciplinaSelect")?.value || "ARQ";
+    const targetTab = document.getElementById("uploadTargetTab")?.value || activeTab;
+    const estado = document.getElementById("isoEstadoSelect")?.value || "S0";
+    const consecutivo = document.getElementById("isoConsecutivoSelect")?.value || "";
+
+    const method = document.getElementById("uploadMethodSelect")?.value || "DIRECT";
+    let extension = "pdf";
+    let extensionConflictiva = false;
+
+    if (method === "LINK") {
+        extension = document.getElementById("isoDriveExtSelect")?.value || "pdf";
+    } else {
+        const fileInput = document.getElementById("fileLocalInput");
+        if (fileInput && fileInput.files && fileInput.files.length > 0) {
+            extension = fileInput.files[0].name.split('.').pop().toLowerCase();
+            const permitidas = REGLAS_TIPO_EXTENSION[tipo] || [];
+            if (!permitidas.includes(extension)) {
+                extensionConflictiva = true;
+            }
+        } else {
+            const permitidas = REGLAS_TIPO_EXTENSION[tipo] || ["pdf"];
+            extension = permitidas[0];
+        }
+    }
+
+    const campoEstadoCompleto = consecutivo ? `${estado}${consecutivo}` : estado;
+    const nombreCompleto = `${proy}_${orig}_${zona}_${tipo}_${disc}_${campoEstadoCompleto}.${extension}`;
+
+    previewSpan.innerText = nombreCompleto;
+
+    // Detectar subcarpeta ISO de destino
+    let subDetectada = "Principal";
+    const esInstalacion = ["MEP", "HID", "SAN", "ELE", "MEC", "PCI", "GAS", "VAC"].includes(disc);
+
+    if (targetTab === "01_WIP") {
+        if (disc === "ARQ" || disc === "DIS") subDetectada = "01_WIP / ARQ_Arquitectura";
+        else if (disc === "EST") subDetectada = "01_WIP / EST_Estructura";
+        else if (esInstalacion) subDetectada = "01_WIP / MEP_Instalaciones";
+        else subDetectada = "01_WIP / ARQ_Arquitectura";
+    } else if (targetTab === "02_SHARED") {
+        if (tipo === "M3") subDetectada = "02_SHARED / 01_Modelos_3D";
+        else if (tipo === "PL" || tipo === "DR") subDetectada = "02_SHARED / 02_Planos_Coordinados";
+        else subDetectada = "02_SHARED / 03_Informes_Interferencias";
+    } else if (targetTab === "03_PUBLISHED") {
+        if (tipo === "M3") subDetectada = "03_PUBLISHED / 01_Modelos_Aprobados";
+        else if (tipo === "PL" || tipo === "DR") subDetectada = "03_PUBLISHED / 02_Planos_Contractuales";
+        else subDetectada = "03_PUBLISHED / 03_Actas_y_Memorias";
+    }
+
+    folderHintSpan.innerText = subDetectada;
+
+    if (alertBox) {
+        if (extensionConflictiva) {
+            alertBox.style.display = "block";
+            alertBox.innerHTML = `⚠️ <strong>Conflicto Técnico:</strong> El tipo seleccionado es [${tipo}] pero el archivo local cargado es (.${extension}). Extensión no compatible con la norma.`;
+        } else {
+            alertBox.style.display = "none";
+        }
+    }
+
+    const btnAdd = document.getElementById("btnAddToQueue");
+    if (btnAdd) {
+        btnAdd.disabled = extensionConflictiva;
+    }
+}
+
+// ==============================================================================
+// GESTIÓN DE LA COLA DE ENTREGA POR LOTE (STAGING EN MODAL UNIFICADO)
+// ==============================================================================
+function handleAgregarAColaEntrega(e) {
+    e.preventDefault();
+
+    const method = document.getElementById("uploadMethodSelect").value;
+    const tipo = document.getElementById("isoTipoSelect").value;
+    const targetTab = document.getElementById("uploadTargetTab").value;
+    const nombreIsoCompleto = document.getElementById("isoLivePreviewText").innerText.trim();
+
+    let urlOrigen = null;
+    let fileObj = null;
+
+    if (method === "LINK") {
+        urlOrigen = document.getElementById("driveUrlInput").value.trim();
+        if (!urlOrigen) {
+            alert("⚠️ Por favor ingrese el enlace público de Google Drive.");
+            return;
+        }
+    } else {
+        const fileInput = document.getElementById("fileLocalInput");
+        if (!fileInput.files || fileInput.files.length === 0) {
+            alert("⚠️ Por favor seleccione un archivo local.");
+            return;
+        }
+        fileObj = fileInput.files[0];
+        const extReal = fileObj.name.split('.').pop().toLowerCase();
+        const permitidas = REGLAS_TIPO_EXTENSION[tipo] || [];
+        if (!permitidas.includes(extReal)) {
+            alert(`❌ CONFLICTO TÉCNICO:\n\nEl tipo declarado es [${tipo}], pero el archivo cargado es (.${extReal}). No es compatible con el estándar ISO 19650.`);
+            return;
+        }
+    }
+
+    // Comprobar que no esté duplicado en la misma cola
+    const yaExisteEnCola = stagedUploadList.some(item => item.isoName === nombreIsoCompleto);
+    if (yaExisteEnCola) {
+        alert(`⚠️ El entregable "${nombreIsoCompleto}" ya se encuentra agregado en la cola actual.`);
         return;
     }
 
-    const nombreSinExt = isoName.split('.').slice(0, -1).join('.');
-    const partes = nombreSinExt.split('_');
-    const tipoISO = (partes.length >= 6) ? partes[3].toUpperCase() : "";
-    const discISO = (partes.length >= 6) ? partes[4].toUpperCase() : "";
+    const hintFolder = document.getElementById("hintFolderName").innerText;
 
-    let subDetectada = "Principal";
-    const esInstalacion = ["MEP", "HID", "SAN", "ELE", "MEC", "PCI", "GAS", "VAC"].indexOf(discISO) !== -1;
+    stagedUploadList.push({
+        isoName: nombreIsoCompleto,
+        targetTab: targetTab,
+        method: method,
+        urlOrigen: urlOrigen,
+        fileObj: fileObj,
+        hintFolder: hintFolder
+    });
 
-    if (targetTab === "01_WIP") {
-        if (discISO === "ARQ" || discISO === "DIS") subDetectada = "01_WIP / ARQ_Arquitectura";
-        else if (discISO === "EST") subDetectada = "01_WIP / EST_Estructura";
-        else if (esInstalacion) subDetectada = "01_WIP / MEP_Instalaciones";
-        else subDetectada = "01_WIP / ARQ_Arquitectura (Default)";
-    } else if (targetTab === "02_SHARED") {
-        if (tipoISO === "M3") {
-            subDetectada = "02_SHARED / 01_Modelos_3D";
-        } else if (tipoISO === "PL" || tipoISO === "DR") {
-            subDetectada = "02_SHARED / 02_Planos_Coordinados";
-        } else if (tipoISO === "INF" || tipoISO === "MEM" || tipoISO === "VI" || tipoISO === "IM") {
-            subDetectada = "02_SHARED / 03_Informes_Interferencias";
-        } else {
-            if (isoName.endsWith(".IFC") || isoName.endsWith(".RVT")) subDetectada = "02_SHARED / 01_Modelos_3D";
-            else if (isoName.endsWith(".DWG") || isoName.endsWith(".DXF")) subDetectada = "02_SHARED / 02_Planos_Coordinados";
-            else subDetectada = "02_SHARED / 03_Informes_Interferencias";
+    // Limpiar exclusivamente los orígenes para cargar el siguiente
+    if (document.getElementById("driveUrlInput")) document.getElementById("driveUrlInput").value = "";
+    if (document.getElementById("fileLocalInput")) document.getElementById("fileLocalInput").value = "";
+
+    renderizarTablaColaEntrega();
+    recalcularPrevisualizacionNomenclatura();
+}
+
+function renderizarTablaColaEntrega() {
+    const container = document.getElementById("queueTableContainer");
+    const countBadge = document.getElementById("queueCountBadge");
+    const btnSubmit = document.getElementById("btnSubmitBatchUpload");
+    if (!container) return;
+
+    if (countBadge) countBadge.innerText = stagedUploadList.length;
+
+    if (stagedUploadList.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; color: #64748b; font-size: 0.78rem; padding: 14px;">
+                No hay entregables en la cola de subida. Configure arriba y presione "➕ Añadir a la Cola".
+            </div>
+        `;
+        if (btnSubmit) {
+            btnSubmit.disabled = true;
+            btnSubmit.innerText = "🚀 Confirmar y Cargar Lote (0)";
         }
-    } else if (targetTab === "03_PUBLISHED") {
-        if (tipoISO === "M3") {
-            subDetectada = "03_PUBLISHED / 01_Modelos_Aprobados";
-        } else if (tipoISO === "PL" || tipoISO === "DR") {
-            subDetectada = "03_PUBLISHED / 02_Planos_Contractuales";
-        } else if (tipoISO === "ACT" || tipoISO === "CON" || tipoISO === "INF" || tipoISO === "MEM" || tipoISO === "VI" || tipoISO === "IM") {
-            subDetectada = "03_PUBLISHED / 03_Actas_y_Memorias";
-        } else {
-            if (isoName.endsWith(".IFC") || isoName.endsWith(".RVT")) subDetectada = "03_PUBLISHED / 01_Modelos_Aprobados";
-            else if (isoName.endsWith(".DWG") || isoName.endsWith(".DXF")) subDetectada = "02_Planos_Contractuales";
-            else subDetectada = "03_PUBLISHED / 03_Actas_y_Memorias (Default Admin)";
-        }
+        return;
     }
 
-    hintSpan.innerText = subDetectada;
-    hintSpan.style.color = "#10b981";
+    let html = `
+        <table style="width:100%; border-collapse:collapse; font-size:0.75rem; color:#f8fafc;">
+            <thead>
+                <tr style="border-bottom: 1px solid #334155; text-align: left; color: #94a3b8;">
+                    <th style="padding: 6px;">#</th>
+                    <th style="padding: 6px;">Entregable ISO 19650</th>
+                    <th style="padding: 6px;">Destino Drive</th>
+                    <th style="padding: 6px;">Origen</th>
+                    <th style="padding: 6px; text-align: center;">Acción</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    stagedUploadList.forEach((it, idx) => {
+        html += `
+            <tr style="border-bottom: 1px solid rgba(51, 65, 85, 0.4); background: ${idx % 2 === 0 ? 'rgba(15,23,42,0.4)' : 'transparent'};">
+                <td style="padding: 6px; color:#d97706; font-weight:bold;">${idx + 1}</td>
+                <td style="padding: 6px; font-weight:bold; word-break:break-all;">${it.isoName}</td>
+                <td style="padding: 6px; color:#10b981;">${it.hintFolder}</td>
+                <td style="padding: 6px; color:#38bdf8;">${it.method === 'LINK' ? '🔗 Drive' : '💻 Local'}</td>
+                <td style="padding: 6px; text-align: center;">
+                    <button type="button" onclick="eliminarItemColaEntrega(${idx})" style="background:none; border:none; color:#ef4444; cursor:pointer; font-size:0.9rem;" title="Quitar de la cola">🗑️</button>
+                </td>
+            </tr>
+        `;
+    });
+
+    html += `</tbody></table>`;
+    container.innerHTML = html;
+
+    if (btnSubmit) {
+        btnSubmit.disabled = false;
+        btnSubmit.innerText = `🚀 Confirmar y Cargar Lote (${stagedUploadList.length})`;
+    }
+}
+
+function eliminarItemColaEntrega(index) {
+    stagedUploadList.splice(index, 1);
+    renderizarTablaColaEntrega();
+}
+
+async function ejecutarSubidaLoteConsolidada() {
+    if (stagedUploadList.length === 0) return;
+
+    const btnSubmit = document.getElementById("btnSubmitBatchUpload");
+    if (btnSubmit) {
+        btnSubmit.disabled = true;
+        btnSubmit.innerText = "Preparando y codificando paquete...";
+    }
+
+    try {
+        const itemsPayload = [];
+
+        for (let i = 0; i < stagedUploadList.length; i++) {
+            const item = stagedUploadList[i];
+            if (btnSubmit) btnSubmit.innerText = `Codificando (${i + 1}/${stagedUploadList.length}): ${item.isoName}...`;
+
+            let fileBase64 = null;
+            let mimeType = "application/octet-stream";
+
+            if (item.method !== "LINK") {
+                fileBase64 = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result.split(',')[1]);
+                    reader.readAsDataURL(item.fileObj);
+                });
+                mimeType = item.fileObj.type || "application/octet-stream";
+            }
+
+            // DETECCIÓN AUTOMÁTICA DE VERSIÓN PREVIA PARA ARCHIVADO SEGURO
+            let idArchivoViejo = null;
+            let nombreViejoArchivado = null;
+
+            const partesSinExt = item.isoName.split('.').slice(0, -1).join('.').split('_');
+            if (partesSinExt.length >= 6) {
+                const raizCincoCampos = partesSinExt.slice(0, 5).join('_');
+                const estadoCompletoSexto = partesSinExt[5];
+                const partesGuionSexto = estadoCompletoSexto.split('-');
+                const sufijoNumerico = (partesGuionSexto.length > 1) ? `-${partesGuionSexto[1]}` : "";
+
+                let queryFiltro = `${raizCincoCampos}_%`;
+                if (sufijoNumerico) queryFiltro = `${raizCincoCampos}_%${sufijoNumerico}.%`;
+
+                const { data: registrosPrevios } = await supabaseClient
+                    .from("audit_logs")
+                    .select("*")
+                    .eq("proyecto_id", activeProjectId)
+                    .eq("activo", true)
+                    .ilike("archivo_nombre", queryFiltro);
+
+                if (registrosPrevios && registrosPrevios.length > 0) {
+                    const prev = registrosPrevios[0];
+                    const matchOld = (prev.drive_file_url || "").match(/[-\w]{25,}/);
+                    if (matchOld) idArchivoViejo = matchOld[0];
+
+                    const { count } = await supabaseClient
+                        .from("audit_logs")
+                        .select("*", { count: 'exact', head: true })
+                        .eq("proyecto_id", activeProjectId)
+                        .ilike("archivo_nombre", `${raizCincoCampos}%_OLD_%`);
+
+                    const versionIndex = (count || 0) + 1;
+                    const extOld = prev.archivo_nombre.split('.').pop();
+                    const baseVieja = prev.archivo_nombre.substring(0, prev.archivo_nombre.lastIndexOf('.'));
+                    nombreViejoArchivado = `${baseVieja}_OLD_v${versionIndex}.${extOld}`;
+
+                    await supabaseClient
+                        .from("audit_logs")
+                        .update({
+                            archivo_nombre: nombreViejoArchivado,
+                            estado_origen: prev.estado_destino || item.targetTab,
+                            estado_destino: "04_ARCHIVED"
+                        })
+                        .eq("id", prev.id);
+                }
+            }
+
+            itemsPayload.push({
+                nombre_iso: item.isoName,
+                estado_destino: item.targetTab,
+                tipo_carga: item.method === "LINK" ? "URL" : "DIRECTA",
+                url_origen: item.urlOrigen,
+                file_base64: fileBase64,
+                mime_type: mimeType,
+                id_archivo_viejo: idArchivoViejo,
+                nombre_viejo_archivado: nombreViejoArchivado
+            });
+        }
+
+        if (btnSubmit) btnSubmit.innerText = "Integrando paquete y generando remisión única...";
+
+        // UN SOLO ENVÍO (IMPORTAR_LOTE)
+        const payloadLote = {
+            accion: "IMPORTAR_LOTE",
+            proyecto_id: activeProjectId,
+            codigo_proyecto: activeProjectCode,
+            usuario_nombre: currentUser.nombre_completo,
+            items: itemsPayload
+        };
+
+        const res = await fetch(WEBHOOK_APPS_SCRIPT, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify(payloadLote)
+        });
+        const data = await res.json();
+
+        if (data.status === "success") {
+            alert(`✅ ¡Paquete de ${data.total_cargados} entregables integrado con éxito y notificación transaccional única enviada!`);
+            stagedUploadList.length = 0;
+            closeUploadModal();
+            loadFiles();
+            cargarTimelineActividad();
+        } else {
+            alert("⚠️ " + data.message);
+        }
+    } catch (err) {
+        alert("Error de comunicación: " + err.message);
+    } finally {
+        if (btnSubmit) {
+            btnSubmit.disabled = false;
+            btnSubmit.innerText = `🚀 Confirmar y Cargar Lote (${stagedUploadList.length})`;
+        }
+    }
 }
 
 // ==============================================================================
@@ -454,6 +833,14 @@ async function handleProjectChange(e) {
     activeSubfolder = "TODAS";
     selectedFilesForBatch.clear();
     stagedUploadList.length = 0;
+    renderizarTablaColaEntrega();
+
+    const proyCodeInput = document.getElementById("isoProyectoInput");
+    if (proyCodeInput) proyCodeInput.value = activeProjectCode || "PRY";
+
+    actualizarOpcionesEstadoISO();
+    actualizarOpcionesExtensionDrive();
+
     aplicarRestriccionPestanasVisuales();
     renderizarBarraSubcarpetas();
     actualizarBarraAccionesPorLote();
@@ -726,7 +1113,7 @@ async function cargarTimelineActividad() {
 }
 
 // ==============================================================================
-// GESTIÓN DE SUBIDAS Y BANDEJA DE PRECARGA / STAGING MULTI-ARCHIVO (ISO 19650)
+// GESTIÓN DE SUBIDAS Y APERTURA DE MODAL UNIFICADO
 // ==============================================================================
 function openUploadModal() {
     registrarAperturaModalEnHistorial("uploadModal");
@@ -742,14 +1129,25 @@ function openUploadModal() {
 
     if (optPublished) optPublished.style.display = esSuperAdminOBimManager ? "block" : "none";
 
-    if (currentUser && currentUser.cargo.includes("REVISOR") && !esSuperAdminOBimManager) {
-        if (optWip) optWip.style.display = "none";
-        if (optShared) optShared.selected = true;
-    } else {
-        if (optWip) optWip.style.display = "block";
+    const tabSelect = document.getElementById("uploadTargetTab");
+    if (tabSelect) {
+        if (currentUser && currentUser.cargo.includes("REVISOR") && !esSuperAdminOBimManager) {
+            if (optWip) optWip.style.display = "none";
+            tabSelect.value = "02_SHARED";
+        } else {
+            if (optWip) optWip.style.display = "block";
+            tabSelect.value = activeTab !== "04_ARCHIVED" ? activeTab : "01_WIP";
+        }
     }
 
-    actualizarPistaSubcarpetaModal();
+    const proyCodeInput = document.getElementById("isoProyectoInput");
+    if (proyCodeInput) proyCodeInput.value = activeProjectCode || "PRY";
+
+    actualizarOpcionesEstadoISO();
+    actualizarOpcionesExtensionDrive();
+    recalcularPrevisualizacionNomenclatura();
+    renderizarTablaColaEntrega();
+
     const modal = document.getElementById("uploadModal");
     if (modal) {
         modal.style.display = "flex";
@@ -774,50 +1172,18 @@ function toggleUploadMethod() {
     const method = document.getElementById("uploadMethodSelect").value;
     const linkGroup = document.getElementById("linkMethodGroup");
     const directGroup = document.getElementById("directMethodGroup");
+    const extDriveGroup = document.getElementById("driveExtSelectionGroup");
 
     if (method === "LINK") {
         linkGroup.style.display = "block";
         directGroup.style.display = "none";
+        if (extDriveGroup) extDriveGroup.style.display = "block";
     } else {
         linkGroup.style.display = "none";
         directGroup.style.display = "block";
+        if (extDriveGroup) extDriveGroup.style.display = "none";
     }
-}
-
-function validarNomenclaturaISO19650(nombreArchivo) {
-    const nombreSinExt = nombreArchivo.split('.').slice(0, -1).join('.');
-    const partes = nombreSinExt.split('_');
-    return partes.length >= 6;
-}
-
-function extraerEstadoDeNombre(nombreArchivo) {
-    const nombreSinExt = nombreArchivo.split('.').slice(0, -1).join('.');
-    const partes = nombreSinExt.split('_');
-    if (partes.length < 6) return "";
-    var rawEstado = partes[5].toUpperCase();
-    return rawEstado.split('-')[0];
-}
-
-function extraerTipoDeNombre(nombreArchivo) {
-    const nombreSinExt = nombreArchivo.split('.').slice(0, -1).join('.');
-    const partes = nombreSinExt.split('_');
-    return (partes.length >= 6) ? partes[3].toUpperCase() : "";
-}
-
-function validarCoherenciaTipoYExtension(tipo, extension) {
-    const ext = extension.toLowerCase();
-    const REGLAS_EXTENSIONES = {
-        "M3": ["ifc", "rvt", "pln", "nwc", "nwd"],
-        "PL": ["dwg", "pdf", "dxf", "plt"],
-        "DR": ["dwg", "pdf", "dxf"],
-        "VI": ["mp4", "mov", "webm", "mkv", "avi"],
-        "IM": ["png", "jpg", "jpeg", "webp", "tiff", "tif"],
-        "INF": ["pdf", "xlsx", "xls", "docx", "doc", "html", "dwg"],
-        "MEM": ["pdf", "docx", "doc", "xlsx", "dwg"],
-        "ACT": ["pdf"],
-        "CON": ["pdf"]
-    };
-    return REGLAS_EXTENSIONES[tipo] ? REGLAS_EXTENSIONES[tipo].includes(ext) : true;
+    recalcularPrevisualizacionNomenclatura();
 }
 
 function recalcularEstadoEnNombre(nombreOriginal, nuevoEstadoISO) {
@@ -836,346 +1202,6 @@ function recalcularEstadoEnNombre(nombreOriginal, nuevoEstadoISO) {
         return comp.join('_') + '.' + ext;
     }
     return nombreOriginal;
-}
-
-// ------------------------------------------------------------------------------
-// PRE-VALIDACIÓN Y APERTURA DE BANDEJA DE STAGING MULTI-ARCHIVO
-// ------------------------------------------------------------------------------
-function handlePrevalidarSubida(e) {
-    e.preventDefault();
-    const method = document.getElementById("uploadMethodSelect").value;
-    const isoNameInput = document.getElementById("isoNameInput").value.trim();
-    const targetTab = document.getElementById("uploadTargetTab").value;
-
-    if (!isoNameInput) {
-        alert("⚠️ Debe ingresar el nombre normado ISO 19650 con su extensión.");
-        return;
-    }
-
-    if (!validarNomenclaturaISO19650(isoNameInput) && !isoNameInput.endsWith(".html")) {
-        alert(`❌ REGLA ISO 19650 INCUMPLIDA:\n\nEl nombre "${isoNameInput}" no cumple la estructura de 6 campos:\n[PROYECTO]_[ORIGINADOR]_[ZONA]_[TIPO]_[DISCIPLINA]_[ESTADO].[ext]`);
-        return;
-    }
-
-    const estadoArchivo = extraerEstadoDeNombre(isoNameInput);
-    const tipoArchivo = extraerTipoDeNombre(isoNameInput);
-    const extEscrita = isoNameInput.split('.').pop().toLowerCase();
-
-    if (!validarCoherenciaTipoYExtension(tipoArchivo, extEscrita)) {
-        alert(`❌ CONFLICTO TÉCNICO TIPO vs. EXTENSIÓN:\n\nEl tipo declarado es [${tipoArchivo}], pero la extensión ingresada es [.${extEscrita}].`);
-        return;
-    }
-
-    if (targetTab === "01_WIP" && estadoArchivo !== "S0" && !estadoArchivo.startsWith("P0")) {
-        alert(`⛔ VIOLACIÓN DE NORMA ISO 19650:\n\nEn 01_WIP solo se permiten entregables en estado "S0" (o borradores P0).`);
-        return;
-    }
-
-    if (targetTab === "02_SHARED" && (!estadoArchivo.startsWith("S") || estadoArchivo === "S0")) {
-        alert(`⛔ VIOLACIÓN DE NORMA ISO 19650:\n\nEn 02_SHARED solo se permiten entregables en estado S1, S2, S3, etc.`);
-        return;
-    }
-
-    const estadosValidosPublished = ["CR", "ACT", "AP", "CON"];
-    const esValidoEnPublished = estadoArchivo.startsWith("A") || estadosValidosPublished.includes(estadoArchivo);
-
-    if (targetTab === "03_PUBLISHED" && !esValidoEnPublished) {
-        alert(`⛔ VIOLACIÓN DE NORMA ISO 19650:\n\nEn 03_PUBLISHED solo se permiten entregables en estado A1, A2... o códigos especiales (${estadosValidosPublished.join(', ')}).`);
-        return;
-    }
-
-    let urlOrigen = null;
-    let fileObj = null;
-
-    if (method === "LINK") {
-        urlOrigen = document.getElementById("driveUrlInput").value.trim();
-        if (!urlOrigen) {
-            alert("⚠️ Por favor ingrese el enlace público de Google Drive.");
-            return;
-        }
-    } else {
-        const fileInput = document.getElementById("fileLocalInput");
-        if (!fileInput.files || fileInput.files.length === 0) {
-            alert("⚠️ Por favor seleccione un archivo local.");
-            return;
-        }
-        fileObj = fileInput.files[0];
-        const extReal = fileObj.name.split('.').pop().toLowerCase();
-        if (extReal !== extEscrita) {
-            alert(`❌ CONFLICTO DE EXTENSIÓN:\n\nEl archivo seleccionado es (.${extReal}) pero en el CDE escribió (.${extEscrita}).`);
-            return;
-        }
-    }
-
-    const partesSinExt = isoNameInput.split('.').slice(0, -1).join('.').split('_');
-    const itemData = {
-        isoName: isoNameInput,
-        targetTab: targetTab,
-        method: method,
-        urlOrigen: urlOrigen,
-        fileObj: fileObj,
-        fProy: partesSinExt[0] || '---',
-        fOrig: partesSinExt[1] || '---',
-        fZona: partesSinExt[2] || '---',
-        fTipo: partesSinExt[3] || '---',
-        fDisc: partesSinExt[4] || '---',
-        fEstado: partesSinExt[5] || '---',
-        ext: extEscrita,
-        hintFolder: document.getElementById("hintFolderName") ? document.getElementById("hintFolderName").innerText : targetTab
-    };
-
-    stagedUploadList.push(itemData);
-
-    document.getElementById("isoNameInput").value = "";
-    if (document.getElementById("driveUrlInput")) document.getElementById("driveUrlInput").value = "";
-    if (document.getElementById("fileLocalInput")) document.getElementById("fileLocalInput").value = "";
-    actualizarPistaSubcarpetaModal();
-
-    abrirModalStagingPrecarga();
-}
-
-// ------------------------------------------------------------------------------
-// MODAL DE INSPECCIÓN PREVIA / STAGING (COLA DINÁMICA DE LOTES)
-// ------------------------------------------------------------------------------
-function abrirModalStagingPrecarga() {
-    let modal = document.getElementById("stagingModal");
-    if (!modal) {
-        modal = document.createElement("div");
-        modal.id = "stagingModal";
-        document.body.appendChild(modal);
-    }
-
-    const uploadModal = document.getElementById("uploadModal");
-    if (uploadModal) {
-        uploadModal.style.display = "none";
-        uploadModal.classList.remove("modal-overlay");
-        uploadModal.classList.add("modal-hidden");
-    }
-
-    modal.className = "modal-overlay";
-    modal.classList.remove("modal-hidden");
-    modal.style.display = "flex";
-    modal.style.zIndex = "100000";
-
-    renderizarContenidoStagingModal(modal);
-    registrarAperturaModalEnHistorial("stagingModal");
-}
-
-function renderizarContenidoStagingModal(modalElement) {
-    if (!modalElement) modalElement = document.getElementById("stagingModal");
-    if (!modalElement) return;
-
-    let itemsHtml = "";
-    stagedUploadList.forEach((it, idx) => {
-        itemsHtml += `
-            <div style="background:#0b1120; border:1px solid #1e293b; border-radius:6px; padding:10px 12px; margin-bottom:8px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                    <span style="font-size:0.75rem; color:#38bdf8; font-weight:bold;">#${idx + 1} • ${it.hintFolder}</span>
-                    <button type="button" onclick="eliminarItemStaging(${idx})" style="background:none; border:none; color:#ef4444; font-size:0.75rem; cursor:pointer; font-weight:bold;">✕ Quitar</button>
-                </div>
-                <div style="font-size:0.86rem; color:#f8fafc; font-weight:bold; word-break:break-all; margin-bottom:6px;">${it.isoName}</div>
-                <div style="display:grid; grid-template-columns: repeat(6, 1fr); gap:4px; font-size:0.68rem; text-align:center;">
-                    <span style="background:#0f172a; padding:2px; border-radius:3px; border:1px solid #334155; color:#38bdf8;">${it.fProy}</span>
-                    <span style="background:#0f172a; padding:2px; border-radius:3px; border:1px solid #334155;">${it.fOrig}</span>
-                    <span style="background:#0f172a; padding:2px; border-radius:3px; border:1px solid #334155;">${it.fZona}</span>
-                    <span style="background:#0f172a; padding:2px; border-radius:3px; border:1px solid #334155; color:#10b981; font-weight:bold;">${it.fTipo}</span>
-                    <span style="background:#0f172a; padding:2px; border-radius:3px; border:1px solid #334155;">${it.fDisc}</span>
-                    <span style="background:#0f172a; padding:2px; border-radius:3px; border:1px solid #334155; color:#d97706; font-weight:bold;">${it.fEstado}</span>
-                </div>
-            </div>
-        `;
-    });
-
-    modalElement.innerHTML = `
-        <div class="modal-content card" style="max-width: 600px; border-left: 4px solid var(--accent-copper, #d97706); box-shadow: 0 10px 30px rgba(0,0,0,0.7); position: relative; z-index: 100001; max-height:85vh; display:flex; flex-direction:column;">
-            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #334155; padding-bottom:8px; margin-bottom:10px;">
-                <h3 style="color:var(--accent-copper, #d97706); margin:0;">🔍 Bandeja de Pre-Validación en Lote</h3>
-                <button type="button" onclick="closeStagingModal()" style="background:none; border:none; color:#94a3b8; font-size:1.1rem; cursor:pointer;">✕</button>
-            </div>
-            
-            <p style="font-size:0.78rem; color:#cbd5e1; margin-bottom:10px;">
-                Tiene <strong>${stagedUploadList.length} entregable(s)</strong> listos en cola. Puede agregar otro archivo para compilar un paquete o cargarlos en bloque ahora (notificación única).
-            </p>
-
-            <div style="overflow-y:auto; flex-grow:1; max-height:360px; margin-bottom:12px; padding-right:4px;">
-                ${itemsHtml}
-            </div>
-
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; border-top:1px solid #1e293b; padding-top:10px;">
-                <button type="button" class="btn-secondary" style="font-size:0.75rem; border-color:#38bdf8; color:#38bdf8;" onclick="agregarOtroEntregableAlLote()">➕ Agregar otro entregable</button>
-                <div style="display:flex; gap:8px;">
-                    <button type="button" class="btn-secondary" onclick="closeStagingModal()">Cancelar</button>
-                    <button type="button" class="btn-primary" id="btnConfirmStagingSubmit" onclick="ejecutarSubidaConfirmada()" ${stagedUploadList.length === 0 ? 'disabled' : ''}>
-                        🚀 Confirmar y Cargar Lote (${stagedUploadList.length})
-                    </button>
-                </div>
-            </div>
-        </div>
-    `;
-}
-
-function eliminarItemStaging(index) {
-    stagedUploadList.splice(index, 1);
-    if (stagedUploadList.length === 0) {
-        closeStagingModal(false);
-        openUploadModal();
-    } else {
-        renderizarContenidoStagingModal();
-    }
-}
-
-function agregarOtroEntregableAlLote() {
-    const modal = document.getElementById("stagingModal");
-    if (modal) {
-        modal.style.display = "none";
-        modal.classList.add("modal-hidden");
-        modal.classList.remove("modal-overlay");
-    }
-    const uploadModal = document.getElementById("uploadModal");
-    if (uploadModal) {
-        uploadModal.style.display = "flex";
-        uploadModal.classList.remove("modal-hidden");
-        uploadModal.classList.add("modal-overlay");
-    }
-}
-
-function closeStagingModal(triggerHistory = true) {
-    const modal = document.getElementById("stagingModal");
-    if (modal) {
-        modal.style.display = "none";
-        modal.classList.add("modal-hidden");
-        modal.classList.remove("modal-overlay");
-    }
-    if (triggerHistory && window.history.state && window.history.state.modalOpen) {
-        window.history.back();
-    }
-}
-
-// ------------------------------------------------------------------------------
-// EJECUCIÓN DEFINITIVA DE LA CARGA VALIDADA (EN LOTE - UN SOLO FETCH, UN SOLO CORREO)
-// ------------------------------------------------------------------------------
-async function ejecutarSubidaConfirmada() {
-    if (stagedUploadList.length === 0) return;
-
-    const btnSubmit = document.getElementById("btnConfirmStagingSubmit");
-    if (btnSubmit) {
-        btnSubmit.disabled = true;
-        btnSubmit.innerText = "Preparando y codificando paquete...";
-    }
-
-    try {
-        const itemsPayload = [];
-
-        for (let i = 0; i < stagedUploadList.length; i++) {
-            const item = stagedUploadList[i];
-            if (btnSubmit) btnSubmit.innerText = `Preparando (${i + 1}/${stagedUploadList.length}): ${item.isoName}...`;
-
-            let fileBase64 = null;
-            let mimeType = "application/octet-stream";
-
-            if (item.method !== "LINK") {
-                fileBase64 = await new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onload = () => resolve(reader.result.split(',')[1]);
-                    reader.readAsDataURL(item.fileObj);
-                });
-                mimeType = item.fileObj.type || "application/octet-stream";
-            }
-
-            // DETECCIÓN AUTOMÁTICA DE VERSIÓN PREVIA
-            let idArchivoViejo = null;
-            let nombreViejoArchivado = null;
-
-            const partesSinExt = item.isoName.split('.').slice(0, -1).join('.').split('_');
-            if (partesSinExt.length >= 6) {
-                const raizCincoCampos = partesSinExt.slice(0, 5).join('_');
-                const estadoCompletoSexto = partesSinExt[5];
-                const partesGuionSexto = estadoCompletoSexto.split('-');
-                const sufijoNumerico = (partesGuionSexto.length > 1) ? `-${partesGuionSexto[1]}` : "";
-
-                let queryFiltro = `${raizCincoCampos}_%`;
-                if (sufijoNumerico) queryFiltro = `${raizCincoCampos}_%${sufijoNumerico}.%`;
-
-                const { data: registrosPrevios } = await supabaseClient
-                    .from("audit_logs")
-                    .select("*")
-                    .eq("proyecto_id", activeProjectId)
-                    .eq("activo", true)
-                    .ilike("archivo_nombre", queryFiltro);
-
-                if (registrosPrevios && registrosPrevios.length > 0) {
-                    const prev = registrosPrevios[0];
-                    const matchOld = (prev.drive_file_url || "").match(/[-\w]{25,}/);
-                    if (matchOld) idArchivoViejo = matchOld[0];
-
-                    const { count } = await supabaseClient
-                        .from("audit_logs")
-                        .select("*", { count: 'exact', head: true })
-                        .eq("proyecto_id", activeProjectId)
-                        .ilike("archivo_nombre", `${raizCincoCampos}%_OLD_%`);
-
-                    const versionIndex = (count || 0) + 1;
-                    const extOld = prev.archivo_nombre.split('.').pop();
-                    const baseVieja = prev.archivo_nombre.substring(0, prev.archivo_nombre.lastIndexOf('.'));
-                    nombreViejoArchivado = `${baseVieja}_OLD_v${versionIndex}.${extOld}`;
-
-                    await supabaseClient
-                        .from("audit_logs")
-                        .update({
-                            archivo_nombre: nombreViejoArchivado,
-                            estado_origen: prev.estado_destino || item.targetTab,
-                            estado_destino: "04_ARCHIVED"
-                        })
-                        .eq("id", prev.id);
-                }
-            }
-
-            itemsPayload.push({
-                nombre_iso: item.isoName,
-                estado_destino: item.targetTab,
-                tipo_carga: item.method === "LINK" ? "URL" : "DIRECTA",
-                url_origen: item.urlOrigen,
-                file_base64: fileBase64,
-                mime_type: mimeType,
-                id_archivo_viejo: idArchivoViejo,
-                nombre_viejo_archivado: nombreViejoArchivado
-            });
-        }
-
-        if (btnSubmit) btnSubmit.innerText = `Subiendo paquete completo al CDE...`;
-
-        const payloadLote = {
-            accion: "IMPORTAR_LOTE",
-            proyecto_id: activeProjectId,
-            codigo_proyecto: activeProjectCode,
-            usuario_nombre: currentUser.nombre_completo,
-            items: itemsPayload
-        };
-
-        const res = await fetch(WEBHOOK_APPS_SCRIPT, {
-            method: "POST",
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify(payloadLote)
-        });
-        const data = await res.json();
-
-        if (data.status === "success") {
-            alert(`✅ ¡Paquete de ${data.total_cargados} entregables integrado con éxito y notificación única enviada!`);
-            stagedUploadList.length = 0;
-            closeStagingModal(false);
-            loadFiles();
-            cargarTimelineActividad();
-        } else {
-            alert("⚠️ " + data.message);
-        }
-    } catch (err) {
-        alert("Error de comunicación: " + err.message);
-    } finally {
-        if (btnSubmit) {
-            btnSubmit.disabled = false;
-            btnSubmit.innerText = "🚀 Confirmar y Cargar Lote";
-        }
-    }
 }
 
 // ==============================================================================
@@ -1500,7 +1526,7 @@ async function generarPDFActaRecibo() {
     if (files && files.length > 0) {
         const unicosPublished = new Map();
         files.forEach(f => {
-            if (!f.archivo_nombre.includes("ACTA_") && !f.archivo_nombre.includes("NOTA_TECNICA") && !f.archivo_nombre.includes("CARGA DE ENTREGABLE") && !f.archivo_nombre.includes("PROMOCIÓN_")) {
+            if (!f.archivo_nombre.includes("ACTA_") && !f.archivo_nombre.includes("NOTA_TECNICA") && !f.archivo_nombre.includes("CARGA DE ENTREGABLE") && !f.archivo_nombre.includes("PROMOCIÓN_") && !f.archivo_nombre.includes("CARGA_LOTE_ENTREGABLES")) {
                 if (!unicosPublished.has(f.archivo_nombre)) unicosPublished.set(f.archivo_nombre, f);
             }
         });
@@ -2082,7 +2108,7 @@ async function inicializarVisorIFC(fileUrl, container) {
             const posFloats = new Float32Array(verts.length / 2);
             for (let j = 0; j < verts.length; j += 6) {
                 posFloats[j / 2] = verts[j];
-                posFloats[j / 2 + 1] = verts[j + 1];
+                posFloats[j / 2 + 1] = verts[j + 2];
                 posFloats[j / 2 + 2] = verts[j + 2];
             }
 
@@ -3371,7 +3397,7 @@ async function loadFiles() {
             const tipoISO = (partes.length >= 6) ? partes[3].toUpperCase() : "";
             const discISO = (partes.length >= 6) ? partes[4].toUpperCase() : "";
 
-            const esInstalacion = ["MEP", "HID", "SAN", "ELE", "MEC", "PCI", "GAS", "VAC"].indexOf(discISO) !== -1;
+            const esInstalacion = ["MEP", "HID", "SAN", "ELE", "MEC", "PCI", "GAS", "VAC"].includes(discISO);
 
             if (activeTab === "01_WIP") {
                 if (activeSubfolder === "ARQ_Arquitectura") return discISO === "ARQ" || discISO === "DIS" || nameUpper.includes("_ARQ_");
