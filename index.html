@@ -299,6 +299,44 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.4);
         }
 
+        /* Estilo responsivo optimizado para el modal unificado de subida */
+        .upload-modal-container {
+            max-width: 680px;
+            width: 95vw;
+            max-height: 92vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            padding: 1.2rem;
+        }
+
+        .upload-modal-body {
+            overflow-y: auto;
+            flex-grow: 1;
+            padding-right: 4px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .grid-iso-params {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+
+        @media (max-width: 768px) {
+            .grid-iso-params {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 500px) {
+            .grid-iso-params {
+                grid-template-columns: 1fr;
+            }
+        }
+
         /* REGLA RESPONSIVA AISLADA PARA MÓVILES (< 600px) */
         @media (max-width: 600px) {
             #ifcNavToolbar {
@@ -459,58 +497,177 @@
         </div>
     </div>
 
-    <!-- MODAL DE SUBIDA HÍBRIDA -->
+    <!-- MODAL UNIFICADO: NOMENCLATURA ASISTIDA Y COLA DE ENTREGA POR LOTE (ISO 19650) -->
     <div id="uploadModal" class="modal-hidden">
-        <div class="modal-content card" style="max-width: 520px;">
-            <h3>Subir / Registrar Entregable (ISO 19650)</h3>
-            <div style="margin-bottom: 12px; font-size: 0.8rem; color: #94a3b8; background: rgba(30,41,59,0.8); padding: 8px 12px; border-radius: 6px; border-left: 3px solid var(--accent-copper);">
-                ℹ️ <strong>Instrucciones ISO 19650:</strong><br>
-                • Estado <strong>S0</strong> exclusivo para <strong>01_WIP</strong>.<br>
-                • Estados <strong>S1, S2...</strong> exclusivos para <strong>02_SHARED</strong>.<br>
-                • Estados <strong>A1, A2... o códigos (CR, ACT, AP)</strong> para <strong>03_PUBLISHED</strong>.
+        <div class="modal-content card upload-modal-container">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #334155; padding-bottom:8px;">
+                <h3 style="color:var(--accent-copper, #d97706); margin:0;">📤 Carga y Compilación de Entregables (ISO 19650)</h3>
+                <button type="button" onclick="closeUploadModal()" style="background:none; border:none; color:#94a3b8; font-size:1.2rem; cursor:pointer;">✕</button>
             </div>
 
-            <form id="uploadForm">
-                <label><small>Método de Carga:</small></label>
-                <select id="uploadMethodSelect" onchange="toggleUploadMethod()" style="width: 100%; margin-top: 4px; margin-bottom: 10px; padding: 8px; border-radius: 6px; background: #0f172a; color: #fff; border: 1px solid #334155;">
-                    <option value="LINK">Importación por Enlace Google Drive (&gt; 15 MB)</option>
-                    <option value="DIRECT">Carga Directa de Archivo Local (&le; 15 MB)</option>
-                </select>
+            <div class="upload-modal-body">
+                <form id="uploadForm" style="display:flex; flex-direction:column; gap:10px;">
+                    <!-- 1. ORIGEN DEL ARCHIVO -->
+                    <div style="background:#0f172a; padding:10px 12px; border-radius:6px; border:1px solid #334155;">
+                        <span style="font-size:0.75rem; color:#94a3b8; font-weight:bold; display:block; margin-bottom:6px;">1. ORIGEN DEL ARCHIVO</span>
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+                            <div>
+                                <label><small>Método de Carga:</small></label>
+                                <select id="uploadMethodSelect" onchange="toggleUploadMethod()" style="width:100%; margin-top:2px; padding:6px; border-radius:6px; background:#0b1120; color:#fff; border:1px solid #334155; font-size:0.75rem;">
+                                    <option value="DIRECT" selected>Carga Directa Local (&le; 15 MB)</option>
+                                    <option value="LINK">Enlace Google Drive (&gt; 15 MB)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label><small>Pestaña Destino:</small></label>
+                                <select id="uploadTargetTab" required style="width:100%; margin-top:2px; padding:6px; border-radius:6px; background:#0b1120; color:#fff; border:1px solid #334155; font-size:0.75rem;">
+                                    <option value="01_WIP" id="optUploadWip">01_WIP (Trabajo)</option>
+                                    <option value="02_SHARED" id="optUploadShared">02_SHARED (Compartido)</option>
+                                    <option value="03_PUBLISHED" id="optUploadPublished" style="display:none;">03_PUBLISHED (Publicado)</option>
+                                </select>
+                            </div>
+                        </div>
 
-                <div id="linkMethodGroup">
-                    <label><small>Enlace compartido de Google Drive:</small></label>
-                    <input type="url" id="driveUrlInput" placeholder="https://drive.google.com/file/d/..." style="width: 100%; margin-top: 4px; margin-bottom: 10px; padding: 8px; border-radius: 6px; background: #0f172a; color: #fff; border: 1px solid #334155;">
+                        <div id="directMethodGroup" style="margin-top:8px;">
+                            <label><small>Seleccionar Archivo Local:</small></label>
+                            <input type="file" id="fileLocalInput" style="width:100%; margin-top:2px; padding:4px; color:#fff; font-size:0.75rem;">
+                        </div>
+
+                        <div id="linkMethodGroup" style="display:none; margin-top:8px;">
+                            <label><small>Enlace compartido de Google Drive:</small></label>
+                            <input type="url" id="driveUrlInput" placeholder="https://drive.google.com/file/d/..." style="width:100%; margin-top:2px; padding:6px; border-radius:6px; background:#0b1120; color:#fff; border:1px solid #334155; font-size:0.75rem;">
+                        </div>
+
+                        <div id="driveExtSelectionGroup" style="display:none; margin-top:8px;">
+                            <label><small>Extensión remota del archivo:</small></label>
+                            <select id="isoDriveExtSelect" style="width:100%; margin-top:2px; padding:6px; border-radius:6px; background:#0b1120; color:#10b981; font-weight:bold; border:1px solid #334155; font-size:0.75rem;"></select>
+                        </div>
+                    </div>
+
+                    <!-- 2. SELECTORES PARAMÉTRICOS ASISTIDOS (ISO 19650) -->
+                    <div style="background:#0f172a; padding:10px 12px; border-radius:6px; border:1px solid #334155;">
+                        <span style="font-size:0.75rem; color:#94a3b8; font-weight:bold; display:block; margin-bottom:6px;">2. NOMENCLATURA ASISTIDA (6 CAMPOS)</span>
+                        <div class="grid-iso-params">
+                            <div>
+                                <label><small>Proyecto (Fijo):</small></label>
+                                <input type="text" id="isoProyectoInput" readonly style="width:100%; margin-top:2px; padding:6px; border-radius:6px; background:#1e293b; color:#38bdf8; font-weight:bold; border:1px solid #334155; font-size:0.75rem;">
+                            </div>
+                            <div>
+                                <label><small>Originador:</small></label>
+                                <select id="isoOriginadorSelect" style="width:100%; margin-top:2px; padding:6px; border-radius:6px; background:#0b1120; color:#fff; border:1px solid #334155; font-size:0.75rem;">
+                                    <option value="INNO" selected>INNO (InnovArqZ S.A.S.)</option>
+                                    <option value="CLI">CLI (Cliente / Propietario)</option>
+                                    <option value="EST">EST (Consultor Estructural)</option>
+                                    <option value="MEP">MEP (Consultor Instalaciones)</option>
+                                    <option value="CIV">CIV (Ingeniería Civil / Vías)</option>
+                                    <option value="GEO">GEO (Geotecnia / Suelos)</option>
+                                    <option value="CON">CON (Constructor / Obra)</option>
+                                    <option value="OTRO">OTRO (Especificar...)</option>
+                                </select>
+                                <input type="text" id="isoOriginadorOtherInput" placeholder="Sigla (3-4 letras)" maxlength="6" style="display:none; width:100%; margin-top:4px; padding:4px; border-radius:4px; background:#0b1120; color:#fff; border:1px solid #334155; font-size:0.72rem; text-transform:uppercase;">
+                            </div>
+                            <div>
+                                <label><small>Zona / Nivel:</small></label>
+                                <select id="isoZonaSelect" style="width:100%; margin-top:2px; padding:6px; border-radius:6px; background:#0b1120; color:#fff; border:1px solid #334155; font-size:0.75rem;">
+                                    <option value="ZZ" selected>ZZ (Todo el edificio / General)</option>
+                                    <option value="01">01 (Piso 1)</option>
+                                    <option value="02">02 (Piso 2)</option>
+                                    <option value="03">03 (Piso 3)</option>
+                                    <option value="04">04 (Piso 4)</option>
+                                    <option value="RF">RF (Cubierta / Techo)</option>
+                                    <option value="S1">S1 (Sótano 1)</option>
+                                    <option value="EXT">EXT (Exteriores / Urbanismo)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label><small>Tipo de Entregable:</small></label>
+                                <select id="isoTipoSelect" style="width:100%; margin-top:2px; padding:6px; border-radius:6px; background:#0b1120; color:#10b981; font-weight:bold; border:1px solid #334155; font-size:0.75rem;">
+                                    <option value="PL" selected>PL (Planos 2D)</option>
+                                    <option value="M3">M3 (Modelos 3D BIM)</option>
+                                    <option value="VI">VI (Videos / Recorridos)</option>
+                                    <option value="IM">IM (Imágenes / Renders / Fotos)</option>
+                                    <option value="INF">INF (Informes Técnicos)</option>
+                                    <option value="MEM">MEM (Memorias de Cálculo)</option>
+                                    <option value="ACT">ACT (Actas / Administrativo)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label><small>Disciplina:</small></label>
+                                <select id="isoDisciplinaSelect" style="width:100%; margin-top:2px; padding:6px; border-radius:6px; background:#0b1120; color:#fff; border:1px solid #334155; font-size:0.75rem;">
+                                    <option value="ARQ" selected>ARQ (Arquitectura)</option>
+                                    <option value="EST">EST (Estructura)</option>
+                                    <option value="MEP">MEP (Instalaciones Generales)</option>
+                                    <option value="HID">HID (Hidráulico / Fontanería)</option>
+                                    <option value="SAN">SAN (Sanitario / Pluvial)</option>
+                                    <option value="ELE">ELE (Eléctrico / Iluminación)</option>
+                                    <option value="PCI">PCI (Protección Contra Incendio)</option>
+                                    <option value="GAS">GAS (Redes de Gas)</option>
+                                    <option value="MEC">MEC (Mecánico / Climatización)</option>
+                                    <option value="URB">URB (Urbanismo)</option>
+                                    <option value="COOR">COOR (Coordinación BIM)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label><small>Estado & Consecutivo:</small></label>
+                                <div style="display:flex; gap:4px;">
+                                    <select id="isoEstadoSelect" style="flex:1; margin-top:2px; padding:6px; border-radius:6px; background:#0b1120; color:#d97706; font-weight:bold; border:1px solid #334155; font-size:0.75rem;">
+                                        <option value="S0" selected>S0</option>
+                                    </select>
+                                    <select id="isoConsecutivoSelect" style="width:75px; margin-top:2px; padding:6px; border-radius:6px; background:#0b1120; color:#cbd5e1; border:1px solid #334155; font-size:0.75rem;">
+                                        <option value="" selected>Único</option>
+                                        <option value="-01">-01</option>
+                                        <option value="-02">-02</option>
+                                        <option value="-03">-03</option>
+                                        <option value="-04">-04</option>
+                                        <option value="-05">-05</option>
+                                        <option value="-06">-06</option>
+                                        <option value="-07">-07</option>
+                                        <option value="-08">-08</option>
+                                        <option value="-09">-09</option>
+                                        <option value="-10">-10</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Previsualización en Vivo y Alerta de Inconsistencia -->
+                        <div style="margin-top:10px; background:#0b1120; border:1px solid #1e293b; padding:8px 10px; border-radius:6px;">
+                            <div style="font-size:0.72rem; color:#94a3b8; margin-bottom:2px;">Vista Previa del Nombre Normalizado:</div>
+                            <div id="isoLivePreviewText" style="font-size:0.82rem; color:#f8fafc; font-weight:bold; word-break:break-all;">PRY_INNO_ZZ_PL_ARQ_S0.pdf</div>
+                            <div style="font-size:0.72rem; color:#10b981; margin-top:4px;">
+                                📍 Destino Físico Drive: <span id="hintFolderName" style="font-weight:bold;">01_WIP / ARQ_Arquitectura</span>
+                            </div>
+                        </div>
+
+                        <div id="isoValidationWarning" style="display:none; margin-top:6px; font-size:0.74rem; color:#ef4444; background:rgba(239, 68, 68, 0.1); border-left:3px solid #ef4444; padding:6px 8px; border-radius:4px;"></div>
+
+                        <div style="text-align:right; margin-top:8px;">
+                            <button type="submit" id="btnAddToQueue" class="btn-primary" style="background:#0284c7; font-size:0.78rem; padding:6px 14px;">➕ Añadir a la Cola</button>
+                        </div>
+                    </div>
+                </form>
+
+                <!-- 3. BANDEJA DE COLA DE ENTREGA TÉCNICA (LOTE) -->
+                <div style="background:#0f172a; padding:10px 12px; border-radius:6px; border:1px solid #334155; flex-grow:1; display:flex; flex-direction:column;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <span style="font-size:0.78rem; color:#f8fafc; font-weight:bold;">📦 Cola de Entrega Técnica (<span id="queueCountBadge" style="color:#d97706;">0</span> entregables)</span>
+                    </div>
+
+                    <div id="queueTableContainer" style="overflow-y:auto; max-height:180px; border:1px solid #1e293b; border-radius:4px; padding:4px; background:#0b1120;">
+                        <div style="text-align: center; color: #64748b; font-size: 0.78rem; padding: 14px;">
+                            No hay entregables en la cola de subida. Configure arriba y presione "➕ Añadir a la Cola".
+                        </div>
+                    </div>
                 </div>
+            </div>
 
-                <div id="directMethodGroup" style="display: none;">
-                    <label><small>Seleccionar Archivo Local (&le; 15 MB):</small></label>
-                    <input type="file" id="fileLocalInput" style="width: 100%; margin-top: 4px; margin-bottom: 10px; padding: 6px; color: #fff;">
-                </div>
-
-                <label><small>Nombre del Archivo Bajo Norma ISO 19650 (con extensión):</small></label>
-                <input type="text" id="isoNameInput" placeholder="Ej: PRY2026-001_INNOVARQZ_ZZ_M3_ARQ_S0.rvt" required style="width: 100%; margin-top: 4px; margin-bottom: 4px; padding: 8px; border-radius: 6px; background: #0f172a; color: #fff; border: 1px solid #334155;">
-                
-                <div id="subfolderTargetHint" style="font-size: 0.75rem; color: #38bdf8; margin-bottom: 10px; font-weight: bold;">
-                    📍 Subcarpeta Destino: <span id="hintFolderName">Auto-Detectando...</span>
-                </div>
-
-                <label><small>Pestaña Destino:</small></label>
-                <select id="uploadTargetTab" required style="width: 100%; margin-top: 4px; margin-bottom: 15px; padding: 8px; border-radius: 6px; background: #0f172a; color: #fff; border: 1px solid #334155;">
-                    <option value="01_WIP" id="optUploadWip">01_WIP (Nativos - Requiere estado S0)</option>
-                    <option value="02_SHARED" id="optUploadShared">02_SHARED (Coordinación - Requiere estado S1, S2, etc.)</option>
-                    <option value="03_PUBLISHED" id="optUploadPublished" style="display: none;">03_PUBLISHED (Aprobado / Administrativo - A1, ACT, CR, AP)</option>
-                </select>
-
-                <div class="modal-actions" style="margin-top:15px; display: flex; justify-content: flex-end; gap: 10px;">
-                    <button type="button" class="btn-secondary" onclick="closeUploadModal()">Cancelar</button>
-                    <button type="submit" class="btn-primary" id="btnSubmitUpload">Pre-Validar Entregable</button>
-                </div>
-            </form>
+            <!-- Acciones Finales -->
+            <div style="display:flex; justify-content:flex-end; gap:8px; border-top:1px solid #334155; padding-top:10px; margin-top:10px;">
+                <button type="button" class="btn-secondary" onclick="closeUploadModal()">Cancelar</button>
+                <button type="button" class="btn-primary" id="btnSubmitBatchUpload" disabled onclick="ejecutarSubidaLoteConsolidada()">🚀 Confirmar y Cargar Lote (0)</button>
+            </div>
         </div>
     </div>
-
-    <!-- BANDEJA DE PRE-VALIDACIÓN / STAGING MODAL (ISO 19650) -->
-    <div id="stagingModal" class="modal-hidden" style="display: none;"></div>
 
     <!-- MODAL REVISOR -->
     <div id="revisorInstructionModal" class="modal-hidden">
