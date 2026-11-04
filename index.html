@@ -25,12 +25,44 @@
         }
 
         /* Bloqueo estricto de selección de texto en la botonera flotante */
-        #ifcNavToolbar, #ifcNavToolbar * {
+        #ifcMainToolbar, #ifcMainToolbar *, #ifcToolsDropdownMenu, #ifcToolsDropdownMenu * {
             user-select: none !important;
             -webkit-user-select: none !important;
             -webkit-touch-callout: none !important;
             -moz-user-select: none !important;
             -ms-user-select: none !important;
+        }
+
+        /* Botonera y Menú Desplegable V2.0 */
+        .btn-subtool {
+            background: #1e293b;
+            color: #f8fafc;
+            border: 1px solid #334155;
+            border-radius: 4px;
+            padding: 5px 2px;
+            font-size: 0.68rem;
+            cursor: pointer;
+            text-align: center;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .btn-subtool:hover {
+            background: #334155;
+            border-color: #38bdf8;
+            color: #38bdf8;
+        }
+        .menu-tool-row {
+            padding: 6px 14px;
+            font-size: 0.74rem;
+            color: #e2e8f0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.15s, color 0.15s;
+        }
+        .menu-tool-row:hover {
+            background: rgba(56, 189, 248, 0.12);
+            color: #38bdf8;
         }
 
         /* Botón de acceso al manual en el encabezado */
@@ -151,33 +183,6 @@
             margin: 3px 0;
         }
 
-        /* Botón Flotante de Bandeja de Capturas (Garantizado sobre el Canvas) */
-        #btnBandejaCapturas {
-            position: absolute;
-            top: 14px;
-            left: 14px;
-            z-index: 55 !important;
-            background: var(--accent-copper, #d97706);
-            color: #fff;
-            border: 1px solid rgba(255, 255, 255, 0.4);
-            border-radius: 20px;
-            padding: 7px 16px;
-            font-size: 0.78rem;
-            font-weight: bold;
-            cursor: pointer !important;
-            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
-            display: none;
-            align-items: center;
-            gap: 6px;
-            backdrop-filter: blur(6px);
-            transition: transform 0.15s, background 0.2s;
-            pointer-events: auto !important;
-        }
-        #btnBandejaCapturas:hover {
-            transform: scale(1.05);
-            background: #b45309;
-        }
-
         /* Modal Consolidado de Capturas - Máxima prioridad Z-Index */
         #capturaConsolidadaModal {
             z-index: 99999 !important;
@@ -260,40 +265,6 @@
             transform: scale(0.92);
         }
 
-        /* Indicador flotante modo caminar para PC con botón para salir */
-        .walk-pc-hint {
-            position: absolute;
-            top: 14px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 25;
-            background: rgba(15, 23, 42, 0.92);
-            border: 1px solid #10b981;
-            color: #e2e8f0;
-            padding: 6px 14px;
-            border-radius: 20px;
-            font-size: 0.75rem;
-            display: none;
-            backdrop-filter: blur(4px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-            white-space: nowrap;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .btn-exit-walk {
-            background: #ef4444;
-            color: #fff;
-            border: none;
-            border-radius: 12px;
-            padding: 3px 10px;
-            font-size: 0.72rem;
-            cursor: pointer !important;
-            font-weight: bold;
-            pointer-events: auto !important;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-        }
-
         /* Estilo responsivo optimizado para el modal unificado de subida */
         .upload-modal-container {
             max-width: 680px;
@@ -334,24 +305,22 @@
 
         /* REGLA RESPONSIVA AISLADA PARA MÓVILES (< 600px) */
         @media (max-width: 600px) {
-            #ifcNavToolbar {
+            #ifcMainToolbar {
                 top: 8px !important;
                 right: 8px !important;
-                padding: 4px !important;
-                gap: 3px !important;
-                width: auto !important;
+                gap: 5px !important;
             }
-            #ifcNavToolbar button {
-                padding: 6px !important;
-                width: 32px !important;
-                height: 32px !important;
-                display: flex !important;
-                justify-content: center !important;
-                align-items: center !important;
-                font-size: 0.95rem !important;
-            }
-            #ifcNavToolbar .btn-nav-text {
+            #btnToggleToolMenu span {
                 display: none !important;
+            }
+            #btnToggleToolMenu {
+                padding: 0 8px !important;
+            }
+            #ifcToolsDropdownMenu {
+                top: 48px !important;
+                right: 8px !important;
+                width: calc(100vw - 20px) !important;
+                max-width: 250px !important;
             }
             #ifcSectionToolPanel, #ifcMeasureCard {
                 bottom: 8px !important;
@@ -379,6 +348,12 @@
                 width: 44px !important;
                 height: 44px !important;
                 font-size: 1.1rem !important;
+            }
+            #ifcContextGuideBar {
+                bottom: 6px !important;
+                padding: 4px 10px !important;
+                font-size: 0.68rem !important;
+                max-width: calc(100vw - 20px) !important;
             }
         }
     </style>
@@ -572,14 +547,17 @@
                                 <label><small>Zona / Nivel:</small></label>
                                 <select id="isoZonaSelect" style="width:100%; margin-top:2px; padding:6px; border-radius:6px; background:#0b1120; color:#fff; border:1px solid #334155; font-size:0.75rem;">
                                     <option value="ZZ" selected>ZZ (Todo el edificio / General)</option>
-                                    <option value="01">01 (Piso 1)</option>
+                                    <option value="01">01 (Piso 1 / Acceso)</option>
                                     <option value="02">02 (Piso 2)</option>
                                     <option value="03">03 (Piso 3)</option>
                                     <option value="04">04 (Piso 4)</option>
                                     <option value="RF">RF (Cubierta / Techo)</option>
-                                    <option value="S1">S1 (Sótano 1)</option>
+                                    <option value="SB1">SB1 (Sótano 1 / Subterráneo 1)</option>
+                                    <option value="SB2">SB2 (Sótano 2 / Subterráneo 2)</option>
                                     <option value="EXT">EXT (Exteriores / Urbanismo)</option>
+                                    <option value="OTRO">+ Otro Nivel...</option>
                                 </select>
+                                <input type="text" id="isoZonaOtherInput" placeholder="CÓDIGO (Ej: SB3, 05, MZ)" maxlength="4" style="display:none; width:100%; margin-top:4px; padding:4px; border-radius:4px; background:#0b1120; color:#38bdf8; border:1px solid #38bdf8; font-size:0.72rem; text-transform:uppercase; font-weight:bold;">
                             </div>
                             <div>
                                 <label><small>Tipo de Entregable:</small></label>
@@ -610,14 +588,13 @@
                                 </select>
                             </div>
                             <div>
-                                <label><small>Estado & Consecutivo:</small></label>
+                                <label><small>Idoneidad & Consecutivo:</small></label>
                                 <div style="display:flex; gap:4px;">
                                     <select id="isoEstadoSelect" style="flex:1; margin-top:2px; padding:6px; border-radius:6px; background:#0b1120; color:#d97706; font-weight:bold; border:1px solid #334155; font-size:0.75rem;">
                                         <option value="S0" selected>S0</option>
                                     </select>
-                                    <select id="isoConsecutivoSelect" style="width:75px; margin-top:2px; padding:6px; border-radius:6px; background:#0b1120; color:#cbd5e1; border:1px solid #334155; font-size:0.75rem;">
-                                        <option value="" selected>Único</option>
-                                        <option value="-01">-01</option>
+                                    <select id="isoConsecutivoSelect" style="width:85px; margin-top:2px; padding:6px; border-radius:6px; background:#0b1120; color:#cbd5e1; border:1px solid #334155; font-size:0.75rem;">
+                                        <option value="-01" selected>-01</option>
                                         <option value="-02">-02</option>
                                         <option value="-03">-03</option>
                                         <option value="-04">-04</option>
@@ -627,6 +604,7 @@
                                         <option value="-08">-08</option>
                                         <option value="-09">-09</option>
                                         <option value="-10">-10</option>
+                                        <option value="">Único</option>
                                     </select>
                                 </div>
                             </div>
@@ -635,7 +613,7 @@
                         <!-- Previsualización en Vivo y Alerta de Inconsistencia -->
                         <div style="margin-top:10px; background:#0b1120; border:1px solid #1e293b; padding:8px 10px; border-radius:6px;">
                             <div style="font-size:0.72rem; color:#94a3b8; margin-bottom:2px;">Vista Previa del Nombre Normalizado:</div>
-                            <div id="isoLivePreviewText" style="font-size:0.82rem; color:#f8fafc; font-weight:bold; word-break:break-all;">PRY_INNO_ZZ_PL_ARQ_S0.pdf</div>
+                            <div id="isoLivePreviewText" style="font-size:0.82rem; color:#f8fafc; font-weight:bold; word-break:break-all;">PRY_INNO_ZZ_PL_ARQ_S0-01.pdf</div>
                             <div style="font-size:0.72rem; color:#10b981; margin-top:4px;">
                                 📍 Destino Físico Drive: <span id="hintFolderName" style="font-weight:bold;">01_WIP / ARQ_Arquitectura</span>
                             </div>
@@ -716,10 +694,70 @@
 
                 <!-- 3. Visor BIM 3D (IFC) -->
                 <div id="modalIfcContainer" class="viewer-item" style="display: none; position: relative; width: 100%; height: 100%; overflow: hidden; cursor: default;">
-                    <!-- Botón Flotante de Carrito de Inspección (Bandeja de Capturas) -->
-                    <button type="button" id="btnBandejaCapturas" onclick="event.stopPropagation(); abrirModalCapturasConsolidadas();">
-                        📷 Observación ( <span id="trayCounter">0</span> )
-                    </button>
+                    
+                    <!-- BOTONERA MINIMALISTA PRINCIPAL (3 ACCESOS FIJOS) -->
+                    <div id="ifcMainToolbar" style="position: absolute; top: 12px; right: 12px; z-index: 50; display: flex; align-items: center; gap: 8px; user-select: none;">
+                        <button type="button" id="btnToggleToolMenu" onclick="alternarMenuHerramientasIFC(event)" title="Menú de Herramientas 3D" style="height: 36px; padding: 0 12px; font-size: 0.8rem; background: #0f172a; color: #38bdf8; border: 1px solid #38bdf8; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 6px; font-weight: bold; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+                            🛠️ <span>Herramientas ▾</span>
+                        </button>
+
+                        <button type="button" id="btnBandejaCapturas" onclick="event.stopPropagation(); abrirModalCapturasConsolidadas();" title="Bandeja de incidencias y capturas" style="height: 36px; padding: 0 14px; font-size: 0.78rem; font-weight: bold; background: var(--accent-copper, #d97706); color: #fff; border: 1px solid rgba(255,255,255,0.4); border-radius: 20px; cursor: pointer; display: none; align-items: center; gap: 6px; box-shadow: 0 4px 14px rgba(0,0,0,0.6);">
+                            📷 Observación ( <span id="trayCounter">0</span> )
+                        </button>
+
+                        <button type="button" onclick="ajustarVistaModeloIFC()" title="Ajustar y Centrar Modelo (Zoom Extensión)" style="width: 36px; height: 36px; font-size: 0.95rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.4);">
+                            🎯
+                        </button>
+                    </div>
+
+                    <!-- MENÚ DESPLEGABLE CATEGORIZADO POR FAMILIAS (ESTILO APLICACIÓN ESCRITORIO) -->
+                    <div id="ifcToolsDropdownMenu" style="position: absolute; top: 54px; right: 12px; z-index: 55; display: none; background: rgba(15, 23, 42, 0.98); border: 1px solid #334155; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.6); backdrop-filter: blur(8px); width: 230px; padding: 6px 0; user-select: none;">
+                        
+                        <!-- Categoría Vistas -->
+                        <div style="padding: 4px 12px; font-size: 0.68rem; font-weight: bold; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Vistas y Proyección</div>
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px 10px;">
+                            <button type="button" class="btn-subtool" onclick="ejecutarHerramientaIFC('ISO')" title="Isométrica">🧭 Iso</button>
+                            <button type="button" class="btn-subtool" onclick="ejecutarHerramientaIFC('FRONTAL')" title="Frontal">🏢 Front</button>
+                            <button type="button" class="btn-subtool" onclick="ejecutarHerramientaIFC('POSTERIOR')" title="Posterior">🏠 Post</button>
+                            <button type="button" class="btn-subtool" onclick="ejecutarHerramientaIFC('LATERAL_IZQ')" title="Izquierda">📐 Izq</button>
+                            <button type="button" class="btn-subtool" onclick="ejecutarHerramientaIFC('LATERAL_DER')" title="Derecha">📐 Der</button>
+                            <button type="button" class="btn-subtool" onclick="ejecutarHerramientaIFC('PLANTA')" title="Planta">🗺️ Plan</button>
+                        </div>
+
+                        <div style="height: 1px; background: #334155; margin: 6px 0;"></div>
+
+                        <!-- Categoría Análisis -->
+                        <div style="padding: 4px 12px; font-size: 0.68rem; font-weight: bold; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Análisis y Diagnóstico</div>
+                        <div class="menu-tool-row" onclick="ejecutarHerramientaIFC('CORTE')">
+                            <span>✂️ Caja de Sección / Cortes</span>
+                        </div>
+                        <div class="menu-tool-row" onclick="ejecutarHerramientaIFC('MEDIR')">
+                            <span>📏 Medir Distancias</span>
+                        </div>
+                        <div class="menu-tool-row" onclick="ejecutarHerramientaIFC('NIVELES')">
+                            <span>🏢 Árbol de Pisos / Niveles</span>
+                        </div>
+
+                        <div style="height: 1px; background: #334155; margin: 6px 0;"></div>
+
+                        <!-- Categoría Entorno y Navegación -->
+                        <div style="padding: 4px 12px; font-size: 0.68rem; font-weight: bold; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Entorno y Recorrido</div>
+                        <div class="menu-tool-row" onclick="ejecutarHerramientaIFC('CAMINAR')">
+                            <span>🚶 Modo Caminar en Primera Persona</span>
+                        </div>
+                        <div class="menu-tool-row" onclick="ejecutarHerramientaIFC('LINEAS')">
+                            <span>🖋️ Alternar Aristas (Bordes)</span>
+                        </div>
+                        <div class="menu-tool-row" onclick="ejecutarHerramientaIFC('REJILLA')">
+                            <span>▦ Alternar Cuadrícula</span>
+                        </div>
+                    </div>
+
+                    <!-- BARRA DE GUÍA CONTEXTUAL INFERIOR (ESTADO E INSTRUCCIONES) -->
+                    <div id="ifcContextGuideBar" style="position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 25; background: rgba(15, 23, 42, 0.94); border: 1px solid #334155; padding: 6px 16px; border-radius: 20px; font-size: 0.74rem; color: #cbd5e1; display: none; align-items: center; gap: 12px; backdrop-filter: blur(6px); box-shadow: 0 4px 14px rgba(0,0,0,0.5); white-space: nowrap;">
+                        <span id="ifcGuideText">Instrucción activa...</span>
+                        <button type="button" id="btnCancelActiveTool" onclick="cancelarHerramientaActiva()" style="background: #ef4444; color: #fff; border: none; border-radius: 12px; padding: 2px 8px; font-size: 0.68rem; cursor: pointer; font-weight: bold;">✕ Salir</button>
+                    </div>
 
                     <!-- Menú Contextual Personalizado BIM (Clic Derecho) -->
                     <div id="ifcContextMenu">
@@ -728,12 +766,6 @@
                         <div class="ifc-context-separator"></div>
                         <div class="ifc-context-item" id="menuOcultarElemento" onclick="ocultarElementoSeleccionadoIFC()">👁️ Ocultar Elemento</div>
                         <div class="ifc-context-item" onclick="restablecerVisibilidadIFC()">🔄 Mostrar Todo</div>
-                    </div>
-
-                    <!-- Indicador flotante modo caminar con botón de salida -->
-                    <div id="walkPcHint" class="walk-pc-hint">
-                        <span id="walkStatusLabel">🚶 <strong>Modo Caminar:</strong> Usa <strong>W, A, S, D</strong> para moverte y arrastra el ratón para mirar</span>
-                        <button type="button" class="btn-exit-walk" onclick="desactivarModoCaminar()">✕ Salir</button>
                     </div>
 
                     <!-- Panel Flotante de Árbol de Niveles IFC -->
@@ -745,25 +777,6 @@
                         <div id="ifcLevelsList" class="ifc-levels-list">
                             <small style="color: #94a3b8;">Cargando niveles del archivo...</small>
                         </div>
-                    </div>
-
-                    <!-- Botonera de Orientación y Vistas -->
-                    <div id="ifcNavToolbar" style="position: absolute; top: 12px; right: 12px; z-index: 20; display: flex; flex-direction: column; gap: 5px; background: rgba(15, 23, 42, 0.88); padding: 7px; border-radius: 8px; backdrop-filter: blur(6px); border: 1px solid rgba(255, 255, 255, 0.15); box-shadow: 0 4px 14px rgba(0,0,0,0.4);">
-                        <button type="button" onclick="cambiarVistaIFC('ISO')" title="Vista Isométrica 3D" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">🧭 <span class="btn-nav-text">Iso</span></button>
-                        <button type="button" onclick="cambiarVistaIFC('FRONTAL')" title="Fachada Frontal" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">🏢 <span class="btn-nav-text">Frontal</span></button>
-                        <button type="button" onclick="cambiarVistaIFC('POSTERIOR')" title="Fachada Posterior" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">🏠 <span class="btn-nav-text">Posterior</span></button>
-                        <button type="button" onclick="cambiarVistaIFC('LATERAL_IZQ')" title="Costado Izquierdo" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">📐 <span class="btn-nav-text">Izq</span></button>
-                        <button type="button" onclick="cambiarVistaIFC('LATERAL_DER')" title="Costado Derecho" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">📐 <span class="btn-nav-text">Der</span></button>
-                        <button type="button" onclick="cambiarVistaIFC('PLANTA')" title="Vista Aérea / Cubierta" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">🗺️ <span class="btn-nav-text">Planta</span></button>
-                        <button type="button" onclick="cambiarVistaIFC('INFERIOR')" title="Vista Inferior" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">⬇️ <span class="btn-nav-text">Inferior</span></button>
-                        <div style="height: 1px; background: rgba(255, 255, 255, 0.2); margin: 2px 0;"></div>
-                        <button type="button" onclick="ajustarVistaModeloIFC()" title="Ajustar y Centrar Modelo" style="padding: 5px 8px; font-size: 0.72rem; background: var(--accent-copper, #d97706); color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">🎯 <span class="btn-nav-text">Centrar</span></button>
-                        <button type="button" id="btnToggleLevels" onclick="alternarPanelNivelesIFC()" title="Árbol de niveles y pisos del edificio" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #10b981; border: 1px solid #10b981; border-radius: 4px; cursor: pointer; font-weight: bold;">📚 <span class="btn-nav-text">Niveles</span></button>
-                        <button type="button" onclick="alternarCuadriculaIFC()" title="Mostrar u Ocultar Rejilla" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #cbd5e1; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">▦ <span class="btn-nav-text">Rejilla</span></button>
-                        <button type="button" id="btnToggleEdges" onclick="alternarAristasIFC()" title="Mostrar u Ocultar Líneas de Arista" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #cbd5e1; border: 1px solid #475569; border-radius: 4px; cursor: pointer;">🖋️ <span class="btn-nav-text">Líneas</span></button>
-                        <button type="button" id="btnToggleSectionBox" onclick="alternarPanelCorteIFC()" title="Caja de Sección y Cortes 3D" style="padding: 5px 8px; font-size: 0.72rem; background: #0284c7; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">✂️ <span class="btn-nav-text">Corte</span></button>
-                        <button type="button" id="btnToggleMeasure" onclick="alternarModoMedicionIFC()" title="Medición de Distancias Punto a Punto" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #38bdf8; border: 1px solid #38bdf8; border-radius: 4px; cursor: pointer; font-weight: bold;">📏 <span class="btn-nav-text">Medir</span></button>
-                        <button type="button" id="btnToggleWalk" onclick="activarSeleccionLosaCaminar()" title="Caminar sobre losa o forjado específico" style="padding: 5px 8px; font-size: 0.72rem; background: #1e293b; color: #10b981; border: 1px solid #10b981; border-radius: 4px; cursor: pointer; font-weight: bold;">🚶 <span class="btn-nav-text">Caminar</span></button>
                     </div>
 
                     <!-- Panel Flotante de Herramienta de Sección / Corte (Clipping) -->
