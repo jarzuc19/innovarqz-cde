@@ -1,13 +1,16 @@
 /* ==============================================================================
-   VARIABLES GENERALES Y BASE CDE INNOVARQZ
+   VARIABLES GENERALES Y BASE CDE INNOVARQZ (VERSIÓN 2.0)
    ============================================================================== */
 :root {
     --bg-dark: #0b1120;
     --card-bg: #1e293b;
     --card-border: #334155;
     --accent-copper: #d97706;
+    --accent-copper-hover: #b45309;
     --accent-blue: #38bdf8;
+    --accent-blue-hover: #0284c7;
     --accent-green: #10b981;
+    --accent-green-hover: #059669;
     --accent-red: #ef4444;
     --text-main: #f8fafc;
     --text-muted: #94a3b8;
@@ -99,12 +102,13 @@ body {
     font-size: 0.82rem;
     cursor: pointer;
     font-weight: 600;
-    transition: opacity 0.2s;
+    transition: background 0.2s, opacity 0.2s;
     white-space: nowrap;
 }
 
 .btn-primary:hover {
-    opacity: 0.9;
+    background: var(--accent-copper-hover);
+    opacity: 0.95;
 }
 
 .btn-secondary {
@@ -115,13 +119,14 @@ body {
     padding: 7px 12px;
     font-size: 0.82rem;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
     white-space: nowrap;
 }
 
 .btn-secondary:hover {
     background: #475569;
     color: #fff;
+    border-color: #64748b;
 }
 
 /* CAMPOS DE FORMULARIO */
@@ -279,6 +284,7 @@ input:focus, select:focus, textarea:focus {
     font-weight: 600;
     white-space: nowrap;
     flex-shrink: 0;
+    transition: all 0.2s ease-in-out;
 }
 
 .tab-btn.active {
@@ -522,6 +528,12 @@ tr:hover {
     justify-content: center;
     align-items: center;
     box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+    transition: background 0.15s, transform 0.15s;
+}
+
+.viewer-floating-zoom button:hover {
+    background: #334155;
+    transform: scale(1.05);
 }
 
 .viewer-loading-banner {
@@ -536,6 +548,155 @@ tr:hover {
     color: #fff;
     text-align: center;
     z-index: 30;
+}
+
+/* ==============================================================================
+   COMPONENTES EXCLUSIVOS VISOR 3D (VERSIÓN 2.0)
+   ============================================================================== */
+/* Botonera superior de 3 accesos fijos */
+#ifcMainToolbar {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+#btnToggleToolMenu {
+    height: 36px;
+    padding: 0 12px;
+    font-size: 0.8rem;
+    background: #0f172a;
+    color: var(--accent-blue);
+    border: 1px solid var(--accent-blue);
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: bold;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    transition: background 0.15s, transform 0.15s;
+}
+
+#btnToggleToolMenu:hover {
+    background: #1e293b;
+    transform: translateY(-1px);
+}
+
+#btnBandejaCapturas {
+    height: 36px;
+    padding: 0 14px;
+    font-size: 0.78rem;
+    font-weight: bold;
+    background: var(--accent-copper);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 20px;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+    transition: transform 0.15s, background 0.2s;
+}
+
+#btnBandejaCapturas:hover {
+    transform: scale(1.05);
+    background: var(--accent-copper-hover);
+}
+
+/* Menú contextual categorizado de herramientas */
+#ifcToolsDropdownMenu {
+    position: absolute;
+    top: 54px;
+    right: 12px;
+    z-index: 55;
+    display: none;
+    background: rgba(15, 23, 42, 0.98);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(10px);
+    width: 230px;
+    padding: 6px 0;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.btn-subtool {
+    background: #1e293b;
+    color: var(--text-main);
+    border: 1px solid var(--card-border);
+    border-radius: 4px;
+    padding: 5px 2px;
+    font-size: 0.68rem;
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.btn-subtool:hover {
+    background: #334155;
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+}
+
+.menu-tool-row {
+    padding: 7px 14px;
+    font-size: 0.74rem;
+    color: #e2e8f0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.15s, color 0.15s;
+}
+
+.menu-tool-row:hover {
+    background: rgba(56, 189, 248, 0.12);
+    color: var(--accent-blue);
+}
+
+/* Barra inferior contextual interactiva */
+#ifcContextGuideBar {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 25;
+    background: rgba(15, 23, 42, 0.94);
+    border: 1px solid var(--card-border);
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 0.74rem;
+    color: #cbd5e1;
+    display: none;
+    align-items: center;
+    gap: 12px;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+    white-space: nowrap;
+}
+
+#btnCancelActiveTool {
+    background: var(--accent-red);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    padding: 2px 8px;
+    font-size: 0.68rem;
+    cursor: pointer;
+    font-weight: bold;
+    transition: opacity 0.15s;
+}
+
+#btnCancelActiveTool:hover {
+    opacity: 0.85;
 }
 
 /* ==============================================================================
@@ -696,5 +857,34 @@ tr:hover {
 
     .cde-footer-sep {
         display: none;
+    }
+
+    /* Adaptaciones del visor en pantallas estrechas */
+    #ifcMainToolbar {
+        top: 8px;
+        right: 8px;
+        gap: 5px;
+    }
+
+    #btnToggleToolMenu span {
+        display: none;
+    }
+
+    #btnToggleToolMenu {
+        padding: 0 8px;
+    }
+
+    #ifcToolsDropdownMenu {
+        top: 48px;
+        right: 8px;
+        width: calc(100vw - 16px);
+        max-width: 250px;
+    }
+
+    #ifcContextGuideBar {
+        bottom: 8px;
+        padding: 5px 12px;
+        font-size: 0.68rem;
+        max-width: calc(100vw - 20px);
     }
 }
