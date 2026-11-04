@@ -504,17 +504,17 @@
         <!-- CAPÍTULO 1 -->
         <section class="manual-chapter" id="intro">
             <h2>1. Introducción y Objeto</h2>
-            <p>El Entorno Común de Datos (CDE) de <strong>InnovArqZ Soluciones Integrales S.A.S.</strong> formaliza y centraliza la gestión, revisión, auditoría y entrega de documentación técnica multidisciplinar en proyectos de consultoría BIM/CIM, arquitectura e ingeniería civil[cite: 17].</p>
-            <p>Constituye la <strong>"Única Fuente de Verdad"</strong> del proyecto, erradicando cadenas informales de mensajería y correos dispersos, al tiempo que garantiza el cumplimiento binario del estándar internacional <strong>ISO 19650-2</strong>[cite: 17].</p>
+            <p>El Entorno Común de Datos (CDE) de <strong>InnovArqZ Soluciones Integrales S.A.S.</strong> formaliza y centraliza la gestión, revisión, auditoría y entrega de documentación técnica multidisciplinar en proyectos de consultoría BIM/CIM, arquitectura e ingeniería civil.</p>
+            <p>Constituye la <strong>"Única Fuente de Verdad"</strong> del proyecto, erradicando cadenas informales de mensajería y correos dispersos, al tiempo que garantiza el cumplimiento binario del estándar internacional <strong>ISO 19650-2</strong>.</p>
             <div class="card-tip">
-                <strong>Plataforma Web Nativa 2.0:</strong> Diseñada como una Single Page Application (SPA) de alto rendimiento, optimizada para operar sin dependencias de instalación en navegadores modernos en estaciones de trabajo fijas, tabletas y teléfonos inteligentes[cite: 17].
+                <strong>Plataforma Web Nativa 2.0:</strong> Diseñada como una Single Page Application (SPA) de alto rendimiento, optimizada para operar sin dependencias de instalación en navegadores modernos en estaciones de trabajo fijas, tabletas y teléfonos inteligentes.
             </div>
         </section>
 
         <!-- CAPÍTULO 2 -->
         <section class="manual-chapter" id="roles">
             <h2>2. Matriz de Roles y Responsabilidades</h2>
-            <p>La seguridad y trazabilidad del CDE se basa en el principio de menor privilegio necesario, condicionando la visibilidad de carpetas y acciones según el cargo del usuario[cite: 17]:</p>
+            <p>La seguridad y trazabilidad del CDE se basa en el principio de menor privilegio necesario, condicionando la visibilidad de carpetas y acciones según el cargo del usuario:</p>
 
             <div class="table-responsive">
                 <table class="manual-table">
@@ -529,22 +529,22 @@
                         <tr>
                             <td><span class="badge-role badge-super">SuperAdmin / BIM Manager</span></td>
                             <td><code>01_WIP</code>, <code>02_SHARED</code>, <code>03_PUBLISHED</code>, <code>04_ARCHIVED</code></td>
-                            <td>Control total de proyectos, auditoría de no conformidades, asignación de permisos, publicación administrativa directa y retiro de entregables hacia ARCHIVED[cite: 17].</td>
+                            <td>Control total de proyectos, auditoría de no conformidades, asignación de permisos, publicación administrativa directa y retiro de entregables hacia ARCHIVED.</td>
                         </tr>
                         <tr>
                             <td><span class="badge-role badge-modelador">Modelador BIM</span></td>
                             <td><code>01_WIP</code> (Edición/Carga) + <code>02_SHARED</code> (Consulta/Referencia)</td>
-                            <td>Elaboración y carga de modelos nativos (RVT, PLN, DWG), vinculación de disciplinas coordinadas y promoción técnica por lote hacia SHARED[cite: 17].</td>
+                            <td>Elaboración y carga de modelos nativos (RVT, PLN, DWG), vinculación de disciplinas coordinadas y promoción técnica por lote hacia SHARED.</td>
                         </tr>
                         <tr>
                             <td><span class="badge-role badge-revisor">Revisor / Coordinador</span></td>
                             <td><code>02_SHARED</code> (Revisión) + <code>03_PUBLISHED</code> (Publicación)</td>
-                            <td>Cruce multidisciplinar, detección de interferencias, emisión de instrucciones técnicas, publicación formal a PUBLISHED y retiro preventivo de entregables obsoletos hacia ARCHIVED[cite: 17].</td>
+                            <td>Cruce multidisciplinar, detección de interferencias, emisión de instrucciones técnicas, publicación formal a PUBLISHED y retiro preventivo de entregables obsoletos hacia ARCHIVED.</td>
                         </tr>
                         <tr>
                             <td><span class="badge-role badge-cliente">Cliente / Supervisión</span></td>
                             <td><code>03_PUBLISHED</code> (Consulta y Aprobación)</td>
-                            <td>Inspección de entregables contractuales congelados, formulación de notas de ajuste y firma digital de Actas de Recibo en PDF[cite: 17].</td>
+                            <td>Inspección de entregables contractuales congelados, formulación de notas de ajuste y firma digital de Actas de Recibo en PDF.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -554,7 +554,7 @@
         <!-- CAPÍTULO 3 -->
         <section class="manual-chapter" id="cde-cycle">
             <h2>3. Ciclo de Información ISO 19650</h2>
-            <p>Toda la información producida transita por un pipeline progresivo de madurez que impide el uso accidental de documentos desactualizados[cite: 17]:</p>
+            <p>Toda la información producida transita por un pipeline progresivo de madurez que impide el uso accidental de documentos desactualizados:</p>
 
             <div class="pipeline-flow">
                 <div class="flow-step step-wip">
@@ -583,7 +583,7 @@
             </div>
 
             <h3>3.1. Archivado Histórico Inteligente (Predecesores)</h3>
-            <p>Siempre que se incorpora una nueva versión que coincide en sus primeros 5 campos de nomenclatura y consecutivo con un archivo existente, el servidor ejecuta una sustitución no destructiva[cite: 17]:</p>
+            <p>Siempre que se incorpora una nueva versión que coincide en sus primeros 5 campos de nomenclatura y consecutivo con un archivo existente, el servidor ejecuta una sustitución no destructiva:</p>
 
             <div class="diagram-card" style="margin: 20px 0; align-items: stretch;">
                 <h4>Mecanismo de Sustitución Segura de Versiones</h4>
@@ -602,16 +602,16 @@
                 </svg>
             </div>
             <ul>
-                <li>El archivo anterior se traslada automáticamente a la carpeta <code>04_ARCHIVED</code>[cite: 17].</li>
-                <li>Se le agrega el sufijo numérico inmutable <code>_OLD_v[N]</code>, preservando el histórico completo sin riesgo de sobreescritura accidental[cite: 17].</li>
-                <li>El nuevo archivo toma de inmediato la posición activa dentro de la carpeta correspondiente[cite: 17].</li>
+                <li>El archivo anterior se traslada automáticamente a la carpeta <code>04_ARCHIVED</code>.</li>
+                <li>Se le agrega el sufijo numérico inmutable <code>_OLD_v[N]</code>, preservando el histórico completo sin riesgo de sobreescritura accidental.</li>
+                <li>El nuevo archivo toma de inmediato la posición activa dentro de la carpeta correspondiente.</li>
             </ul>
         </section>
 
         <!-- CAPÍTULO 4 -->
         <section class="manual-chapter" id="nomenclatura">
             <h2>4. Codificación Oficial de Entregables (6 Campos)</h2>
-            <p>La denominación de todo entregable debe respetar de forma estricta la concordancia internacional de 6 campos delimitados exclusivamente por guiones bajos[cite: 17]:</p>
+            <p>La denominación de todo entregable debe respetar de forma estricta la concordancia internacional de 6 campos delimitados exclusivamente por guiones bajos:</p>
 
             <div class="diagram-card" style="margin: 20px 0; align-items: stretch;">
                 <h4>Estructura Sintáctica Internacional (ISO 19650-2)</h4>
@@ -667,7 +667,7 @@
             </div>
 
             <h3>4.1. Campo 3: ZONA / NIVEL (Estandarización Internacional)</h3>
-            <p>Para erradicar colisiones entre Bloques (ej: <code>B01</code>) y Sótanos, la versión 2.0 adopta el código <code>SB</code> (Sub-Basement / Subterráneo) y habilita campos dinámicos para plantas superiores[cite: 17]:</p>
+            <p>Para erradicar colisiones entre Bloques (ej: <code>B01</code>) y Sótanos, la versión 2.0 adopta el código <code>SB</code> (Sub-Basement / Subterráneo) y habilita campos dinámicos para plantas superiores:</p>
             <div class="table-responsive">
                 <table class="manual-table">
                     <thead>
@@ -681,7 +681,7 @@
                         <tr>
                             <td><code>ZZ</code></td>
                             <td>Todo el Edificio / General</td>
-                            <td>Modelos federados generales, memorias descriptivas, actas y contratos[cite: 17].</td>
+                            <td>Modelos federados generales, memorias descriptivas, actas y contratos.</td>
                         </tr>
                         <tr>
                             <td><code>SB1</code></td>
@@ -696,17 +696,17 @@
                         <tr>
                             <td><code>01, 02...</code></td>
                             <td>Pisos sobre Rasante</td>
-                            <td>Piso 1 (Acceso), Piso 2, 3, etc., codificados a 2 dígitos[cite: 17].</td>
+                            <td>Piso 1 (Acceso), Piso 2, 3, etc., codificados a 2 dígitos.</td>
                         </tr>
                         <tr>
                             <td><code>RF</code></td>
                             <td>Cubierta / Techo</td>
-                            <td>Estructura de cerramiento superior e impermeabilizaciones[cite: 17].</td>
+                            <td>Estructura de cerramiento superior e impermeabilizaciones.</td>
                         </tr>
                         <tr>
                             <td><code>EXT</code></td>
                             <td>Exteriores / Urbanismo</td>
-                            <td>Vías de acceso, redes exteriores y paisajismo[cite: 17].</td>
+                            <td>Vías de acceso, redes exteriores y paisajismo.</td>
                         </tr>
                         <tr>
                             <td><code>+ OTRO</code></td>
@@ -732,63 +732,63 @@
                         <tr>
                             <td><code>M3</code></td>
                             <td>Modelo 3D Paramétrico</td>
-                            <td>Modelos tridimensionales de diseño, coordinación o récord[cite: 17].</td>
-                            <td>.ifc, .rvt, .pln, .nwc, .nwd[cite: 17]</td>
+                            <td>Modelos tridimensionales de diseño, coordinación o récord.</td>
+                            <td>.ifc, .rvt, .pln, .nwc, .nwd</td>
                         </tr>
                         <tr>
                             <td><code>PL</code></td>
                             <td>Plano 2D Coordinado</td>
-                            <td>Planimetría formal, láminas técnicas y planos de presentación[cite: 17].</td>
-                            <td>.dwg, .pdf, .dxf, .plt[cite: 17]</td>
+                            <td>Planimetría formal, láminas técnicas y planos de presentación.</td>
+                            <td>.dwg, .pdf, .dxf, .plt</td>
                         </tr>
                         <tr>
                             <td><code>DR</code></td>
                             <td>Dibujo / Detalle 2D</td>
-                            <td>Detalles constructivos singulares, esquemas técnicos auxiliares[cite: 17].</td>
-                            <td>.dwg, .pdf, .dxf[cite: 17]</td>
+                            <td>Detalles constructivos singulares, esquemas técnicos auxiliares.</td>
+                            <td>.dwg, .pdf, .dxf</td>
                         </tr>
                         <tr>
                             <td><code>IM</code></td>
                             <td>Imagen / Render Estático</td>
-                            <td>Perspectivas hiperrealistas y vistas 3D fijas en formato gráfico[cite: 17].</td>
-                            <td>.png, .jpg, .jpeg, .webp, .tiff[cite: 17]</td>
+                            <td>Perspectivas hiperrealistas y vistas 3D fijas en formato gráfico.</td>
+                            <td>.png, .jpg, .jpeg, .webp, .tiff</td>
                         </tr>
                         <tr>
                             <td><code>VI</code></td>
                             <td>Video / Animación</td>
-                            <td>Recorridos virtuales, animaciones 3D o fases constructivas 4D[cite: 17].</td>
-                            <td>.mp4, .mov, .webm, .mkv, .avi[cite: 17]</td>
+                            <td>Recorridos virtuales, animaciones 3D o fases constructivas 4D.</td>
+                            <td>.mp4, .mov, .webm, .mkv, .avi</td>
                         </tr>
                         <tr>
                             <td><code>INF</code></td>
                             <td>Informe Técnico</td>
-                            <td>Reportes de colisiones, catálogos o informes de observación 3D[cite: 17].</td>
-                            <td>.pdf, .xlsx, .docx, .html[cite: 17]</td>
+                            <td>Reportes de colisiones, catálogos o informes de observación 3D.</td>
+                            <td>.pdf, .xlsx, .docx, .html</td>
                         </tr>
                         <tr>
                             <td><code>MEM</code></td>
                             <td>Memoria de Cálculo</td>
-                            <td>Memorias de cálculo estructural, memorias técnicas MEP[cite: 17].</td>
-                            <td>.pdf, .docx, .xlsx[cite: 17]</td>
+                            <td>Memorias de cálculo estructural, memorias técnicas MEP.</td>
+                            <td>.pdf, .docx, .xlsx</td>
                         </tr>
                         <tr>
                             <td><code>ACT</code></td>
                             <td>Acta Administrativa</td>
-                            <td>Actas de reunión, recibo a satisfacción y cierre de hitos[cite: 17].</td>
-                            <td>.pdf[cite: 17]</td>
+                            <td>Actas de reunión, recibo a satisfacción y cierre de hitos.</td>
+                            <td>.pdf</td>
                         </tr>
                         <tr>
                             <td><code>CON</code></td>
                             <td>Documento Legal</td>
-                            <td>Contratos de consultoría, pólizas, acuerdos de confidencialidad[cite: 17].</td>
-                            <td>.pdf[cite: 17]</td>
+                            <td>Contratos de consultoría, pólizas, acuerdos de confidencialidad.</td>
+                            <td>.pdf</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
 
             <h3>4.3. Campo 6: ESTADO & CONSECUTIVO COMPUESTO (Suitability)</h3>
-            <p>Todo entregable debe incorporar su código de aptitud junto con un número de correlativo con guion para garantizar la diferenciación de piezas documentales[cite: 17]:</p>
+            <p>Todo entregable debe incorporar su código de aptitud junto con un número de correlativo con guion para garantizar la diferenciación de piezas documentales:</p>
             <div class="table-responsive">
                 <table class="manual-table">
                     <thead>
@@ -804,37 +804,37 @@
                             <td><code>S0-01</code></td>
                             <td>Borrador de Trabajo</td>
                             <td>01_WIP</td>
-                            <td>Documento preliminar en producción interna[cite: 17].</td>
+                            <td>Documento preliminar en producción interna.</td>
                         </tr>
                         <tr>
                             <td><code>S1-01</code></td>
                             <td>Apto para Coordinación</td>
                             <td>02_SHARED</td>
-                            <td>Emitido para revisión multidisciplinar y detección de colisiones[cite: 17].</td>
+                            <td>Emitido para revisión multidisciplinar y detección de colisiones.</td>
                         </tr>
                         <tr>
                             <td><code>S2-01</code></td>
                             <td>Apto para Información</td>
                             <td>02_SHARED</td>
-                            <td>Compartido con consultores como marco referencial no contractual[cite: 17].</td>
+                            <td>Compartido con consultores como marco referencial no contractual.</td>
                         </tr>
                         <tr>
                             <td><code>S3-01</code></td>
                             <td>Apto para Revisión</td>
                             <td>02_SHARED</td>
-                            <td>Emitido para comentarios formales del Revisor o Interventoría[cite: 17].</td>
+                            <td>Emitido para comentarios formales del Revisor o Interventoría.</td>
                         </tr>
                         <tr>
                             <td><code>A1-01</code></td>
                             <td>Aprobado Contractual</td>
                             <td>03_PUBLISHED</td>
-                            <td>Documento oficial autorizado. Válido para construcción o cotización[cite: 17].</td>
+                            <td>Documento oficial autorizado. Válido para construcción o cotización.</td>
                         </tr>
                         <tr>
                             <td><code>A2-01</code></td>
                             <td>Aprobado con Observación</td>
                             <td>03_PUBLISHED</td>
-                            <td>Visto bueno condicionado a ajustes menores en liquidación[cite: 17].</td>
+                            <td>Visto bueno condicionado a ajustes menores en liquidación.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -844,7 +844,7 @@
         <!-- CAPÍTULO 5 -->
         <section class="manual-chapter" id="concordancia">
             <h2>5. Matriz de Concordancia Obligatoria (Tipo vs. Extensión)</h2>
-            <p>El CDE valida la compatibilidad estricta entre la naturaleza declarada del entregable y su formato físico. Toda discrepancia técnica bloquea el ingreso del archivo[cite: 17]:</p>
+            <p>El CDE valida la compatibilidad estricta entre la naturaleza declarada del entregable y su formato físico. Toda discrepancia técnica bloquea el ingreso del archivo:</p>
 
             <div class="table-responsive">
                 <table class="manual-table">
@@ -859,32 +859,32 @@
                         <tr>
                             <td><code>M3 (Modelo 3D)</code></td>
                             <td>.ifc, .rvt, .pln, .nwc, .nwd</td>
-                            <td>Asignar .dwg o .pdf a un modelo tridimensional[cite: 17].</td>
+                            <td>Asignar .dwg o .pdf a un modelo tridimensional.</td>
                         </tr>
                         <tr>
                             <td><code>PL / DR (Planos/Detalles)</code></td>
                             <td>.dwg, .pdf, .dxf, .plt</td>
-                            <td>Intentar subir videos o imágenes sueltas bajo tipo PL[cite: 17].</td>
+                            <td>Intentar subir videos o imágenes sueltas bajo tipo PL.</td>
                         </tr>
                         <tr>
                             <td><code>VI (Videos / Animación)</code></td>
                             <td>.mp4, .mov, .webm, .mkv, .avi</td>
-                            <td>Registrar videos terminados en .pdf o nombrados como PL[cite: 17].</td>
+                            <td>Registrar videos terminados en .pdf o nombrados como PL.</td>
                         </tr>
                         <tr>
                             <td><code>IM (Imágenes / Renders)</code></td>
                             <td>.png, .jpg, .jpeg, .webp, .tiff</td>
-                            <td>Registrar imágenes o renders sueltos terminados en .pdf[cite: 17].</td>
+                            <td>Registrar imágenes o renders sueltos terminados en .pdf.</td>
                         </tr>
                         <tr>
                             <td><code>INF / MEM (Informes/Memorias)</code></td>
                             <td>.pdf, .xlsx, .docx, .html</td>
-                            <td>Asignar extensiones de video o modelos tridimensionales[cite: 17].</td>
+                            <td>Asignar extensiones de video o modelos tridimensionales.</td>
                         </tr>
                         <tr>
                             <td><code>ACT / CON (Actas/Contratos)</code></td>
                             <td>.pdf</td>
-                            <td>Cualquier formato que no sea lectura fija contractual firmada[cite: 17].</td>
+                            <td>Cualquier formato que no sea lectura fija contractual firmada.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -895,17 +895,17 @@
         <section class="manual-chapter" id="reglas-renders">
             <h2>6. Protocolo de Renders, Videos y Dossiers</h2>
             <ol>
-                <li><strong>Render individual suelto:</strong> Se codifica como tipo <code>IM</code> con extensiones de imagen (<code>.png</code>, <code>.jpg</code>, <code>.webp</code>)[cite: 17].</li>
-                <li><strong>Video de recorrido virtual:</strong> Se codifica como tipo <code>VI</code> con extensiones multimedia (<code>.mp4</code>, <code>.mov</code>)[cite: 17].</li>
-                <li><strong>Lámina de presentación con renders:</strong> Se codifica como tipo <code>PL</code>, disciplina <code>DIS</code> (o <code>ARQ</code>) y extensión <code>.pdf</code> (ejemplo: <code>PRY2026-004_INNO_ZZ_PL_DIS_S3-01.pdf</code>) para diferenciarlo de la planimetría constructiva general[cite: 17].</li>
-                <li><strong>Dossier o catálogo multipágina en PDF:</strong> Se codifica como tipo <code>INF</code> o <code>MEM</code> (ejemplo: <code>PRY2026-004_INNO_ZZ_INF_ARQ_S3-01.pdf</code>) para indexarse en Actas y Memorias[cite: 17].</li>
+                <li><strong>Render individual suelto:</strong> Se codifica como tipo <code>IM</code> con extensiones de imagen (<code>.png</code>, <code>.jpg</code>, <code>.webp</code>).</li>
+                <li><strong>Video de recorrido virtual:</strong> Se codifica como tipo <code>VI</code> con extensiones multimedia (<code>.mp4</code>, <code>.mov</code>).</li>
+                <li><strong>Lámina de presentación con renders:</strong> Se codifica como tipo <code>PL</code>, disciplina <code>DIS</code> (o <code>ARQ</code>) y extensión <code>.pdf</code> (ejemplo: <code>PRY2026-004_INNO_ZZ_PL_DIS_S3-01.pdf</code>) para diferenciarlo de la planimetría constructiva general.</li>
+                <li><strong>Dossier o catálogo multipágina en PDF:</strong> Se codifica como tipo <code>INF</code> o <code>MEM</code> (ejemplo: <code>PRY2026-004_INNO_ZZ_INF_ARQ_S3-01.pdf</code>) para indexarse en Actas y Memorias.</li>
             </ol>
         </section>
 
         <!-- CAPÍTULO 7 -->
         <section class="manual-chapter" id="subidas">
             <h2>7. Protocolo de Carga y Remisión Técnica por Lote</h2>
-            <p>La incorporación de documentación técnica en el CDE se ejecuta mediante un entorno integrado de <strong>nomenclatura paramétrica asistida (Poka-Yoke)</strong> y una <strong>cola de entrega técnica por lote</strong>, erradicando entradas manuales propensas a errores tipográficos[cite: 17]:</p>
+            <p>La incorporación de documentación técnica en el CDE se ejecuta mediante un entorno integrado de <strong>nomenclatura paramétrica asistida (Poka-Yoke)</strong> y una <strong>cola de entrega técnica por lote</strong>, erradicando entradas manuales propensas a errores tipográficos:</p>
 
             <div class="diagram-card" style="margin: 20px 0; align-items: stretch;">
                 <h4>Flujo Operativo de Ensamblado y Remisión por Lotes</h4>
@@ -940,16 +940,16 @@
 
             <h3>7.1. Carga Híbrida y Despacho Masivo</h3>
             <ul>
-                <li><strong>Carga Directa (&le; 15 MB):</strong> Para documentos PDF, DWG livianos y especificaciones técnicas[cite: 17].</li>
-                <li><strong>Enlace Google Drive (&gt; 15 MB):</strong> Para modelos BIM pesados (RVT, IFC, PLN)[cite: 17]. El servidor valida que el enlace remoto coincida estrictamente con la extensión declarada[cite: 17].</li>
-                <li><strong>Despacho Consolidado:</strong> Al completar el paquete, el sistema sube todos los entregables juntos y despacha <strong>una sola notificación estructurada por correo</strong> a todo el equipo de trabajo[cite: 17].</li>
+                <li><strong>Carga Directa (&le; 15 MB):</strong> Para documentos PDF, DWG livianos y especificaciones técnicas.</li>
+                <li><strong>Enlace Google Drive (&gt; 15 MB):</strong> Para modelos BIM pesados (RVT, IFC, PLN). El servidor valida que el enlace remoto coincida estrictamente con la extensión declarada.</li>
+                <li><strong>Despacho Consolidado:</strong> Al completar el paquete, el sistema sube todos los entregables juntos y despacha <strong>una sola notificación estructurada por correo</strong> a todo el equipo de trabajo.</li>
             </ul>
         </section>
 
         <!-- CAPÍTULO 8 -->
         <section class="manual-chapter" id="interaccion-mouse">
             <h2>8. Diagramas de Interacción (Mouse y Controles 3D)</h2>
-            <p>El visor 3D implementa un esquema ergonómico de navegación adaptado a entornos CAD/BIM[cite: 17]:</p>
+            <p>El visor 3D implementa un esquema ergonómico de navegación adaptado a entornos CAD/BIM:</p>
 
             <div class="diagram-container">
                 <div class="diagram-card">
@@ -964,7 +964,7 @@
                         <text x="145" y="45" fill="#d97706" font-size="9" font-weight="bold">Menú Contextual</text>
                         <text x="90" y="145" fill="#10b981" font-size="9" text-anchor="middle">Scroll = Zoom | Clic Rueda = Paneo</text>
                     </svg>
-                    <p><strong>Shift + Clic Central:</strong> Órbita libre tridimensional en torno al centroide del modelo[cite: 17].</p>
+                    <p><strong>Shift + Clic Central:</strong> Órbita libre tridimensional en torno al centroide del modelo.</p>
                 </div>
 
                 <div class="diagram-card">
@@ -980,7 +980,7 @@
                         <text x="135" y="90" fill="#38bdf8" font-size="16" font-weight="bold" text-anchor="middle">D</text>
                         <text x="90" y="130" fill="#cbd5e1" font-size="9" text-anchor="middle">W/S: Avance • A/D: Laterales</text>
                     </svg>
-                    <p>En tabletas y teléfonos se activa de forma automática el D-Pad táctil virtual[cite: 17].</p>
+                    <p>En tabletas y teléfonos se activa de forma automática el D-Pad táctil virtual.</p>
                 </div>
             </div>
         </section>
@@ -988,18 +988,18 @@
         <!-- CAPÍTULO 9 -->
         <section class="manual-chapter" id="visor-bim">
             <h2>9. Visor BIM 3D y Menú de Herramientas (Versión 2.0)</h2>
-            <p>La Versión 2.0 del visor OpenBIM presenta una interfaz minimalista de **3 accesos principales** en la esquina superior derecha, evitando la saturación del espacio gráfico[cite: 17]:</p>
+            <p>La Versión 2.0 del visor OpenBIM presenta una interfaz minimalista de **3 accesos principales** en la esquina superior derecha, evitando la saturación del espacio gráfico:</p>
 
             <ul>
-                <li><strong>🛠️ Herramientas ▾:</strong> Despliega un menú en cascada tipo aplicación de escritorio con 3 familias de utilidades[cite: 17]:
+                <li><strong>🛠️ Herramientas ▾:</strong> Despliega un menú en cascada tipo aplicación de escritorio con 3 familias de utilidades:
                     <ul>
-                        <li><em>Vistas y Proyección:</em> Acceso directo a vistas ortogonales fijas (Isométrica, Frontal, Posterior, Lateral Izquierda, Lateral Derecha y Planta)[cite: 17].</li>
-                        <li><em>Análisis y Diagnóstico:</em> Caja de Sección (Cortes 3D), Herramienta de Medición y Árbol de Pisos/Niveles BIM[cite: 17].</li>
-                        <li><em>Entorno y Recorrido:</em> Modo Caminar en Primera Persona, alternancia de Aristas/Bordes y Cuadrícula de referencia[cite: 17].</li>
+                        <li><em>Vistas y Proyección:</em> Acceso directo a vistas ortogonales fijas (Isométrica, Frontal, Posterior, Lateral Izquierda, Lateral Derecha y Planta).</li>
+                        <li><em>Análisis y Diagnóstico:</em> Caja de Sección (Cortes 3D), Herramienta de Medición y Árbol de Pisos/Niveles BIM.</li>
+                        <li><em>Entorno y Recorrido:</em> Modo Caminar en Primera Persona, alternancia de Aristas/Bordes y Cuadrícula de referencia.</li>
                     </ul>
                 </li>
                 <li><strong>📸 Capturar:</strong> Botón directo para tomar capturas instantáneas de la vista actual y almacenarlas en la bandeja temporal.</li>
-                <li><strong>🎯 Centrar:</strong> Reajusta la cámara al centroide del modelo mediante un zoom de extensión automático[cite: 17].</li>
+                <li><strong>🎯 Centrar:</strong> Reajusta la cámara al centroide del modelo mediante un zoom de extensión automático.</li>
             </ul>
 
             <div class="card-tip">
@@ -1014,23 +1014,23 @@
             <h3>Cortes de Sección Limpios (WebGL Nativo)</h3>
             <p>La versión 2.0 elimina las antiguas capas oscuras superpuestas. Al activar <code>✂️ Corte</code>, el corte se calcula matemáticamente mediante caras interiores limpias (<code>DoubleSide</code>):</p>
             <ul>
-                <li><strong>Ejes Dinámicos:</strong> Permite seccionar en el plano vertical (Nivel Y), transversal (Eje X) o longitudinal (Eje Z)[cite: 17].</li>
-                <li><strong>Corte Automático por Nivel:</strong> Desde el panel de niveles, presionar <code>✂️ Cortar</code> sitúa el plano a <strong>+1.20 m</strong> exactos sobre la losa del piso elegido[cite: 17].</li>
+                <li><strong>Ejes Dinámicos:</strong> Permite seccionar en el plano vertical (Nivel Y), transversal (Eje X) o longitudinal (Eje Z).</li>
+                <li><strong>Corte Automático por Nivel:</strong> Desde el panel de niveles, presionar <code>✂️ Cortar</code> sitúa el plano a <strong>+1.20 m</strong> exactos sobre la losa del piso elegido.</li>
             </ul>
 
             <h3>Recorrido Peatonal con Memoria de Posición</h3>
-            <p>Al seleccionar <code>🚶 Caminar</code> o tocar una losa resaltada en verde, la cámara se sitúa a <strong>+1.65 m</strong> (altura de ojos humana)[cite: 17]. El motor cuenta con <strong>memoria de avatar</strong>: si sales momentáneamente a medir una distancia o revisar un corte, podrás volver a entrar exactamente en las coordenadas donde te encontrabas.</p>
+            <p>Al seleccionar <code>🚶 Caminar</code> o tocar una losa resaltada en verde, la cámara se sitúa a <strong>+1.65 m</strong> (altura de ojos humana). El motor cuenta con <strong>memoria de avatar</strong>: si sales momentáneamente a medir una distancia o revisar un corte, podrás volver a entrar exactamente en las coordenadas donde te encontrabas.</p>
         </section>
 
         <!-- CAPÍTULO 11 -->
         <section class="manual-chapter" id="capturas">
             <h2>11. Disparador de Capturas e Informes Técnicos en PDF</h2>
-            <p>El CDE 2.0 estandariza las observaciones de obra e incidencias tridimensionales, eliminando el envío de archivos de imagen sueltos[cite: 17]:</p>
+            <p>El CDE 2.0 estandariza las observaciones de obra e incidencias tridimensionales, eliminando el envío de archivos de imagen sueltos:</p>
             <ol>
-                <li>Presiona el botón <strong>"📸 Capturar"</strong> en la barra superior o haz clic derecho sobre el modelo y selecciona <em>Tomar Captura de Pantalla</em>[cite: 17].</li>
-                <li>Aparecerá el botón dinámico <strong>"📋 Observación (N)"</strong> con el contador de evidencias en bandeja[cite: 17].</li>
-                <li>Al abrir el modal, redacta el Asunto y el Detalle Técnico de la observación[cite: 17].</li>
-                <li>Al pulsar <strong>"🚀 Publicar en CDE"</strong>, el sistema compila automáticamente un <strong>Informe Técnico Oficial en formato PDF</strong> (con membrete, fecha, autor y capturas maquetadas) y lo registra en <code>02_SHARED / 03_Informes_Interferencias</code>, notificando a los involucrados vía Brevo[cite: 17].</li>
+                <li>Presiona el botón <strong>"📸 Capturar"</strong> en la barra superior o haz clic derecho sobre el modelo y selecciona <em>Tomar Captura de Pantalla</em>.</li>
+                <li>Aparecerá el botón dinámico <strong>"📋 Observación (N)"</strong> con el contador de evidencias en bandeja.</li>
+                <li>Al abrir el modal, redacta el Asunto y el Detalle Técnico de la observación.</li>
+                <li>Al pulsar <strong>"🚀 Publicar en CDE"</strong>, el sistema compila automáticamente un <strong>Informe Técnico Oficial en formato PDF</strong> (con membrete, fecha, autor y capturas maquetadas) y lo registra en <code>02_SHARED / 03_Informes_Interferencias</code>, notificando a los involucrados vía Brevo.</li>
             </ol>
         </section>
 
@@ -1066,20 +1066,20 @@
         <!-- CAPÍTULO 13 -->
         <section class="manual-chapter" id="actas">
             <h2>13. Actas Formales y Cierre de Hito</h2>
-            <p>Cuando un proyecto completa su fase en <code>03_PUBLISHED</code>, el Cliente dispone del panel de aprobación formal[cite: 17]:</p>
+            <p>Cuando un proyecto completa su fase en <code>03_PUBLISHED</code>, el Cliente dispone del panel de aprobación formal:</p>
             <div class="card-success">
-                <strong>Firma y Generación Inmutable:</strong> Al emitir el visto bueno, el sistema compila el Acta de Recibo en PDF con membrete corporativo, marcas de agua diagonales, credenciales del Director General y el listado consolidado de todos los entregables vigentes para archivo legal permanente[cite: 17].
+                <strong>Firma y Generación Inmutable:</strong> Al emitir el visto bueno, el sistema compila el Acta de Recibo en PDF con membrete corporativo, marcas de agua diagonales, credenciales del Director General y el listado consolidado de todos los entregables vigentes para archivo legal permanente.
             </div>
         </section>
 
         <!-- CAPÍTULO 14 -->
         <section class="manual-chapter" id="propiedad-intelectual">
             <h2>14. Propiedad Intelectual, Licenciamiento y Autoría</h2>
-            <p>El Entorno Común de Datos (CDE) es una plataforma tecnológica desarrollada, implementada y administrada de forma exclusiva por <strong>InnovArqZ Soluciones Integrales S.A.S.</strong> (&copy; 2026)[cite: 17].</p>
+            <p>El Entorno Común de Datos (CDE) es una plataforma tecnológica desarrollada, implementada y administrada de forma exclusiva por <strong>InnovArqZ Soluciones Integrales S.A.S.</strong> (&copy; 2026).</p>
             <ul>
-                <li><strong>Titularidad Intelectual y Metodológica:</strong> La arquitectura funcional, los módulos de automatización de nomenclatura ISO 19650-2, la gestión algorítmica de carpetas y los motores de inspección OpenBIM constituyen propiedad intelectual de InnovArqZ Soluciones Integrales S.A.S.[cite: 17]</li>
-                <li><strong>Licencia de Colaboración:</strong> El acceso suministrado a clientes, consultores externos, modeladores e interventorías constituye una autorización de uso técnico restringida a los entregables y fases estipuladas en los contratos respectivos[cite: 17]. Queda prohibida la reproducción, duplicación, ingeniería inversa o aprovechamiento no autorizado de la solución[cite: 17].</li>
-                <li><strong>Respaldo Profesional:</strong> La supervisión y gobernanza técnica del entorno se encuentran avaladas por la Dirección General de InnovArqZ Soluciones Integrales S.A.S.[cite: 17]</li>
+                <li><strong>Titularidad Intelectual y Metodológica:</strong> La arquitectura funcional, los módulos de automatización de nomenclatura ISO 19650-2, la gestión algorítmica de carpetas y los motores de inspección OpenBIM constituyen propiedad intelectual de InnovArqZ Soluciones Integrales S.A.S.</li>
+                <li><strong>Licencia de Colaboración:</strong> El acceso suministrado a clientes, consultores externos, modeladores e interventorías constituye una autorización de uso técnico restringida a los entregables y fases estipuladas en los contratos respectivos. Queda prohibida la reproducción, duplicación, ingeniería inversa o aprovechamiento no autorizado de la solución.</li>
+                <li><strong>Respaldo Profesional:</strong> La supervisión y gobernanza técnica del entorno se encuentran avaladas por la Dirección General de InnovArqZ Soluciones Integrales S.A.S.</li>
             </ul>
         </section>
     </main>
