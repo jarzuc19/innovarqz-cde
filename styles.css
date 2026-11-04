@@ -527,7 +527,7 @@ tr:hover {
     display: flex;
     justify-content: center;
     align-items: center;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
     transition: background 0.15s, transform 0.15s;
 }
 
@@ -553,7 +553,7 @@ tr:hover {
 /* ==============================================================================
    COMPONENTES EXCLUSIVOS VISOR 3D (VERSIÓN 2.0)
    ============================================================================== */
-/* Botonera superior de 3 accesos fijos */
+/* Botonera superior de accesos fijos */
 #ifcMainToolbar {
     position: absolute;
     top: 12px;
@@ -588,9 +588,37 @@ tr:hover {
     transform: translateY(-1px);
 }
 
+/* Botón disparador de captura 3D */
+#btnDispararCaptura {
+    height: 36px;
+    padding: 0 12px;
+    font-size: 0.8rem;
+    background: #0f172a;
+    color: var(--accent-green);
+    border: 1px solid var(--accent-green);
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: bold;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    transition: background 0.15s, transform 0.15s;
+}
+
+#btnDispararCaptura:hover {
+    background: #1e293b;
+    transform: translateY(-1px);
+}
+
+#btnDispararCaptura:active {
+    transform: scale(0.92);
+}
+
+/* Botón de bandeja / observaciones con capturas acumuladas */
 #btnBandejaCapturas {
     height: 36px;
-    padding: 0 14px;
+    padding: 0 12px;
     font-size: 0.78rem;
     font-weight: bold;
     background: var(--accent-copper);
@@ -863,15 +891,18 @@ tr:hover {
     #ifcMainToolbar {
         top: 8px;
         right: 8px;
-        gap: 5px;
+        gap: 4px;
     }
 
-    #btnToggleToolMenu span {
-        display: none;
+    #ifcMainToolbar .btn-toolbar-text {
+        display: none !important;
     }
 
-    #btnToggleToolMenu {
-        padding: 0 8px;
+    #btnToggleToolMenu,
+    #btnDispararCaptura,
+    #btnBandejaCapturas {
+        padding: 0 8px !important;
+        height: 34px !important;
     }
 
     #ifcToolsDropdownMenu {
