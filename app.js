@@ -1,5 +1,5 @@
 // ==============================================================================
-// CONFIGURACIÓN CENTRALIZADA DE SERVICIOS - CDE INNOVARQZ S.A.S.
+// CONFIGURACIÓN CENTRALIZADA DE SERVICIOS - CDE INNOVARQZ S.A.S. (VERSIÓN 2.0)
 // ==============================================================================
 const SUPABASE_URL = "https://bjlqtzrcrofpqlmyvoob.supabase.co";
 const SUPABASE_KEY = "sb_publishable_htPtQvL-1wrLfu7ACHBg1w_epAZsu1E";
@@ -59,11 +59,12 @@ let currentLoadedModelID = null;
 // ÁRBOL DE NIVELES BIM
 let ifcBuildingStoreys = [];
 
-// GESTIÓN DE PLANOS DE CORTE / SECCIONES (CLIPPING PLANES)
+// GESTIÓN DE PLANOS DE CORTE Y TAPAS SÓLIDAS (CLIPPING CAPS)
 let ifcClippingPlane = null;
 let ifcClipInverted = false;
 let ifcClipAxis = 'Y';
 let isSectionToolActive = false;
+let clippingCapsGroup = null;
 
 // GESTIÓN Y ALTERNANCIA DE LÍNEAS DE ARISTA (EDGES)
 const ifcEdgesList = [];
@@ -74,15 +75,16 @@ let isMeasureToolActive = false;
 let measurePoints = [];
 const measureVisualObjects = [];
 
-// HERRAMIENTA DE RECORRIDO EN PRIMERA PERSONA (NAVEGACIÓN LIBRE SIN BLOQUEOS)
+// HERRAMIENTA DE RECORRIDO EN PRIMERA PERSONA CON MEMORIA DE COORDENADAS
 let isWalkModeActive = false;
 let isPickSlabModeActive = false;
 const walkMovement = { forward: false, backward: false, left: false, right: false };
 const walkClock = new THREE.Clock();
-const walkSpeed = 3.8; // metros por segundo
+const walkSpeed = 3.8; // m/s
 let walkPitch = 0;
 let walkYaw = 0;
-let walkFixedY = 1.65; // Cota de ojos bloqueada para el nivel activo
+let walkFixedY = 1.65;
+let walkLastKnownPosition = null;
 let walkIsDraggingLook = false;
 let walkLastMousePos = { x: 0, y: 0 };
 let walkListenersConfigured = false;
@@ -141,7 +143,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const capturaForm = document.getElementById("formCapturaConsolidada");
     if (capturaForm) capturaForm.addEventListener("submit", handleEnviarCapturasAlCDE);
 
-    // Conectar reactividad paramétrica del formulario asistido
+    // Conectar reactividad paramétrica del formulario asistido ISO 19650
     vincularEventosNomenclaturaAsistida();
 
     setupDropdownWithOther("ubicacionSelect", "ubicacionOtherInput");
@@ -150,9 +152,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     window.addEventListener("keydown", (e) => {
         if (e.key === "Escape") {
+            ocultarMenuHerramientasIFC();
             ocultarMenuContextualIFC();
-            if (isMeasureToolActive) desactivarModoMedicion();
-            if (isWalkModeActive) desactivarModoCaminar();
+            cancelarHerramientaActiva();
             cerrarCualquierModalAbierto();
         }
     });
@@ -197,7 +199,7 @@ function cerrarCualquierModalAbierto(triggerHistoryBack = true) {
 
     const cModal = document.getElementById("capturaConsolidadaModal");
     if (cModal && (cModal.style.display === "flex" || cModal.classList.contains("modal-overlay"))) {
-        cerrarModalCapturasConsolidadas(false);
+        cerrarModalCapturasConsolidadas();
         seCerro = true;
     }
 
@@ -283,7 +285,7 @@ function filtrarPorSubcarpeta(sub) {
 function vincularEventosNomenclaturaAsistida() {
     const camposReactivos = [
         "isoOriginadorSelect", "isoOriginadorOtherInput", 
-        "isoZonaSelect", "isoTipoSelect", "isoDisciplinaSelect", 
+        "isoZonaSelect", "isoZonaOtherInput", "isoTipoSelect", "isoDisciplinaSelect", 
         "uploadTargetTab", "isoEstadoSelect", "isoConsecutivoSelect", 
         "isoDriveExtSelect"
     ];
@@ -303,6 +305,18 @@ function vincularEventosNomenclaturaAsistida() {
     if (origSelect) {
         origSelect.addEventListener("change", (e) => {
             const other = document.getElementById("isoOriginadorOtherInput");
+            if (other) {
+                other.style.display = (e.target.value === "OTRO") ? "block" : "none";
+                other.required = (e.target.value === "OTRO");
+                if (e.target.value !== "OTRO") other.value = "";
+            }
+        });
+    }
+
+    const zonaSelect = document.getElementById("isoZonaSelect");
+    if (zonaSelect) {
+        zonaSelect.addEventListener("change", (e) => {
+            const other = document.getElementById("isoZonaOtherInput");
             if (other) {
                 other.style.display = (e.target.value === "OTRO") ? "block" : "none";
                 other.required = (e.target.value === "OTRO");
@@ -390,7 +404,17 @@ function recalcularPrevisualizacionNomenclatura() {
         }
     }
 
-    const zona = document.getElementById("isoZonaSelect")?.value || "ZZ";
+    let zona = "ZZ";
+    const zonaSelect = document.getElementById("isoZonaSelect");
+    if (zonaSelect) {
+        if (zonaSelect.value === "OTRO") {
+            const otherZona = document.getElementById("isoZonaOtherInput")?.value.trim().toUpperCase() || "";
+            zona = otherZona ? otherZona.replace(/\s+/g, '') : "NIVEL";
+        } else {
+            zona = zonaSelect.value;
+        }
+    }
+
     const tipo = document.getElementById("isoTipoSelect")?.value || "PL";
     const disc = document.getElementById("isoDisciplinaSelect")?.value || "ARQ";
     const targetTab = document.getElementById("uploadTargetTab")?.value || activeTab;
@@ -417,12 +441,13 @@ function recalcularPrevisualizacionNomenclatura() {
         }
     }
 
+    // Estructura ISO 19650: [Proyecto]_[Originador]_[Zona/Nivel]_[Tipo]_[Disciplina]_[Idoneidad-Consecutivo].[ext]
     const campoEstadoCompleto = consecutivo ? `${estado}${consecutivo}` : estado;
     const nombreCompleto = `${proy}_${orig}_${zona}_${tipo}_${disc}_${campoEstadoCompleto}.${extension}`;
 
     previewSpan.innerText = nombreCompleto;
 
-    // Detectar subcarpeta ISO de destino
+    // Clasificación a subcarpeta ISO 19650
     let subDetectada = "Principal";
     const esInstalacion = ["MEP", "HID", "SAN", "ELE", "MEC", "PCI", "GAS", "VAC"].includes(disc);
 
@@ -493,7 +518,6 @@ function handleAgregarAColaEntrega(e) {
         }
     }
 
-    // Comprobar que no esté duplicado en la misma cola
     const yaExisteEnCola = stagedUploadList.some(item => item.isoName === nombreIsoCompleto);
     if (yaExisteEnCola) {
         alert(`⚠️ El entregable "${nombreIsoCompleto}" ya se encuentra agregado en la cola actual.`);
@@ -511,7 +535,6 @@ function handleAgregarAColaEntrega(e) {
         hintFolder: hintFolder
     });
 
-    // Limpiar exclusivamente los orígenes para cargar el siguiente
     if (document.getElementById("driveUrlInput")) document.getElementById("driveUrlInput").value = "";
     if (document.getElementById("fileLocalInput")) document.getElementById("fileLocalInput").value = "";
 
@@ -610,7 +633,6 @@ async function ejecutarSubidaLoteConsolidada() {
                 mimeType = item.fileObj.type || "application/octet-stream";
             }
 
-            // DETECCIÓN AUTOMÁTICA DE VERSIÓN PREVIA PARA ARCHIVADO SEGURO
             let idArchivoViejo = null;
             let nombreViejoArchivado = null;
 
@@ -672,7 +694,6 @@ async function ejecutarSubidaLoteConsolidada() {
 
         if (btnSubmit) btnSubmit.innerText = "Integrando paquete y generando remisión única...";
 
-        // UN SOLO ENVÍO (IMPORTAR_LOTE)
         const payloadLote = {
             accion: "IMPORTAR_LOTE",
             proyecto_id: activeProjectId,
@@ -1103,6 +1124,7 @@ async function cargarTimelineActividad() {
         else if (eventoNombre.includes("CONFIRMADO")) { icono = "✅"; estiloTexto = "color: #10b981;"; }
         else if (eventoNombre.includes("REEMPLAZO")) { icono = "📦"; estiloTexto = "color: #fbbf24;"; }
         else if (eventoNombre.includes("CORRECCION")) { icono = "⚠️"; estiloTexto = "color: #f59e0b;"; }
+        else if (eventoNombre.includes("RETIRO")) { icono = "📦"; estiloTexto = "color: #94a3b8;"; }
 
         let mensajeOriginal = l.drive_file_url || "";
         let asuntoCorto = mensajeOriginal.split(" | Detalle: ")[0];
@@ -1205,7 +1227,7 @@ function recalcularEstadoEnNombre(nombreOriginal, nuevoEstadoISO) {
 }
 
 // ==============================================================================
-// GESTIÓN DE PROMOCIÓN POR LOTE (BATCH PROMOTION - UN SOLO CORREO)
+// GESTIÓN DE PROMOCIÓN Y RETIRO DE ENTREGABLES (ISO 19650)
 // ==============================================================================
 function alternarSeleccionFila(nombreArchivo, estadoOrigen, estadoDestino) {
     if (selectedFilesForBatch.has(nombreArchivo)) {
@@ -1365,6 +1387,44 @@ async function promoverArchivo(nombreArchivo, estadoOrigen, estadoDestino) {
             cargarTimelineActividad();
         } else {
             alert("⚠️ Error de promoción: " + responseData.message);
+        }
+    } catch (err) {
+        alert("Error de comunicación: " + err.message);
+    }
+}
+
+// RETIRO Y ARCHIVO DE ENTREGABLES (HACIA 04_ARCHIVED)
+async function archivarEntregableDirecto(nombreArchivo, estadoOrigen) {
+    const motivo = prompt(`¿Confirma retirar y mover a ARCHIVED el entregable "${nombreArchivo}"?\n\nEscriba el motivo técnico del retiro (obligatorio):`);
+    if (!motivo || motivo.trim() === "") {
+        alert("⚠️ Es obligatorio registrar una justificación técnica para enviar un documento a ARCHIVED.");
+        return;
+    }
+
+    const payload = {
+        accion: "ARCHIVAR_ENTREGABLE",
+        proyecto_id: activeProjectId,
+        codigo_proyecto: activeProjectCode,
+        nombre_archivo: nombreArchivo,
+        estado_origen: estadoOrigen,
+        motivo: motivo.trim(),
+        usuario_email: currentUser.email,
+        usuario_nombre: currentUser.nombre_completo
+    };
+
+    try {
+        const res = await fetch(WEBHOOK_APPS_SCRIPT, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify(payload)
+        });
+        const responseData = await res.json();
+        if (responseData.status === "success") {
+            alert("✅ Entregable retirado y resguardado en 04_ARCHIVED.");
+            loadFiles();
+            cargarTimelineActividad();
+        } else {
+            alert("⚠️ Error al archivar: " + responseData.message);
         }
     } catch (err) {
         alert("Error de comunicación: " + err.message);
@@ -1738,10 +1798,10 @@ function closeViewerModal(triggerHistory = true) {
     if (loading) loading.style.display = "none";
 
     resetActiveZoom();
+    ocultarMenuHerramientasIFC();
     ocultarMenuContextualIFC();
     cerrarCardPropiedadesIFC();
-    desactivarModoMedicion();
-    desactivarModoCaminar();
+    cancelarHerramientaActiva();
     cerrarPanelNivelesIFC();
 
     if (ifcAnimationId) {
@@ -1894,16 +1954,19 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcEdgesList.length = 0;
     ifcBuildingStoreys = [];
     lastClickedMesh = null;
+    walkLastKnownPosition = null;
     limpiarMedicionIFC();
-    desactivarModoCaminar();
+    cancelarHerramientaActiva();
     cerrarPanelNivelesIFC();
+    ocultarMenuHerramientasIFC();
     ocultarMenuContextualIFC();
 
     const width = container.clientWidth || 800;
     const height = container.clientHeight || 550;
 
     ifcScene = new THREE.Scene();
-    ifcScene.background = new THREE.Color(0xf1f5f9);
+    // V2.0: Fondo sobrio grafito oscuro que resalta el modelo sin deslumbrar
+    ifcScene.background = new THREE.Color(0x1e293b);
 
     ifcCamera = new THREE.PerspectiveCamera(45, width / height, 0.1, 3000);
     ifcCamera.position.set(35, 25, 35);
@@ -1925,16 +1988,17 @@ async function inicializarVisorIFC(fileUrl, container) {
         RIGHT: THREE.MOUSE.NONE
     };
 
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xcfd8dc, 0.85);
+    // V2.0: Calibración balanceada de luces para evitar sobreexposición en geometrías blancas
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x475569, 0.65);
     hemiLight.position.set(0, 60, 0);
     ifcScene.add(hemiLight);
 
-    const sunLight = new THREE.DirectionalLight(0xfffdfa, 0.75);
-    sunLight.position.set(50, 70, 40);
+    const sunLight = new THREE.DirectionalLight(0xfff8ee, 0.55);
+    sunLight.position.set(45, 65, 35);
     ifcScene.add(sunLight);
 
-    const fillLight = new THREE.DirectionalLight(0xe2e8f0, 0.4);
-    fillLight.position.set(-50, 20, -40);
+    const fillLight = new THREE.DirectionalLight(0x94a3b8, 0.35);
+    fillLight.position.set(-45, 20, -35);
     ifcScene.add(fillLight);
 
     raycaster = new THREE.Raycaster();
@@ -1947,9 +2011,17 @@ async function inicializarVisorIFC(fileUrl, container) {
     });
 
     window.addEventListener('click', (e) => {
-        const menu = document.getElementById("ifcContextMenu");
-        if (menu && menu.style.display === "flex" && !menu.contains(e.target)) {
+        const menuCtx = document.getElementById("ifcContextMenu");
+        if (menuCtx && menuCtx.style.display === "flex" && !menuCtx.contains(e.target)) {
             ocultarMenuContextualIFC();
+        }
+
+        const menuTools = document.getElementById("ifcToolsDropdownMenu");
+        const btnToggleTools = document.getElementById("btnToggleToolMenu");
+        if (menuTools && menuTools.style.display === "block") {
+            if (!menuTools.contains(e.target) && btnToggleTools && !btnToggleTools.contains(e.target)) {
+                ocultarMenuHerramientasIFC();
+            }
         }
     });
 
@@ -2087,9 +2159,9 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcClippingPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1000);
 
     const edgeLineMaterial = new THREE.LineBasicMaterial({
-        color: 0x334155,
+        color: 0x475569,
         transparent: true,
-        opacity: 0.35,
+        opacity: 0.45,
         clippingPlanes: [ifcClippingPlane]
     });
 
@@ -2107,9 +2179,9 @@ async function inicializarVisorIFC(fileUrl, container) {
             const bufferGeometry = new THREE.BufferGeometry();
             const posFloats = new Float32Array(verts.length / 2);
             for (let j = 0; j < verts.length; j += 6) {
-                posFloats[j / 2]     = verts[j];     // X nativo
-                posFloats[j / 2 + 1] = verts[j + 1]; // Y nativo (Cota vertical real corregida)
-                posFloats[j / 2 + 2] = verts[j + 2]; // Z nativo
+                posFloats[j / 2]     = verts[j];
+                posFloats[j / 2 + 1] = verts[j + 1];
+                posFloats[j / 2 + 2] = verts[j + 2];
             }
 
             bufferGeometry.setAttribute('position', new THREE.BufferAttribute(posFloats, 3));
@@ -2119,11 +2191,12 @@ async function inicializarVisorIFC(fileUrl, container) {
             const col = placedGeometry.color;
             const esTransparente = col.w < 0.95;
 
+            // V2.0: Material con caras y plano de corte configurado para tapas sólidas
             const material = new THREE.MeshStandardMaterial({
                 color: new THREE.Color(col.x, col.y, col.z),
                 opacity: col.w,
                 transparent: esTransparente,
-                roughness: 0.45,
+                roughness: 0.5,
                 metalness: 0.05,
                 side: THREE.DoubleSide,
                 clippingPlanes: [ifcClippingPlane],
@@ -2183,7 +2256,7 @@ async function inicializarVisorIFC(fileUrl, container) {
 
     ifcScene.add(ifcCurrentGroup);
 
-    ifcGridHelper = new THREE.GridHelper(Math.max(size.x, size.z) * 1.5, 50, 0x94a3b8, 0xe2e8f0);
+    ifcGridHelper = new THREE.GridHelper(Math.max(size.x, size.z) * 1.5, 50, 0x475569, 0x334155);
     ifcGridHelper.position.y = box.min.y - 0.05;
     ifcScene.add(ifcGridHelper);
 
@@ -2193,10 +2266,119 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcModelBounds.minY = box.min.y;
     ifcModelBounds.maxY = box.max.y;
 
+    // V2.0: Generar el plano visual oscuro de sección (Clipping Cap)
+    construirTapaDeCorte(size);
+
     extraerNivelesDelModeloIFC();
     configurarEscuchadoresVisorDiferidos();
     configurarPlanoCorte();
     ajustarVistaModeloIFC();
+}
+
+// ==============================================================================
+// TAPAS SÓLIDAS DE SECCIÓN (CLIPPING CAPS)
+// ==============================================================================
+function construirTapaDeCorte(modelSize) {
+    if (clippingCapsGroup) {
+        ifcScene.remove(clippingCapsGroup);
+    }
+    clippingCapsGroup = new THREE.Group();
+
+    const maxDim = Math.max(modelSize.x, modelSize.y, modelSize.z) * 2.5;
+    const planeGeom = new THREE.PlaneGeometry(maxDim, maxDim);
+
+    const capMaterial = new THREE.MeshBasicMaterial({
+        color: 0x0f172a,
+        side: THREE.DoubleSide,
+        clippingPlanes: [ifcClippingPlane]
+    });
+
+    const capMesh = new THREE.Mesh(planeGeom, capMaterial);
+    capMesh.renderOrder = 1;
+    capMesh.visible = false;
+    clippingCapsGroup.add(capMesh);
+
+    ifcScene.add(clippingCapsGroup);
+}
+
+function actualizarPosicionTapaCorte() {
+    if (!clippingCapsGroup || !ifcClippingPlane) return;
+    const capMesh = clippingCapsGroup.children[0];
+    if (!capMesh) return;
+
+    if (!isSectionToolActive) {
+        capMesh.visible = false;
+        return;
+    }
+
+    capMesh.visible = true;
+    const normal = ifcClippingPlane.normal;
+    const constant = ifcClippingPlane.constant;
+
+    // Posicionar el plano cap exactamente en la cota de corte
+    const pointOnPlane = normal.clone().multiplyScalar(-constant);
+    capMesh.position.copy(pointOnPlane);
+    capMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
+}
+
+// ==============================================================================
+// BOTONERA MINIMALISTA Y MENÚ CATEGORIZADO (VERSIÓN 2.0)
+// ==============================================================================
+function alternarMenuHerramientasIFC(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    const menu = document.getElementById("ifcToolsDropdownMenu");
+    if (!menu) return;
+    const estaVisible = (menu.style.display === "block");
+    menu.style.display = estaVisible ? "none" : "block";
+}
+
+function ocultarMenuHerramientasIFC() {
+    const menu = document.getElementById("ifcToolsDropdownMenu");
+    if (menu) menu.style.display = "none";
+}
+
+function mostrarGuiaContextual(textoInstruccion) {
+    const bar = document.getElementById("ifcContextGuideBar");
+    const textEl = document.getElementById("ifcGuideText");
+    if (bar && textEl) {
+        textEl.innerHTML = textoInstruccion;
+        bar.style.display = "flex";
+    }
+}
+
+function ocultarGuiaContextual() {
+    const bar = document.getElementById("ifcContextGuideBar");
+    if (bar) bar.style.display = "none";
+}
+
+function cancelarHerramientaActiva() {
+    if (isMeasureToolActive) desactivarModoMedicion();
+    if (isWalkModeActive) desactivarModoCaminar();
+    if (isPickSlabModeActive) desactivarSeleccionLosa();
+    if (isSectionToolActive) alternarPanelCorteIFC();
+    cerrarPanelNivelesIFC();
+    cerrarCardPropiedadesIFC();
+    ocultarGuiaContextual();
+}
+
+function ejecutarHerramientaIFC(herramienta) {
+    ocultarMenuHerramientasIFC();
+
+    if (herramienta === 'ISO') cambiarVistaIFC('ISO');
+    else if (herramienta === 'FRONTAL') cambiarVistaIFC('FRONTAL');
+    else if (herramienta === 'POSTERIOR') cambiarVistaIFC('POSTERIOR');
+    else if (herramienta === 'LATERAL_IZQ') cambiarVistaIFC('LATERAL_IZQ');
+    else if (herramienta === 'LATERAL_DER') cambiarVistaIFC('LATERAL_DER');
+    else if (herramienta === 'PLANTA') cambiarVistaIFC('PLANTA');
+    else if (herramienta === 'CORTE') alternarPanelCorteIFC();
+    else if (herramienta === 'MEDIR') alternarModoMedicionIFC();
+    else if (herramienta === 'NIVELES') alternarPanelNivelesIFC();
+    else if (herramienta === 'CAMINAR') activarSeleccionLosaCaminar();
+    else if (herramienta === 'LINEAS') alternarAristasIFC();
+    else if (herramienta === 'REJILLA') alternarCuadriculaIFC();
 }
 
 // ==============================================================================
@@ -2392,6 +2574,7 @@ function descargarBlobTradicional(blob, fileName) {
     URL.revokeObjectURL(url);
 }
 
+// V2.0: Estandarización forzosa a informe formal PDF (cero imágenes sueltas en CDE)
 async function handleEnviarCapturasAlCDE(e) {
     e.preventDefault();
     if (capturasBandeja.length === 0) return;
@@ -2407,16 +2590,11 @@ async function handleEnviarCapturasAlCDE(e) {
     }
 
     btnSubmit.disabled = true;
-    btnSubmit.innerText = "Publicando e indexando en CDE...";
+    btnSubmit.innerText = "Compilando Informe PDF ISO 19650...";
 
     try {
-        let pdfReporteBase64 = null;
-
-        if (capturasBandeja.length > 1) {
-            pdfReporteBase64 = await compilarInformePDFCapturas(asunto, detalle, capturasBandeja);
-        }
-
-        const base64CleanArray = capturasBandeja.map(url => url.split(',')[1]);
+        // En V2.0 SIEMPRE se compila a PDF formal sin importar si es 1 o varias capturas
+        const pdfReporteBase64 = await compilarInformePDFCapturas(asunto, detalle, capturasBandeja);
 
         const payload = {
             accion: "REGISTRAR_OBSERVACION_CAPTURAS",
@@ -2425,7 +2603,7 @@ async function handleEnviarCapturasAlCDE(e) {
             rol_usuario: currentUser.cargo,
             asunto: asunto,
             detalle: detalle,
-            capturas: base64CleanArray,
+            capturas_count: capturasBandeja.length,
             es_subsanacion: esSubsanacion,
             pdf_reporte_base64: pdfReporteBase64
         };
@@ -2438,7 +2616,7 @@ async function handleEnviarCapturasAlCDE(e) {
         const data = await res.json();
 
         if (data.status === "success") {
-            alert("✅ ¡Observación y evidencias 3D integradas exitosamente al CDE!");
+            alert("✅ ¡Informe de observación técnica en PDF compilado y publicado con éxito en el CDE!");
             capturasBandeja.length = 0;
             actualizarBotonBandejaCapturas();
             cerrarModalCapturasConsolidadas();
@@ -2624,23 +2802,14 @@ function renderizarListaNivelesIFC() {
 
 function alternarPanelNivelesIFC() {
     const panel = document.getElementById("ifcLevelsCard");
-    const btn = document.getElementById("btnToggleLevels");
     if (!panel) return;
-
     const visible = panel.style.display === "block";
     panel.style.display = visible ? "none" : "block";
-    if (btn) btn.style.background = visible ? "#1e293b" : "#10b981";
-    if (btn) btn.style.color = visible ? "#10b981" : "#fff";
 }
 
 function cerrarPanelNivelesIFC() {
     const panel = document.getElementById("ifcLevelsCard");
-    const btn = document.getElementById("btnToggleLevels");
     if (panel) panel.style.display = "none";
-    if (btn) {
-        btn.style.background = "#1e293b";
-        btn.style.color = "#10b981";
-    }
 }
 
 function cortarEnNivel(cotaLosaEscena) {
@@ -2648,9 +2817,7 @@ function cortarEnNivel(cotaLosaEscena) {
 
     isSectionToolActive = true;
     const panel = document.getElementById("ifcSectionToolPanel");
-    const btn = document.getElementById("btnToggleSectionBox");
     if (panel) panel.style.display = "block";
-    if (btn) btn.style.background = "#10b981";
 
     const radios = document.getElementsByName("clipAxis");
     radios.forEach(r => { if (r.value === 'Y') r.checked = true; });
@@ -2666,10 +2833,13 @@ function cortarEnNivel(cotaLosaEscena) {
     const pct = Math.min(100, Math.max(0, ((cotaCorte - min) / (max - min)) * 100));
     const slider = document.getElementById("clipSlider");
     if (slider) slider.value = pct;
+
+    actualizarPosicionTapaCorte();
+    mostrarGuiaContextual("✂️ <strong>Corte de Sección Activo:</strong> Ajuste el nivel o eje en el panel inferior.");
 }
 
 // ==============================================================================
-// TELETRANSPORTACIÓN DETERMINISTA Y DESPLAZAMIENTO LIBRE
+// RECORRIDO EN PRIMERA PERSONA CON MEMORIA DE POSICIÓN
 // ==============================================================================
 function caminarEnNivel(cotaLosaEscena) {
     cerrarPanelNivelesIFC();
@@ -2703,26 +2873,21 @@ function activarSeleccionLosaCaminar() {
     desactivarModoMedicion();
     cerrarCardPropiedadesIFC();
     cerrarPanelNivelesIFC();
+    ocultarMenuHerramientasIFC();
     ocultarMenuContextualIFC();
 
+    // V2.0: Si ya existía una posición guardada de caminata, retomar directamente desde ahí
+    if (walkLastKnownPosition && !isWalkModeActive) {
+        iniciarModoCaminarEnCoordenadas(walkLastKnownPosition.x, walkLastKnownPosition.y - 1.65, walkLastKnownPosition.z);
+        return;
+    }
+
     isPickSlabModeActive = !isPickSlabModeActive;
-    const btn = document.getElementById("btnToggleWalk");
     const container = document.getElementById("modalIfcContainer");
-    const pcHint = document.getElementById("walkPcHint");
-    const statusLabel = document.getElementById("walkStatusLabel");
 
     if (isPickSlabModeActive) {
-        if (btn) {
-            btn.style.background = "#d97706";
-            btn.style.color = "#fff";
-        }
         if (container) container.style.cursor = "pointer";
-
-        if (pcHint && statusLabel) {
-            statusLabel.innerHTML = "🎯 <strong>Toca o haz clic sobre la losa resaltada</strong> donde deseas pararte...";
-            pcHint.style.display = "flex";
-        }
-
+        mostrarGuiaContextual("🎯 <strong>Toca o haz clic sobre la losa resaltada</strong> para pararte...");
         resaltarLosasTransitables(true);
     } else {
         desactivarModoCaminar();
@@ -2764,11 +2929,6 @@ function resaltarLosasTransitables(activar) {
 function desactivarSeleccionLosa() {
     isPickSlabModeActive = false;
     resaltarLosasTransitables(false);
-    const btn = document.getElementById("btnToggleWalk");
-    if (btn && !isWalkModeActive) {
-        btn.style.background = "#1e293b";
-        btn.style.color = "#10b981";
-    }
 }
 
 function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
@@ -2776,9 +2936,6 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
     isPickSlabModeActive = false;
     resaltarLosasTransitables(false);
 
-    const btn = document.getElementById("btnToggleWalk");
-    const pcHint = document.getElementById("walkPcHint");
-    const statusLabel = document.getElementById("walkStatusLabel");
     const touchDpad = document.getElementById("walkTouchContainer");
     const container = document.getElementById("modalIfcContainer");
     const esDispositivoTactil = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 992);
@@ -2802,31 +2959,26 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
     ifcCamera.position.set(x, walkFixedY, z);
     aplicarRotacionCaminar();
 
-    if (btn) {
-        btn.style.background = "#10b981";
-        btn.style.color = "#fff";
-    }
+    // Guardar posición para memoria de avatar
+    walkLastKnownPosition = ifcCamera.position.clone();
 
-    if (container) {
-        container.style.cursor = "move";
-    }
-
-    if (statusLabel) {
-        statusLabel.innerHTML = "🚶 <strong>Modo Caminar:</strong> Usa <strong>W, A, S, D</strong> para moverte y arrastra para mirar";
-    }
+    if (container) container.style.cursor = "move";
 
     if (esDispositivoTactil) {
         if (touchDpad) touchDpad.style.display = "flex";
-        if (pcHint) pcHint.style.display = "none";
+        mostrarGuiaContextual("🚶 <strong>Caminata Activa:</strong> Usa el mando táctil para moverte y arrastra para mirar");
     } else {
-        if (pcHint) pcHint.style.display = "flex";
-        if (touchDpad) touchDpad.style.display = "none";
+        mostrarGuiaContextual("🚶 <strong>Modo Caminar:</strong> Usa <strong>W, A, S, D</strong> para moverte y arrastra el ratón para mirar");
     }
 
     configurarEscuchadoresVisorDiferidos();
 }
 
 function desactivarModoCaminar() {
+    if (isWalkModeActive && ifcCamera) {
+        walkLastKnownPosition = ifcCamera.position.clone();
+    }
+
     isWalkModeActive = false;
     isPickSlabModeActive = false;
     resaltarLosasTransitables(false);
@@ -2835,19 +2987,12 @@ function desactivarModoCaminar() {
     walkMovement.left = false;
     walkMovement.right = false;
 
-    const btn = document.getElementById("btnToggleWalk");
-    const pcHint = document.getElementById("walkPcHint");
     const touchDpad = document.getElementById("walkTouchContainer");
     const container = document.getElementById("modalIfcContainer");
 
-    if (btn) {
-        btn.style.background = "#1e293b";
-        btn.style.color = "#10b981";
-    }
-
-    if (pcHint) pcHint.style.display = "none";
     if (touchDpad) touchDpad.style.display = "none";
     if (container) container.style.cursor = "default";
+    ocultarGuiaContextual();
 
     if (ifcControls) {
         ifcControls.enabled = true;
@@ -2884,6 +3029,9 @@ function actualizarFisicaCaminar(delta) {
         
         ifcCamera.position.x += moveVector.x * pasoDistancia;
         ifcCamera.position.z += moveVector.z * pasoDistancia;
+
+        // Actualizar memoria de avatar en tiempo real
+        walkLastKnownPosition = ifcCamera.position.clone();
     }
 
     ifcCamera.position.y = walkFixedY;
@@ -2970,12 +3118,13 @@ function setupWalkTouchListeners() {
 }
 
 // ==============================================================================
-// BOTONERA COMPLETA DE VISTAS ORTOGONALES Y 3D
+// VISTAS ORTOGONALES Y 3D
 // ==============================================================================
 function ajustarVistaModeloIFC() {
     if (!ifcCamera || !ifcControls) return;
     desactivarModoCaminar();
     cerrarPanelNivelesIFC();
+    ocultarMenuHerramientasIFC();
     ocultarMenuContextualIFC();
     const d = ifcModelBounds.maxDim || 25;
     const cy = ifcModelBounds.center.y;
@@ -2988,6 +3137,7 @@ function cambiarVistaIFC(tipo) {
     if (!ifcCamera || !ifcControls) return;
     desactivarModoCaminar();
     cerrarPanelNivelesIFC();
+    ocultarMenuHerramientasIFC();
     ocultarMenuContextualIFC();
     const d = ifcModelBounds.maxDim || 25;
     const cy = ifcModelBounds.center.y;
@@ -3021,11 +3171,6 @@ function alternarAristasIFC() {
     ifcEdgesList.forEach(line => {
         if (line) line.visible = ifcEdgesVisible;
     });
-    const btn = document.getElementById("btnToggleEdges");
-    if (btn) {
-        btn.style.color = ifcEdgesVisible ? "#cbd5e1" : "#ef4444";
-        btn.style.borderColor = ifcEdgesVisible ? "#475569" : "#ef4444";
-    }
 }
 
 // ==============================================================================
@@ -3033,24 +3178,19 @@ function alternarAristasIFC() {
 // ==============================================================================
 function alternarModoMedicionIFC() {
     isMeasureToolActive = !isMeasureToolActive;
-    const btn = document.getElementById("btnToggleMeasure");
     const card = document.getElementById("ifcMeasureCard");
     const container = document.getElementById("modalIfcContainer");
 
     if (isMeasureToolActive) {
         desactivarModoCaminar();
         cerrarPanelNivelesIFC();
+        ocultarMenuHerramientasIFC();
         ocultarMenuContextualIFC();
-        if (btn) {
-            btn.style.background = "#0284c7";
-            btn.style.color = "#fff";
-            const spanText = btn.querySelector(".btn-nav-text");
-            if (spanText) spanText.innerText = "Midiendo...";
-        }
         if (card) card.style.display = "block";
         if (container) container.style.cursor = "crosshair";
         cerrarCardPropiedadesIFC();
         limpiarMedicionIFC();
+        mostrarGuiaContextual("📏 <strong>Medición 3D:</strong> Haz clic en el primer punto de interés...");
     } else {
         desactivarModoMedicion();
     }
@@ -3058,19 +3198,13 @@ function alternarModoMedicionIFC() {
 
 function desactivarModoMedicion() {
     isMeasureToolActive = false;
-    const btn = document.getElementById("btnToggleMeasure");
     const card = document.getElementById("ifcMeasureCard");
     const container = document.getElementById("modalIfcContainer");
 
-    if (btn) {
-        btn.style.background = "#1e293b";
-        btn.style.color = "#38bdf8";
-        const spanText = btn.querySelector(".btn-nav-text");
-        if (spanText) spanText.innerText = "Medir";
-    }
     if (card) card.style.display = "none";
     if (container && !isWalkModeActive) container.style.cursor = "default";
     limpiarMedicionIFC();
+    ocultarGuiaContextual();
 }
 
 function limpiarMedicionIFC() {
@@ -3118,6 +3252,7 @@ function procesarClickMedicion(intersectPoint) {
             status.innerText = "📍 Punto A fijado. Toca el Punto B...";
             status.style.color = "#38bdf8";
         }
+        mostrarGuiaContextual("📍 <strong>Punto A fijado:</strong> Haz clic en el segundo punto...");
     } else if (measurePoints.length === 2) {
         const p1 = measurePoints[0];
         const p2 = measurePoints[1];
@@ -3148,6 +3283,7 @@ function procesarClickMedicion(intersectPoint) {
             document.getElementById("measureDistY").innerText = `${distY.toFixed(2)} m`;
             document.getElementById("measureDistXZ").innerText = `${distXZ.toFixed(2)} m`;
         }
+        mostrarGuiaContextual(`✅ <strong>Distancia Real:</strong> ${distReal.toFixed(2)} m | ΔY: ${distY.toFixed(2)} m`);
     }
 }
 
@@ -3156,18 +3292,19 @@ function procesarClickMedicion(intersectPoint) {
 // ==============================================================================
 function alternarPanelCorteIFC() {
     const panel = document.getElementById("ifcSectionToolPanel");
-    const btn = document.getElementById("btnToggleSectionBox");
     if (!panel) return;
 
     isSectionToolActive = !isSectionToolActive;
     panel.style.display = isSectionToolActive ? "block" : "none";
-    if (btn) btn.style.background = isSectionToolActive ? "#10b981" : "#0284c7";
 
     if (!isSectionToolActive && ifcClippingPlane) {
         ifcClippingPlane.constant = 5000;
+        ocultarGuiaContextual();
     } else {
         configurarPlanoCorte();
+        mostrarGuiaContextual("✂️ <strong>Caja de Sección:</strong> Mueva la barra inferior para ajustar la cota de corte");
     }
+    actualizarPosicionTapaCorte();
 }
 
 function configurarPlanoCorte() {
@@ -3204,6 +3341,7 @@ function actualizarPosicionCorte(valPercent) {
 
     const currentPos = min + (max - min) * pct;
     ifcClippingPlane.constant = ifcClipInverted ? -currentPos : currentPos;
+    actualizarPosicionTapaCorte();
 }
 
 function invertirPlanoCorte() {
@@ -3350,7 +3488,7 @@ async function loadFiles() {
     let listaAProcesar = [];
 
     if (activeTab === "04_ARCHIVED") {
-        listaAProcesar = files.filter(f => f.estado_destino === "04_ARCHIVED" || f.archivo_nombre.includes("_OLD_"));
+        listaAProcesar = files.filter(f => f.estado_destino === "04_ARCHIVED" || f.archivo_nombre.includes("_OLD_") || f.archivo_nombre.includes("_RETIRED_"));
     } else {
         const mapaUnicos = new Map();
         files.forEach(f => {
@@ -3362,7 +3500,7 @@ async function loadFiles() {
                 f.archivo_nombre.startsWith("CARGA_LOTE_ENTREGABLES")
             ) return;
 
-            if (f.archivo_nombre.includes("_OLD_") || f.estado_destino === "04_ARCHIVED") return;
+            if (f.archivo_nombre.includes("_OLD_") || f.archivo_nombre.includes("_RETIRED_") || f.estado_destino === "04_ARCHIVED") return;
 
             const eDestino = f.estado_destino || "";
             const partes = f.archivo_nombre.split("_");
@@ -3372,7 +3510,7 @@ async function loadFiles() {
 
             let cumpleNormaPestana = false;
 
-            // SEGREGACIÓN RIGUROSA ISO 19650
+            // Segregación ISO 19650
             if (activeTab === "01_WIP") {
                 cumpleNormaPestana = (eDestino === "01_WIP") && (codigoEstado === "S0" || codigoEstado.startsWith("P0"));
             } else if (activeTab === "02_SHARED") {
@@ -3424,6 +3562,13 @@ async function loadFiles() {
     const permiteLote = currentUser && currentUser.cargo !== "CLIENTE" && (activeTab === "01_WIP" || activeTab === "02_SHARED");
     const estadoDestinoDefault = (activeTab === "01_WIP") ? "02_SHARED" : "03_PUBLISHED";
 
+    const puedeArchivar = currentUser && (
+        currentUser.cargo.includes("SUPER_ADMIN") || 
+        currentUser.cargo.includes("BIM Manager") || 
+        currentUser.cargo.includes("Director General") ||
+        currentUser.cargo.includes("REVISOR")
+    );
+
     listaAProcesar.forEach(f => {
         const nombreCompleto = f.archivo_nombre || "";
         const parts = nombreCompleto.split("_");
@@ -3471,11 +3616,18 @@ async function loadFiles() {
         }
 
         let botonPromocion = "";
+        let botonArchivar = "";
+
         if (currentUser && currentUser.cargo !== "CLIENTE") {
             if (activeTab === "01_WIP" && (currentUser.cargo.includes("MODELADOR") || currentUser.cargo.includes("SUPER_ADMIN") || currentUser.cargo.includes("BIM Manager"))) {
                 botonPromocion = `<button class="btn-secondary" style="font-size:0.75rem; padding:0.25rem 0.5rem;" onclick="promoverArchivo('${nombreCompleto}', '01_WIP', '02_SHARED')">Promover a SHARED</button>`;
             } else if (activeTab === "02_SHARED" && (currentUser.cargo.includes("REVISOR") || currentUser.cargo.includes("SUPER_ADMIN") || currentUser.cargo.includes("BIM Manager"))) {
                 botonPromocion = `<button class="btn-secondary" style="font-size:0.75rem; padding:0.25rem 0.5rem; background:#10b981; color:#fff;" onclick="promoverArchivo('${nombreCompleto}', '02_SHARED', '03_PUBLISHED')">Publicar a Cliente</button>`;
+            }
+
+            // V2.0: Botón de archivar directo para Revisor, SuperAdmin y BIM Manager en SHARED o PUBLISHED
+            if (puedeArchivar && (activeTab === "02_SHARED" || activeTab === "03_PUBLISHED")) {
+                botonArchivar = `<button class="btn-secondary" style="font-size:0.75rem; padding:0.25rem 0.5rem; background:#334155; color:#cbd5e1; border-color:#475569;" onclick="archivarEntregableDirecto('${nombreCompleto}', '${activeTab}')">📦 Archivar</button>`;
             }
         }
 
@@ -3491,6 +3643,7 @@ async function loadFiles() {
                         ${esVisualizable ? `<button class="btn-secondary" style="font-size:0.75rem; padding:0.25rem 0.5rem;" onclick="openViewerModal('${f.drive_file_url}', '${nombreCompleto}')">Ver</button>` : ''}
                         <a href="${f.drive_file_url}" target="_blank" class="btn-primary" style="text-decoration:none; font-size: 0.75rem; padding: 0.25rem 0.5rem;">Descargar</a>
                         ${botonPromocion}
+                        ${botonArchivar}
                     </td>
                 </tr>
             `;
