@@ -59,12 +59,11 @@ let currentLoadedModelID = null;
 // ÁRBOL DE NIVELES BIM
 let ifcBuildingStoreys = [];
 
-// GESTIÓN DE PLANOS DE CORTE Y TAPAS SÓLIDAS (CLIPPING CAPS)
+// GESTIÓN DE PLANOS DE CORTE LIMPIOS (NATIVOS DE THREE.JS)
 let ifcClippingPlane = null;
 let ifcClipInverted = false;
 let ifcClipAxis = 'Y';
 let isSectionToolActive = false;
-let clippingCapsGroup = null;
 
 // GESTIÓN Y ALTERNANCIA DE LÍNEAS DE ARISTA (EDGES)
 const ifcEdgesList = [];
@@ -2191,7 +2190,7 @@ async function inicializarVisorIFC(fileUrl, container) {
             const col = placedGeometry.color;
             const esTransparente = col.w < 0.95;
 
-            // V2.0: Material con caras y plano de corte configurado para tapas sólidas
+            // Renderizado nativo limpio: doble cara sin planos externos
             const material = new THREE.MeshStandardMaterial({
                 color: new THREE.Color(col.x, col.y, col.z),
                 opacity: col.w,
@@ -2266,59 +2265,10 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcModelBounds.minY = box.min.y;
     ifcModelBounds.maxY = box.max.y;
 
-    // V2.0: Generar el plano visual oscuro de sección (Clipping Cap)
-    construirTapaDeCorte(size);
-
     extraerNivelesDelModeloIFC();
     configurarEscuchadoresVisorDiferidos();
     configurarPlanoCorte();
     ajustarVistaModeloIFC();
-}
-
-// ==============================================================================
-// TAPAS SÓLIDAS DE SECCIÓN (CLIPPING CAPS)
-// ==============================================================================
-function construirTapaDeCorte(modelSize) {
-    if (clippingCapsGroup) {
-        ifcScene.remove(clippingCapsGroup);
-    }
-    clippingCapsGroup = new THREE.Group();
-
-    const maxDim = Math.max(modelSize.x, modelSize.y, modelSize.z) * 2.5;
-    const planeGeom = new THREE.PlaneGeometry(maxDim, maxDim);
-
-    const capMaterial = new THREE.MeshBasicMaterial({
-        color: 0x0f172a,
-        side: THREE.DoubleSide,
-        clippingPlanes: [ifcClippingPlane]
-    });
-
-    const capMesh = new THREE.Mesh(planeGeom, capMaterial);
-    capMesh.renderOrder = 1;
-    capMesh.visible = false;
-    clippingCapsGroup.add(capMesh);
-
-    ifcScene.add(clippingCapsGroup);
-}
-
-function actualizarPosicionTapaCorte() {
-    if (!clippingCapsGroup || !ifcClippingPlane) return;
-    const capMesh = clippingCapsGroup.children[0];
-    if (!capMesh) return;
-
-    if (!isSectionToolActive) {
-        capMesh.visible = false;
-        return;
-    }
-
-    capMesh.visible = true;
-    const normal = ifcClippingPlane.normal;
-    const constant = ifcClippingPlane.constant;
-
-    // Posicionar el plano cap exactamente en la cota de corte
-    const pointOnPlane = normal.clone().multiplyScalar(-constant);
-    capMesh.position.copy(pointOnPlane);
-    capMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
 }
 
 // ==============================================================================
@@ -2834,7 +2784,6 @@ function cortarEnNivel(cotaLosaEscena) {
     const slider = document.getElementById("clipSlider");
     if (slider) slider.value = pct;
 
-    actualizarPosicionTapaCorte();
     mostrarGuiaContextual("✂️ <strong>Corte de Sección Activo:</strong> Ajuste el nivel o eje en el panel inferior.");
 }
 
@@ -3288,7 +3237,7 @@ function procesarClickMedicion(intersectPoint) {
 }
 
 // ==============================================================================
-// HERRAMIENTA DE SECCIÓN Y CORTES 3D DINÁMICOS (CLIPPING)
+// HERRAMIENTA DE SECCIÓN Y CORTES 3D DINÁMICOS (CLIPPING LIMPIO)
 // ==============================================================================
 function alternarPanelCorteIFC() {
     const panel = document.getElementById("ifcSectionToolPanel");
@@ -3304,7 +3253,6 @@ function alternarPanelCorteIFC() {
         configurarPlanoCorte();
         mostrarGuiaContextual("✂️ <strong>Caja de Sección:</strong> Mueva la barra inferior para ajustar la cota de corte");
     }
-    actualizarPosicionTapaCorte();
 }
 
 function configurarPlanoCorte() {
@@ -3341,7 +3289,6 @@ function actualizarPosicionCorte(valPercent) {
 
     const currentPos = min + (max - min) * pct;
     ifcClippingPlane.constant = ifcClipInverted ? -currentPos : currentPos;
-    actualizarPosicionTapaCorte();
 }
 
 function invertirPlanoCorte() {
