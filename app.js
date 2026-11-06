@@ -1812,7 +1812,6 @@ function closeViewerModal(triggerHistory = true) {
     ocultarMenuHerramientasIFC();
     ocultarMenuContextualIFC();
     cerrarCardPropiedadesIFC();
-    cerrarPanelVisibilidadBIM();
     cancelarHerramientaActiva();
     cerrarPanelNivelesIFC();
 
@@ -2193,6 +2192,47 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcApiInstance.StreamAllMeshes(currentLoadedModelID, (flatMesh) => {
         const placedGeometries = flatMesh.geometries;
 
+        // flatMesh.expressID es el ID del elemento constructivo BIM (IfcRoof, IfcWall, etc.)
+        const realElementExpressID = flatMesh.expressID;
+
+        // Clasificar una sola vez por elemento contenedor
+        let categoriaAsignada = "otros";
+        try {
+            const lineaData = ifcApiInstance.GetLine(currentLoadedModelID, realElementExpressID);
+            if (lineaData) {
+                const tipoCadena = (lineaData.__proto__ && lineaData.__proto__.constructor) 
+                    ? String(lineaData.__proto__.constructor.name).toUpperCase() 
+                    : "";
+                const nombreCadena = (lineaData.Name && lineaData.Name.value) 
+                    ? String(lineaData.Name.value).toUpperCase() 
+                    : "";
+                const objetoCadena = (lineaData.ObjectType && lineaData.ObjectType.value) 
+                    ? String(lineaData.ObjectType.value).toUpperCase() 
+                    : "";
+                const descripTotal = `${tipoCadena} ${nombreCadena} ${objetoCadena}`;
+
+                if (descripTotal.includes("WALL") || descripTotal.includes("MURO")) {
+                    categoriaAsignada = "muros";
+                } else if (descripTotal.includes("SLAB") || descripTotal.includes("LOSA") || descripTotal.includes("ROOF") || descripTotal.includes("CUBIERTA") || descripTotal.includes("PISO") || descripTotal.includes("FORJADO") || descripTotal.includes("COVERING") || descripTotal.includes("PLATE")) {
+                    categoriaAsignada = "losas";
+                } else if (descripTotal.includes("COLUMN") || descripTotal.includes("COLUMNA") || descripTotal.includes("PILAR")) {
+                    categoriaAsignada = "columnas";
+                } else if (descripTotal.includes("BEAM") || descripTotal.includes("VIGA") || descripTotal.includes("MEMBER")) {
+                    categoriaAsignada = "vigas";
+                } else if (descripTotal.includes("DOOR") || descripTotal.includes("PUERTA")) {
+                    categoriaAsignada = "puertas";
+                } else if (descripTotal.includes("WINDOW") || descripTotal.includes("VENTANA")) {
+                    categoriaAsignada = "ventanas";
+                } else if (descripTotal.includes("STAIR") || descripTotal.includes("RAMP") || descripTotal.includes("ESCALERA") || descripTotal.includes("RAILING") || descripTotal.includes("BARANDA")) {
+                    categoriaAsignada = "escaleras";
+                } else if (descripTotal.includes("FLOW") || descripTotal.includes("PIPE") || descripTotal.includes("DUCT") || descripTotal.includes("DISTRIBUTION") || descripTotal.includes("ELECTRICAL") || descripTotal.includes("SANITARY")) {
+                    categoriaAsignada = "mep";
+                } else if (descripTotal.includes("FURNISHING") || descripTotal.includes("FURNITURE") || descripTotal.includes("MOBILIARIO") || descripTotal.includes("MUEBLE")) {
+                    categoriaAsignada = "mobiliario";
+                }
+            }
+        } catch (errParse) {}
+
         for (let i = 0; i < placedGeometries.size(); i++) {
             const placedGeometry = placedGeometries.get(i);
             const meshGeometry = ifcApiInstance.GetGeometry(currentLoadedModelID, placedGeometry.geometryExpressID);
@@ -2232,50 +2272,9 @@ async function inicializarVisorIFC(fileUrl, container) {
             const matrix = new THREE.Matrix4().fromArray(placedGeometry.flatTransformation);
             mesh.applyMatrix4(matrix);
 
-            // =================================================================
-            // CLASIFICACIÓN ROBUSTA POR NOMBRE DE ENTIDAD CONSTRUCTIVA (IFC2X3/4)
-            // =================================================================
-            let categoriaAsignada = "otros";
-            let elementExpressID = placedGeometry.geometryExpressID;
-
-            try {
-                const lineaData = ifcApiInstance.GetLine(currentLoadedModelID, placedGeometry.geometryExpressID);
-                if (lineaData) {
-                    const tipoCadena = (lineaData.__proto__ && lineaData.__proto__.constructor) 
-                        ? String(lineaData.__proto__.constructor.name).toUpperCase() 
-                        : "";
-                    const nombreCadena = (lineaData.Name && lineaData.Name.value) 
-                        ? String(lineaData.Name.value).toUpperCase() 
-                        : "";
-                    const objetoCadena = (lineaData.ObjectType && lineaData.ObjectType.value) 
-                        ? String(lineaData.ObjectType.value).toUpperCase() 
-                        : "";
-                    const descripTotal = `${tipoCadena} ${nombreCadena} ${objetoCadena}`;
-
-                    if (descripTotal.includes("WALL") || descripTotal.includes("MURO")) {
-                        categoriaAsignada = "muros";
-                    } else if (descripTotal.includes("SLAB") || descripTotal.includes("LOSA") || descripTotal.includes("ROOF") || descripTotal.includes("CUBIERTA") || descripTotal.includes("PISO") || descripTotal.includes("FORJADO") || descripTotal.includes("COVERING") || descripTotal.includes("PLATE")) {
-                        categoriaAsignada = "losas";
-                    } else if (descripTotal.includes("COLUMN") || descripTotal.includes("COLUMNA") || descripTotal.includes("PILAR")) {
-                        categoriaAsignada = "columnas";
-                    } else if (descripTotal.includes("BEAM") || descripTotal.includes("VIGA") || descripTotal.includes("MEMBER")) {
-                        categoriaAsignada = "vigas";
-                    } else if (descripTotal.includes("DOOR") || descripTotal.includes("PUERTA")) {
-                        categoriaAsignada = "puertas";
-                    } else if (descripTotal.includes("WINDOW") || descripTotal.includes("VENTANA")) {
-                        categoriaAsignada = "ventanas";
-                    } else if (descripTotal.includes("STAIR") || descripTotal.includes("RAMP") || descripTotal.includes("ESCALERA") || descripTotal.includes("RAILING") || descripTotal.includes("BARANDA")) {
-                        categoriaAsignada = "escaleras";
-                    } else if (descripTotal.includes("FLOW") || descripTotal.includes("PIPE") || descripTotal.includes("DUCT") || descripTotal.includes("DISTRIBUTION") || descripTotal.includes("ELECTRICAL") || descripTotal.includes("SANITARY")) {
-                        categoriaAsignada = "mep";
-                    } else if (descripTotal.includes("FURNISHING") || descripTotal.includes("FURNITURE") || descripTotal.includes("MOBILIARIO") || descripTotal.includes("MUEBLE")) {
-                        categoriaAsignada = "mobiliario";
-                    }
-                }
-            } catch (errParse) {}
-
             mesh.userData = {
-                expressID: elementExpressID,
+                expressID: realElementExpressID,
+                geometryExpressID: placedGeometry.geometryExpressID,
                 modelID: currentLoadedModelID,
                 esPuerta: (categoriaAsignada === "puertas"),
                 esLosa: (categoriaAsignada === "losas"),
@@ -2961,7 +2960,6 @@ function activarSeleccionLosaCaminar() {
     desactivarModoMedicion();
     cerrarCardPropiedadesIFC();
     cerrarPanelNivelesIFC();
-    cerrarPanelVisibilidadBIM();
     ocultarMenuHerramientasIFC();
     ocultarMenuContextualIFC();
 
@@ -3210,7 +3208,6 @@ function ajustarVistaModeloIFC() {
     if (!ifcCamera || !ifcControls) return;
     desactivarModoCaminar();
     cerrarPanelNivelesIFC();
-    cerrarPanelVisibilidadBIM();
     ocultarMenuHerramientasIFC();
     ocultarMenuContextualIFC();
     const d = ifcModelBounds.maxDim || 25;
@@ -3224,7 +3221,6 @@ function cambiarVistaIFC(tipo) {
     if (!ifcCamera || !ifcControls) return;
     desactivarModoCaminar();
     cerrarPanelNivelesIFC();
-    cerrarPanelVisibilidadBIM();
     ocultarMenuHerramientasIFC();
     ocultarMenuContextualIFC();
     const d = ifcModelBounds.maxDim || 25;
@@ -3272,7 +3268,6 @@ function alternarModoMedicionIFC() {
     if (isMeasureToolActive) {
         desactivarModoCaminar();
         cerrarPanelNivelesIFC();
-        cerrarPanelVisibilidadBIM();
         ocultarMenuHerramientasIFC();
         ocultarMenuContextualIFC();
         if (card) card.style.display = "block";
@@ -3612,6 +3607,7 @@ async function loadFiles() {
 
             let cumpleNormaPestana = false;
 
+            // Segregación ISO 19650
             if (activeTab === "01_WIP") {
                 cumpleNormaPestana = (eDestino === "01_WIP") && (codigoEstado === "S0" || codigoEstado.startsWith("P0"));
             } else if (activeTab === "02_SHARED") {
@@ -3726,6 +3722,7 @@ async function loadFiles() {
                 botonPromocion = `<button class="btn-secondary" style="font-size:0.75rem; padding:0.25rem 0.5rem; background:#10b981; color:#fff;" onclick="promoverArchivo('${nombreCompleto}', '02_SHARED', '03_PUBLISHED')">Publicar a Cliente</button>`;
             }
 
+            // V2.0: Botón de archivar directo para Revisor, SuperAdmin y BIM Manager en SHARED o PUBLISHED
             if (puedeArchivar && (activeTab === "02_SHARED" || activeTab === "03_PUBLISHED")) {
                 botonArchivar = `<button class="btn-secondary" style="font-size:0.75rem; padding:0.25rem 0.5rem; background:#334155; color:#cbd5e1; border-color:#475569;" onclick="archivarEntregableDirecto('${nombreCompleto}', '${activeTab}')">📦 Archivar</button>`;
             }
@@ -3764,9 +3761,7 @@ async function loadFiles() {
     actualizarBarraAccionesPorLote();
 }
 
-// ==============================================================================
-// HELPERS MODALES PROYECTOS
-// ==============================================================================
+// Helpers Modales Proyectos
 async function prepareAndOpenProjectModal() {
     registrarAperturaModalEnHistorial("projectModal");
     const yearCurrent = new Date().getFullYear();
