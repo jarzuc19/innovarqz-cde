@@ -15,9 +15,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
-    <!-- Motor Web-IFC Oficial Sincronizado para Navegador -->
-    <script src="https://cdn.jsdelivr.net/npm/web-ifc@0.0.78/web-ifc-api.js"></script>
-
     <!-- ESTILOS AISLADOS EXCLUSIVOS PARA EL VISOR 3D, NIVELES, FILTROS, BANDEJA CAPTURAS Y MODO CAMINAR -->
     <style>
         /* Bloqueo estricto del pull-to-refresh confinado ÚNICAMENTE al visor 3D y canvas */
@@ -769,7 +766,7 @@
                         <div class="menu-tool-row" onclick="ejecutarHerramientaIFC('NIVELES')">
                             <span>🏢 Árbol de Pisos / Niveles</span>
                         </div>
-                        <!-- NUEVO: Submenú de Visibilidad y Filtros BIM (v2.1) -->
+                        <!-- Submenú de Visibilidad y Filtros BIM (v2.1) -->
                         <div class="menu-tool-row" onclick="ejecutarHerramientaIFC('VISIBILIDAD')">
                             <span>👁️ Filtros y Visibilidad BIM</span>
                         </div>
@@ -815,7 +812,7 @@
                         </div>
                     </div>
 
-                    <!-- NUEVO: Panel Flotante de Gestión de Visibilidad y Filtros BIM (v2.1) -->
+                    <!-- Panel Flotante de Gestión de Visibilidad y Filtros BIM (v2.1) -->
                     <div id="ifcVisibilityCard">
                         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 6px; margin-bottom: 8px;">
                             <strong style="color: #38bdf8; font-size: 0.82rem;">👁️ Filtros y Visibilidad BIM</strong>
