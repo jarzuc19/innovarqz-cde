@@ -1,5 +1,5 @@
 // ==============================================================================
-// CONFIGURACIÓN CENTRALIZADA DE SERVICIOS - CDE INNOVARQZ S.A.S. (VERSIÓN 2.0)
+// CONFIGURACIÓN CENTRALIZADA DE SERVICIOS - CDE INNOVARQZ (VERSIÓN 2.1)
 // ==============================================================================
 const SUPABASE_URL = "https://bjlqtzrcrofpqlmyvoob.supabase.co";
 const SUPABASE_KEY = "sb_publishable_htPtQvL-1wrLfu7ACHBg1w_epAZsu1E";
@@ -43,7 +43,7 @@ const selectedFilesForBatch = new Map();
 const stagedUploadList = [];
 
 // ==============================================================================
-// VARIABLES DEL MOTOR 3D IFC (THAT OPEN COMPANY WEB-IFC v0.0.78)
+// VARIABLES DEL MOTOR 3D IFC (LOCAL OFFLINE-FIRST v2.1)
 // ==============================================================================
 let ifcScene = null;
 let ifcRenderer = null;
@@ -58,6 +58,20 @@ let currentLoadedModelID = null;
 
 // ÁRBOL DE NIVELES BIM
 let ifcBuildingStoreys = [];
+
+// MAPA DE CATEGORÍAS BIM ATÓMICAS (VERSIÓN 2.1)
+const ifcCategoriesMap = {
+    muros: { label: "🧱 Muros", meshes: [], visible: true },
+    losas: { label: "🔲 Losas / Pisos", meshes: [], visible: true },
+    columnas: { label: "🏛️ Columnas", meshes: [], visible: true },
+    vigas: { label: "🏗️ Vigas", meshes: [], visible: true },
+    puertas: { label: "🚪 Puertas", meshes: [], visible: true },
+    ventanas: { label: "🪟 Ventanas", meshes: [], visible: true },
+    escaleras: { label: "🪜 Escaleras", meshes: [], visible: true },
+    mep: { label: "🔧 Instalaciones MEP", meshes: [], visible: true },
+    mobiliario: { label: "🪑 Mobiliario", meshes: [], visible: true },
+    otros: { label: "📦 Otros", meshes: [], visible: true }
+};
 
 // GESTIÓN DE PLANOS DE CORTE LIMPIOS (NATIVOS DE THREE.JS)
 let ifcClippingPlane = null;
@@ -142,7 +156,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const capturaForm = document.getElementById("formCapturaConsolidada");
     if (capturaForm) capturaForm.addEventListener("submit", handleEnviarCapturasAlCDE);
 
-    // Conectar reactividad paramétrica del formulario asistido ISO 19650
     vincularEventosNomenclaturaAsistida();
 
     setupDropdownWithOther("ubicacionSelect", "ubicacionOtherInput");
@@ -153,6 +166,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (e.key === "Escape") {
             ocultarMenuHerramientasIFC();
             ocultarMenuContextualIFC();
+            cerrarPanelVisibilidadBIM();
             cancelarHerramientaActiva();
             cerrarCualquierModalAbierto();
         }
@@ -445,7 +459,6 @@ function recalcularPrevisualizacionNomenclatura() {
 
     previewSpan.innerText = nombreCompleto;
 
-    // Clasificación a subcarpeta ISO 19650
     let subDetectada = "Principal";
     const esInstalacion = ["MEP", "HID", "SAN", "ELE", "MEC", "PCI", "GAS", "VAC"].includes(disc);
 
@@ -482,7 +495,7 @@ function recalcularPrevisualizacionNomenclatura() {
 }
 
 // ==============================================================================
-// GESTIÓN DE LA COLA DE ENTREGA POR LOTE (STAGING EN MODAL UNIFICADO)
+// GESTIÓN DE LA COLA DE ENTREGA POR LOTE
 // ==============================================================================
 function handleAgregarAColaEntrega(e) {
     e.preventDefault();
@@ -1391,7 +1404,6 @@ async function promoverArchivo(nombreArchivo, estadoOrigen, estadoDestino) {
     }
 }
 
-// RETIRO Y ARCHIVO DE ENTREGABLES (HACIA 04_ARCHIVED)
 async function archivarEntregableDirecto(nombreArchivo, estadoOrigen) {
     const motivo = prompt(`¿Confirma retirar y mover a ARCHIVED el entregable "${nombreArchivo}"?\n\nEscriba el motivo técnico del retiro (obligatorio):`);
     if (!motivo || motivo.trim() === "") {
@@ -1761,7 +1773,7 @@ async function desplegarModalIFC(driveUrl, titulo) {
 
     if (loading) {
         loading.style.display = "block";
-        loading.innerHTML = `<div style="margin-bottom:6px;">⏳ Descargando modelo desde Google Drive...</div><small style="color:#94a3b8;">(Procesando geometría BIM 3D con That Open Company v0.0.78)</small>`;
+        loading.innerHTML = `<div style="margin-bottom:6px;">⏳ Descargando modelo desde Google Drive...</div><small style="color:#38bdf8;">(Decodificando geometría con motor local autónomo v2.1)</small>`;
     }
 
     modal.style.display = "flex";
@@ -1799,6 +1811,7 @@ function closeViewerModal(triggerHistory = true) {
     ocultarMenuHerramientasIFC();
     ocultarMenuContextualIFC();
     cerrarCardPropiedadesIFC();
+    cerrarPanelVisibilidadBIM();
     cancelarHerramientaActiva();
     cerrarPanelNivelesIFC();
 
@@ -1929,19 +1942,12 @@ function applyActiveTransform() {
 }
 
 // ==============================================================================
-// MOTOR BIM OPEN SOURCE 3D (PARAMÉTRICO 1:1 CON COTAS NATIVAS)
+// MOTOR BIM OPEN SOURCE 3D (LOCAL OFFLINE-FIRST v2.1)
 // ==============================================================================
 async function obtenerConstructorIfcAPI() {
     if (window.WebIFC && window.WebIFC.IfcAPI) return window.WebIFC.IfcAPI;
     if (window.IfcAPI) return window.IfcAPI;
-
-    try {
-        const modulo = await import("https://cdn.jsdelivr.net/npm/web-ifc@0.0.78/web-ifc-api.js");
-        if (modulo && modulo.IfcAPI) return modulo.IfcAPI;
-    } catch (e) {
-        console.warn("Fallback dynamic import v0.0.78 no disponible:", e);
-    }
-    throw new Error("No se pudo cargar la librería WebIFC v0.0.78 en el navegador.");
+    throw new Error("No se encontró la librería local web-ifc-api.js en lib/web-ifc/. Verifique que index.html la incluya en el <head>.");
 }
 
 async function inicializarVisorIFC(fileUrl, container) {
@@ -1953,9 +1959,17 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcBuildingStoreys = [];
     lastClickedMesh = null;
     walkLastKnownPosition = null;
+
+    // Reiniciar mapa de categorías BIM
+    Object.keys(ifcCategoriesMap).forEach(k => {
+        ifcCategoriesMap[k].meshes = [];
+        ifcCategoriesMap[k].visible = true;
+    });
+
     limpiarMedicionIFC();
     cancelarHerramientaActiva();
     cerrarPanelNivelesIFC();
+    cerrarPanelVisibilidadBIM();
     ocultarMenuHerramientasIFC();
     ocultarMenuContextualIFC();
 
@@ -1963,7 +1977,6 @@ async function inicializarVisorIFC(fileUrl, container) {
     const height = container.clientHeight || 550;
 
     ifcScene = new THREE.Scene();
-    // V2.0: Fondo sobrio grafito oscuro que resalta el modelo sin deslumbrar
     ifcScene.background = new THREE.Color(0x1e293b);
 
     ifcCamera = new THREE.PerspectiveCamera(45, width / height, 0.1, 3000);
@@ -1986,7 +1999,6 @@ async function inicializarVisorIFC(fileUrl, container) {
         RIGHT: THREE.MOUSE.NONE
     };
 
-    // V2.0: Calibración balanceada de luces para evitar sobreexposición en geometrías blancas
     const hemiLight = new THREE.HemisphereLight(0xffffff, 0x475569, 0.65);
     hemiLight.position.set(0, 60, 0);
     ifcScene.add(hemiLight);
@@ -2127,7 +2139,8 @@ async function inicializarVisorIFC(fileUrl, container) {
     const IfcAPIClass = await obtenerConstructorIfcAPI();
     if (!ifcApiInstance) {
         ifcApiInstance = new IfcAPIClass();
-        ifcApiInstance.SetWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.78/");
+        // V2.1: Enrutamiento local autónomo hacia lib/web-ifc/
+        ifcApiInstance.SetWasmPath("lib/web-ifc/");
         await ifcApiInstance.Init();
     }
 
@@ -2189,7 +2202,6 @@ async function inicializarVisorIFC(fileUrl, container) {
             const col = placedGeometry.color;
             const esTransparente = col.w < 0.95;
 
-            // Renderizado nativo limpio: doble cara sin planos externos
             const material = new THREE.MeshStandardMaterial({
                 color: new THREE.Color(col.x, col.y, col.z),
                 opacity: col.w,
@@ -2207,6 +2219,7 @@ async function inicializarVisorIFC(fileUrl, container) {
 
             let esPuerta = false;
             let esLosa = false;
+            let categoriaAsignada = "otros";
 
             try {
                 const tipoLinea = ifcApiInstance.GetLine(currentLoadedModelID, placedGeometry.geometryExpressID);
@@ -2215,11 +2228,28 @@ async function inicializarVisorIFC(fileUrl, container) {
                     const entityName = (tipoLinea.Name && tipoLinea.Name.value) ? String(tipoLinea.Name.value).toUpperCase() : "";
                     const objectType = (tipoLinea.ObjectType && tipoLinea.ObjectType.value) ? String(tipoLinea.ObjectType.value).toUpperCase() : "";
                     
-                    if (constructorName.includes("DOOR") || entityName.includes("DOOR") || entityName.includes("PUERTA") || objectType.includes("DOOR") || objectType.includes("PUERTA")) {
-                        esPuerta = true;
-                    }
-                    if (constructorName.includes("SLAB") || entityName.includes("SLAB") || entityName.includes("LOSA") || entityName.includes("FORJADO") || entityName.includes("PISO") || objectType.includes("SLAB") || objectType.includes("LOSA")) {
+                    const fullDescriptor = `${constructorName} ${entityName} ${objectType}`;
+
+                    if (fullDescriptor.includes("WALL") || fullDescriptor.includes("MURO")) {
+                        categoriaAsignada = "muros";
+                    } else if (fullDescriptor.includes("SLAB") || fullDescriptor.includes("LOSA") || fullDescriptor.includes("FORJADO") || fullDescriptor.includes("PISO")) {
+                        categoriaAsignada = "losas";
                         esLosa = true;
+                    } else if (fullDescriptor.includes("COLUMN") || fullDescriptor.includes("PILAR") || fullDescriptor.includes("COLUMNA")) {
+                        categoriaAsignada = "columnas";
+                    } else if (fullDescriptor.includes("BEAM") || fullDescriptor.includes("VIGA")) {
+                        categoriaAsignada = "vigas";
+                    } else if (fullDescriptor.includes("DOOR") || fullDescriptor.includes("PUERTA")) {
+                        categoriaAsignada = "puertas";
+                        esPuerta = true;
+                    } else if (fullDescriptor.includes("WINDOW") || fullDescriptor.includes("VENTANA")) {
+                        categoriaAsignada = "ventanas";
+                    } else if (fullDescriptor.includes("STAIR") || fullDescriptor.includes("RAMP") || fullDescriptor.includes("ESCALERA")) {
+                        categoriaAsignada = "escaleras";
+                    } else if (fullDescriptor.includes("PIPE") || fullDescriptor.includes("DUCT") || fullDescriptor.includes("FLOW") || fullDescriptor.includes("DISTRIBUTION")) {
+                        categoriaAsignada = "mep";
+                    } else if (fullDescriptor.includes("FURNISHING") || fullDescriptor.includes("MUEBLE") || fullDescriptor.includes("MOBILIARIO")) {
+                        categoriaAsignada = "mobiliario";
                     }
                 }
             } catch (errCheck) {}
@@ -2228,8 +2258,13 @@ async function inicializarVisorIFC(fileUrl, container) {
                 expressID: placedGeometry.geometryExpressID,
                 modelID: currentLoadedModelID,
                 esPuerta: esPuerta,
-                esLosa: esLosa
+                esLosa: esLosa,
+                categoriaBIM: categoriaAsignada
             };
+
+            if (ifcCategoriesMap[categoriaAsignada]) {
+                ifcCategoriesMap[categoriaAsignada].meshes.push(mesh);
+            }
 
             if (!esTransparente && posFloats.length < 6000) {
                 const edges = new THREE.EdgesGeometry(bufferGeometry, 24);
@@ -2271,7 +2306,95 @@ async function inicializarVisorIFC(fileUrl, container) {
 }
 
 // ==============================================================================
-// BOTONERA MINIMALISTA Y MENÚ CATEGORIZADO (VERSIÓN 2.0)
+// GESTIÓN DE VISIBILIDAD Y FILTROS POR CATEGORÍAS HOMOGÉNEAS (VERSIÓN 2.1)
+// ==============================================================================
+function alternarPanelVisibilidadBIM() {
+    const card = document.getElementById("ifcVisibilityCard");
+    if (!card) return;
+    const estaVisible = (card.style.display === "block");
+    card.style.display = estaVisible ? "none" : "block";
+    if (!estaVisible) renderizarTogglesCategoriasBIM();
+}
+
+function cerrarPanelVisibilidadBIM() {
+    const card = document.getElementById("ifcVisibilityCard");
+    if (card) card.style.display = "none";
+}
+
+function renderizarTogglesCategoriasBIM() {
+    const container = document.getElementById("ifcCategoryTogglesList");
+    if (!container) return;
+    container.innerHTML = "";
+
+    Object.keys(ifcCategoriesMap).forEach(key => {
+        const cat = ifcCategoriesMap[key];
+        if (!cat.meshes || cat.meshes.length === 0) return;
+
+        const row = document.createElement("div");
+        row.style.cssText = "display: flex; justify-content: space-between; align-items: center; background: rgba(30, 41, 59, 0.6); padding: 5px 8px; border-radius: 4px; font-size: 0.74rem;";
+        row.innerHTML = `
+            <span>${cat.label} <small style="color: #94a3b8;">(${cat.meshes.length})</small></span>
+            <button type="button" onclick="alternarCategoriaBIM('${key}')" id="btnCat_${key}" style="border: none; padding: 3px 8px; border-radius: 4px; font-size: 0.68rem; font-weight: bold; cursor: pointer; ${cat.visible ? 'background: #0284c7; color: #fff;' : 'background: #334155; color: #94a3b8;'}">
+                ${cat.visible ? 'Visible' : 'Oculto'}
+            </button>
+        `;
+        container.appendChild(row);
+    });
+}
+
+function alternarCategoriaBIM(key) {
+    const cat = ifcCategoriesMap[key];
+    if (!cat) return;
+    cat.visible = !cat.visible;
+
+    cat.meshes.forEach(mesh => {
+        if (mesh) mesh.visible = cat.visible;
+    });
+
+    const btn = document.getElementById(`btnCat_${key}`);
+    if (btn) {
+        btn.innerText = cat.visible ? "Visible" : "Oculto";
+        btn.style.background = cat.visible ? "#0284c7" : "#334155";
+        btn.style.color = cat.visible ? "#fff" : "#94a3b8";
+    }
+}
+
+function ocultarElementoActual() {
+    if (lastClickedMesh) {
+        lastClickedMesh.visible = false;
+        const nombreElem = document.getElementById("visElemNombre");
+        if (nombreElem) nombreElem.innerText = "Elemento ocultado";
+        const btn = document.getElementById("btnVisOcultarSeleccionado");
+        if (btn) {
+            btn.disabled = true;
+            btn.style.cursor = "not-allowed";
+        }
+        cerrarCardPropiedadesIFC();
+    }
+}
+
+function restablecerVisibilidadIFC() {
+    ocultarMenuContextualIFC();
+    ifcMeshesList.forEach(mesh => {
+        if (mesh) mesh.visible = true;
+    });
+
+    Object.keys(ifcCategoriesMap).forEach(key => {
+        ifcCategoriesMap[key].visible = true;
+        const btn = document.getElementById(`btnCat_${key}`);
+        if (btn) {
+            btn.innerText = "Visible";
+            btn.style.background = "#0284c7";
+            btn.style.color = "#fff";
+        }
+    });
+
+    const nombreElem = document.getElementById("visElemNombre");
+    if (nombreElem) nombreElem.innerText = "Todos los elementos visibles";
+}
+
+// ==============================================================================
+// BOTONERA Y MENÚ DE HERRAMIENTAS
 // ==============================================================================
 function alternarMenuHerramientasIFC(event) {
     if (event) {
@@ -2309,6 +2432,7 @@ function cancelarHerramientaActiva() {
     if (isPickSlabModeActive) desactivarSeleccionLosa();
     if (isSectionToolActive) alternarPanelCorteIFC();
     cerrarPanelNivelesIFC();
+    cerrarPanelVisibilidadBIM();
     cerrarCardPropiedadesIFC();
     ocultarGuiaContextual();
 }
@@ -2325,6 +2449,7 @@ function ejecutarHerramientaIFC(herramienta) {
     else if (herramienta === 'CORTE') alternarPanelCorteIFC();
     else if (herramienta === 'MEDIR') alternarModoMedicionIFC();
     else if (herramienta === 'NIVELES') alternarPanelNivelesIFC();
+    else if (herramienta === 'VISIBILIDAD') alternarPanelVisibilidadBIM();
     else if (herramienta === 'CAMINAR') activarSeleccionLosaCaminar();
     else if (herramienta === 'LINEAS') alternarAristasIFC();
     else if (herramienta === 'REJILLA') alternarCuadriculaIFC();
@@ -2380,15 +2505,8 @@ function ocultarElementoSeleccionadoIFC() {
     }
 }
 
-function restablecerVisibilidadIFC() {
-    ocultarMenuContextualIFC();
-    ifcMeshesList.forEach(mesh => {
-        if (mesh) mesh.visible = true;
-    });
-}
-
 // ==============================================================================
-// BANDEJA Y DISPARADOR DE CAPTURAS 3D (PC, TABLET Y MÓVIL)
+// BANDEJA Y DISPARADOR DE CAPTURAS 3D
 // ==============================================================================
 function agregarCapturaABandejaIFC() {
     ocultarMenuContextualIFC();
@@ -2526,7 +2644,6 @@ function descargarBlobTradicional(blob, fileName) {
     URL.revokeObjectURL(url);
 }
 
-// V2.0: Estandarización forzosa a informe formal PDF (cero imágenes sueltas en CDE)
 async function handleEnviarCapturasAlCDE(e) {
     e.preventDefault();
     if (capturasBandeja.length === 0) return;
@@ -2823,6 +2940,7 @@ function activarSeleccionLosaCaminar() {
     desactivarModoMedicion();
     cerrarCardPropiedadesIFC();
     cerrarPanelNivelesIFC();
+    cerrarPanelVisibilidadBIM();
     ocultarMenuHerramientasIFC();
     ocultarMenuContextualIFC();
 
@@ -3071,6 +3189,7 @@ function ajustarVistaModeloIFC() {
     if (!ifcCamera || !ifcControls) return;
     desactivarModoCaminar();
     cerrarPanelNivelesIFC();
+    cerrarPanelVisibilidadBIM();
     ocultarMenuHerramientasIFC();
     ocultarMenuContextualIFC();
     const d = ifcModelBounds.maxDim || 25;
@@ -3084,6 +3203,7 @@ function cambiarVistaIFC(tipo) {
     if (!ifcCamera || !ifcControls) return;
     desactivarModoCaminar();
     cerrarPanelNivelesIFC();
+    cerrarPanelVisibilidadBIM();
     ocultarMenuHerramientasIFC();
     ocultarMenuContextualIFC();
     const d = ifcModelBounds.maxDim || 25;
@@ -3131,6 +3251,7 @@ function alternarModoMedicionIFC() {
     if (isMeasureToolActive) {
         desactivarModoCaminar();
         cerrarPanelNivelesIFC();
+        cerrarPanelVisibilidadBIM();
         ocultarMenuHerramientasIFC();
         ocultarMenuContextualIFC();
         if (card) card.style.display = "block";
@@ -3235,7 +3356,7 @@ function procesarClickMedicion(intersectPoint) {
 }
 
 // ==============================================================================
-// HERRAMIENTA DE SECCIÓN Y CORTES 3D DINÁMICOS (CLIPPING LIMPIO)
+// HERRAMIENTA DE SECCIÓN Y CORTES 3D DINÁMICOS
 // ==============================================================================
 function alternarPanelCorteIFC() {
     const panel = document.getElementById("ifcSectionToolPanel");
@@ -3295,7 +3416,7 @@ function invertirPlanoCorte() {
 }
 
 // ==============================================================================
-// INSPECCIÓN DE PROPIEDADES BIM Y DISPATCHER DE CLICS / TOQUES
+// INSPECCIÓN DE PROPIEDADES BIM Y DISPATCHER TÁCTIL (VERSIÓN 2.1)
 // ==============================================================================
 function onIfcModelClick(event) {
     if (!ifcRenderer || !ifcCamera) return;
@@ -3336,6 +3457,19 @@ function onIfcModelClick(event) {
             return;
         }
 
+        lastClickedMesh = hit.object;
+
+        const visNombre = document.getElementById("visElemNombre");
+        const btnOcultarVis = document.getElementById("btnVisOcultarSeleccionado");
+        if (visNombre) {
+            const catLabel = ifcCategoriesMap[hit.object.userData.categoriaBIM]?.label || "Elemento";
+            visNombre.innerText = `${catLabel} (ID: ${hit.object.userData.expressID || 'N/A'})`;
+        }
+        if (btnOcultarVis) {
+            btnOcultarVis.disabled = false;
+            btnOcultarVis.style.cursor = "pointer";
+        }
+
         resaltarElementoIFC(hit.object);
         mostrarPropiedadesElementoIFC(hit.object.userData);
     }
@@ -3368,7 +3502,7 @@ function mostrarPropiedadesElementoIFC(userData) {
 
     let html = `
         <div style="margin-bottom: 4px;"><strong>ExpressID:</strong> ${userData.expressID}</div>
-        <div style="margin-bottom: 4px;"><strong>Modelo ID:</strong> ${userData.modelID}</div>
+        <div style="margin-bottom: 4px;"><strong>Familia BIM:</strong> ${ifcCategoriesMap[userData.categoriaBIM]?.label || 'Genérico'}</div>
         <div style="margin-bottom: 4px;"><strong>Norma:</strong> ISO 19650 Compliance</div>
     `;
 
@@ -3376,10 +3510,12 @@ function mostrarPropiedadesElementoIFC(userData) {
         try {
             const props = ifcApiInstance.GetLine(userData.modelID, userData.expressID);
             if (props) {
+                const tipoClase = (props.__proto__ && props.__proto__.constructor) ? props.__proto__.constructor.name : 'IfcElement';
                 html += `
-                    <div style="margin-bottom: 4px;"><strong>Tipo IFC:</strong> ${props.__proto__.constructor.name || 'IfcElement'}</div>
-                    ${props.Name ? `<div><strong>Nombre:</strong> ${props.Name.value}</div>` : ''}
-                    ${props.ObjectType ? `<div><strong>Objeto:</strong> ${props.ObjectType.value}</div>` : ''}
+                    <div style="margin-bottom: 4px;"><strong>Tipo IFC:</strong> ${tipoClase}</div>
+                    ${props.Name && props.Name.value ? `<div style="margin-bottom: 4px;"><strong>Nombre:</strong> ${props.Name.value}</div>` : ''}
+                    ${props.ObjectType && props.ObjectType.value ? `<div style="margin-bottom: 4px;"><strong>Objeto:</strong> ${props.ObjectType.value}</div>` : ''}
+                    ${props.Tag && props.Tag.value ? `<div style="margin-bottom: 4px;"><strong>Tag / Marca:</strong> ${props.Tag.value}</div>` : ''}
                 `;
             }
         } catch (e) {
@@ -3455,7 +3591,6 @@ async function loadFiles() {
 
             let cumpleNormaPestana = false;
 
-            // Segregación ISO 19650
             if (activeTab === "01_WIP") {
                 cumpleNormaPestana = (eDestino === "01_WIP") && (codigoEstado === "S0" || codigoEstado.startsWith("P0"));
             } else if (activeTab === "02_SHARED") {
@@ -3570,7 +3705,6 @@ async function loadFiles() {
                 botonPromocion = `<button class="btn-secondary" style="font-size:0.75rem; padding:0.25rem 0.5rem; background:#10b981; color:#fff;" onclick="promoverArchivo('${nombreCompleto}', '02_SHARED', '03_PUBLISHED')">Publicar a Cliente</button>`;
             }
 
-            // V2.0: Botón de archivar directo para Revisor, SuperAdmin y BIM Manager en SHARED o PUBLISHED
             if (puedeArchivar && (activeTab === "02_SHARED" || activeTab === "03_PUBLISHED")) {
                 botonArchivar = `<button class="btn-secondary" style="font-size:0.75rem; padding:0.25rem 0.5rem; background:#334155; color:#cbd5e1; border-color:#475569;" onclick="archivarEntregableDirecto('${nombreCompleto}', '${activeTab}')">📦 Archivar</button>`;
             }
@@ -3609,7 +3743,9 @@ async function loadFiles() {
     actualizarBarraAccionesPorLote();
 }
 
-// Helpers Modales Proyectos
+// ==============================================================================
+// HELPERS MODALES PROYECTOS
+// ==============================================================================
 async function prepareAndOpenProjectModal() {
     registrarAperturaModalEnHistorial("projectModal");
     const yearCurrent = new Date().getFullYear();
