@@ -43,7 +43,7 @@ const selectedFilesForBatch = new Map();
 const stagedUploadList = [];
 
 // ==============================================================================
-// VARIABLES DEL MOTOR 3D IFC (LOCAL OFFLINE-FIRST v2.1)
+// VARIABLES DEL MOTOR 3D IFC (THAT OPEN COMPANY WEB-IFC v0.0.78)
 // ==============================================================================
 let ifcScene = null;
 let ifcRenderer = null;
@@ -495,7 +495,7 @@ function recalcularPrevisualizacionNomenclatura() {
 }
 
 // ==============================================================================
-// GESTIÓN DE LA COLA DE ENTREGA POR LOTE
+// GESTIÓN DE LA COLA DE ENTREGA POR LOTE (STAGING EN MODAL UNIFICADO)
 // ==============================================================================
 function handleAgregarAColaEntrega(e) {
     e.preventDefault();
@@ -1404,6 +1404,7 @@ async function promoverArchivo(nombreArchivo, estadoOrigen, estadoDestino) {
     }
 }
 
+// RETIRO Y ARCHIVO DE ENTREGABLES (HACIA 04_ARCHIVED)
 async function archivarEntregableDirecto(nombreArchivo, estadoOrigen) {
     const motivo = prompt(`¿Confirma retirar y mover a ARCHIVED el entregable "${nombreArchivo}"?\n\nEscriba el motivo técnico del retiro (obligatorio):`);
     if (!motivo || motivo.trim() === "") {
@@ -1942,28 +1943,19 @@ function applyActiveTransform() {
 }
 
 // ==============================================================================
-// MOTOR BIM OPEN SOURCE 3D (LOCAL RESILIENTE v2.1)
+// MOTOR BIM OPEN SOURCE 3D (PARAMÉTRICO CON DYNAMIC IMPORT v0.0.78)
 // ==============================================================================
 async function obtenerConstructorIfcAPI() {
     if (window.WebIFC && window.WebIFC.IfcAPI) return window.WebIFC.IfcAPI;
     if (window.IfcAPI) return window.IfcAPI;
 
-    // Inyección de respaldo en caso de retardo de red
     try {
-        await new Promise((resolve, reject) => {
-            const s = document.createElement("script");
-            s.src = "https://cdn.jsdelivr.net/npm/web-ifc@0.0.78/web-ifc-api.js";
-            s.onload = () => resolve();
-            s.onerror = () => reject(new Error("Error al cargar script de Web-IFC"));
-            document.head.appendChild(s);
-        });
-        if (window.WebIFC && window.WebIFC.IfcAPI) return window.WebIFC.IfcAPI;
-        if (window.IfcAPI) return window.IfcAPI;
-    } catch (err) {
-        console.error("No se pudo cargar la librería WebIFC:", err);
+        const modulo = await import("https://cdn.jsdelivr.net/npm/web-ifc@0.0.78/web-ifc-api.js");
+        if (modulo && modulo.IfcAPI) return modulo.IfcAPI;
+    } catch (e) {
+        console.warn("Fallback dynamic import v0.0.78 no disponible:", e);
     }
-
-    throw new Error("No se encontró la librería Web-IFC en el navegador.");
+    throw new Error("No se pudo cargar la librería WebIFC v0.0.78 en el navegador.");
 }
 
 async function inicializarVisorIFC(fileUrl, container) {
@@ -1976,6 +1968,7 @@ async function inicializarVisorIFC(fileUrl, container) {
     lastClickedMesh = null;
     walkLastKnownPosition = null;
 
+    // Reiniciar mapa de categorías BIM
     Object.keys(ifcCategoriesMap).forEach(k => {
         ifcCategoriesMap[k].meshes = [];
         ifcCategoriesMap[k].visible = true;
@@ -2152,7 +2145,7 @@ async function inicializarVisorIFC(fileUrl, container) {
     animate();
 
     // =========================================================================
-    // INICIALIZACIÓN LIMPIA Y ROBUSTA DE LA API WASM (SIN ESTADOS CORRUPTOS)
+    // INICIALIZACIÓN OFICIAL Y ESTABLE DEL MOTOR (v0.0.78)
     // =========================================================================
     if (ifcApiInstance && currentLoadedModelID !== null) {
         try { ifcApiInstance.CloseModel(currentLoadedModelID); } catch(e){}
@@ -2160,32 +2153,9 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcApiInstance = null;
 
     const IfcAPIClass = await obtenerConstructorIfcAPI();
-    let inicializado = false;
-
-    // Estrategia 1: WASM local de tu propio servidor
-    try {
-        const instLocal = new IfcAPIClass();
-        instLocal.SetWasmPath("/lib/web-ifc/");
-        await instLocal.Init();
-        ifcApiInstance = instLocal;
-        inicializado = true;
-    } catch (e1) {
-        console.warn("Fallo compilación local de WASM, aplicando recuperación limpia:", e1);
-    }
-
-    // Estrategia 2: Si el binario local es incompatible, instanciar versión oficial CDN
-    if (!inicializado) {
-        try {
-            const instCDN = new IfcAPIClass();
-            instCDN.SetWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.78/");
-            await instCDN.Init();
-            ifcApiInstance = instCDN;
-            inicializado = true;
-        } catch (e2) {
-            console.error("Fallo definitivo al instanciar motor Web-IFC:", e2);
-            throw new Error("No se pudo compilar el motor WebAssembly (WASM).");
-        }
-    }
+    ifcApiInstance = new IfcAPIClass();
+    ifcApiInstance.SetWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.78/");
+    await ifcApiInstance.Init();
 
     let fileId = "";
     const match = fileUrl.match(/[-\w]{25,}/);
@@ -2549,7 +2519,7 @@ function ocultarElementoSeleccionadoIFC() {
 }
 
 // ==============================================================================
-// BANDEJA Y DISPARADOR DE CAPTURAS 3D
+// BANDEJA Y DISPARADOR DE CAPTURAS 3D (PC, TABLET Y MÓVIL)
 // ==============================================================================
 function agregarCapturaABandejaIFC() {
     ocultarMenuContextualIFC();
