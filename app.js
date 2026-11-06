@@ -1948,7 +1948,6 @@ async function obtenerConstructorIfcAPI() {
     if (window.WebIFC && window.WebIFC.IfcAPI) return window.WebIFC.IfcAPI;
     if (window.IfcAPI) return window.IfcAPI;
 
-    // Inyección dinámica de la versión standalone / IIFE
     const scriptsLocales = ["/lib/web-ifc/web-ifc-api-iife.js", "/lib/web-ifc/web-ifc-api.js"];
     for (const src of scriptsLocales) {
         try {
@@ -1966,7 +1965,6 @@ async function obtenerConstructorIfcAPI() {
         }
     }
 
-    // Fallback de seguridad al CDN oficial
     try {
         console.info("Cargando CDN de respaldo para motor IFC...");
         await new Promise((resolve, reject) => {
@@ -1995,7 +1993,6 @@ async function inicializarVisorIFC(fileUrl, container) {
     lastClickedMesh = null;
     walkLastKnownPosition = null;
 
-    // Reiniciar mapa de categorías BIM
     Object.keys(ifcCategoriesMap).forEach(k => {
         ifcCategoriesMap[k].meshes = [];
         ifcCategoriesMap[k].visible = true;
@@ -2172,17 +2169,17 @@ async function inicializarVisorIFC(fileUrl, container) {
     animate();
 
     // =========================================================================
-    // INICIALIZACIÓN TOLERANTE A FALLOS (DESCARTE DE ESTADO ABORTADO)
+    // INICIALIZACIÓN TOLERANTE A FALLOS (REINICIO LIMPIO DE INSTANCIAS)
     // =========================================================================
     if (ifcApiInstance && currentLoadedModelID !== null) {
         try { ifcApiInstance.CloseModel(currentLoadedModelID); } catch(e){}
     }
-    ifcApiInstance = null; // Reiniciar referencia para no heredar estados corruptos
+    ifcApiInstance = null;
 
     const IfcAPIClass = await obtenerConstructorIfcAPI();
     let inicializadoConExito = false;
 
-    // Intento 1: Servir WASM desde la ruta absoluta local
+    // Intento 1: Servir WASM local con ruta absoluta
     try {
         const instLocal = new IfcAPIClass();
         const wasmLocalUrl = window.location.origin + "/lib/web-ifc/";
@@ -2191,10 +2188,23 @@ async function inicializarVisorIFC(fileUrl, container) {
         ifcApiInstance = instLocal;
         inicializadoConExito = true;
     } catch (errLocalWasm) {
-        console.warn("Fallo inicialización local del WASM, aplicando recuperación limpia:", errLocalWasm);
+        console.warn("Fallo inicialización local del WASM, aplicando ruta relativa:", errLocalWasm);
     }
 
-    // Intento 2: Si el local fue abortado, se crea una instancia limpia con CDN sincronizado
+    // Intento 2: Ruta relativa directa si el dominio origin falló
+    if (!inicializadoConExito) {
+        try {
+            const instRelativa = new IfcAPIClass();
+            instRelativa.SetWasmPath("/lib/web-ifc/");
+            await instRelativa.Init();
+            ifcApiInstance = instRelativa;
+            inicializadoConExito = true;
+        } catch (errRel) {
+            console.warn("Fallo ruta relativa, aplicando fallback a CDN:", errRel);
+        }
+    }
+
+    // Intento 3: Fallback a CDN oficial
     if (!inicializadoConExito) {
         try {
             const instCDN = new IfcAPIClass();
@@ -2204,7 +2214,7 @@ async function inicializarVisorIFC(fileUrl, container) {
             inicializadoConExito = true;
         } catch (errCDN) {
             console.error("Fallo definitivo en la inicialización de Web-IFC:", errCDN);
-            throw new Error("No se pudo compilar el motor WebAssembly (WASM). Verifique la conexión o el archivo binario.");
+            throw new Error("No se pudo compilar el motor WebAssembly (WASM).");
         }
     }
 
