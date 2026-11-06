@@ -1774,7 +1774,7 @@ async function desplegarModalIFC(driveUrl, titulo) {
 
     if (loading) {
         loading.style.display = "block";
-        loading.innerHTML = `<div style="margin-bottom:6px;">⏳ Descargando modelo desde Google Drive...</div><small style="color:#38bdf8;">(Decodificando geometría con motor That Open Company v0.0.78)</small>`;
+        loading.innerHTML = `<div style="margin-bottom:6px;">⏳ Descargando modelo desde Google Drive...</div><small style="color:#38bdf8;">(Procesando geometría BIM 3D con That Open Company v0.0.78)</small>`;
     }
 
     modal.style.display = "flex";
@@ -2181,73 +2181,6 @@ async function inicializarVisorIFC(fileUrl, container) {
     currentLoadedModelID = ifcApiInstance.OpenModel(bytesArray, modelSettings);
     ifcCurrentGroup = new THREE.Group();
 
-    // =========================================================================
-    // PRE-INDEXACIÓN POR TIPOS IFC (DISCRIMINACIÓN ATÓMICA DE CATEGORÍAS)
-    // =========================================================================
-    const expressIdToCategory = new Map();
-    
-    // Diccionario de constantes numéricas oficiales de tipos IFC (Spec IFC2X3 / IFC4)
-    const ifcTypeGroups = {
-        muros: [
-            window.WebIFC?.IFCWALL || 2394858110,
-            window.WebIFC?.IFCWALLSTANDARDCASE || 3516309444
-        ],
-        losas: [
-            window.WebIFC?.IFCSLAB || 2623348512,
-            window.WebIFC?.IFCROOF || 2012734458,
-            window.WebIFC?.IFCCOVERING || 775263645
-        ],
-        columnas: [
-            window.WebIFC?.IFCCOLUMN || 843118947
-        ],
-        vigas: [
-            window.WebIFC?.IFCBEAM || 753859737,
-            window.WebIFC?.IFCMEMBER || 3939525412
-        ],
-        puertas: [
-            window.WebIFC?.IFCDOOR || 3959200540
-        ],
-        ventanas: [
-            window.WebIFC?.IFCWINDOW || 3105705613
-        ],
-        escaleras: [
-            window.WebIFC?.IFCSTAIR || 339396788,
-            window.WebIFC?.IFCSTAIRFLIGHT || 2831818165,
-            window.WebIFC?.IFCRAMP || 1205934175,
-            window.WebIFC?.IFCRAMPFLIGHT || 2056346914,
-            window.WebIFC?.IFCRAILING || 2769041697
-        ],
-        mep: [
-            window.WebIFC?.IFCFLOWTERMINAL || 3550269363,
-            window.WebIFC?.IFCFLOWSEGMENT || 4118029562,
-            window.WebIFC?.IFCFLOWFITTING || 2470126744,
-            window.WebIFC?.IFCDISTRIBUTIONELEMENT || 3196960134,
-            window.WebIFC?.IFCPIPESEGMENT || 2816976694,
-            window.WebIFC?.IFCDUCTSEGMENT || 1618641154
-        ],
-        mobiliario: [
-            window.WebIFC?.IFCFURNISHINGELEMENT || 4172428570,
-            window.WebIFC?.IFCFURNITURE || 3267156942
-        ]
-    };
-
-    try {
-        Object.keys(ifcTypeGroups).forEach(catKey => {
-            const types = ifcTypeGroups[catKey];
-            types.forEach(t => {
-                if (!t) return;
-                try {
-                    const ids = ifcApiInstance.GetLineIDsWithType(currentLoadedModelID, t);
-                    for (let k = 0; k < ids.size(); k++) {
-                        expressIdToCategory.set(ids.get(k), catKey);
-                    }
-                } catch (eType) {}
-            });
-        });
-    } catch (eIndex) {
-        console.warn("Indexación de tipos IFC falló:", eIndex);
-    }
-
     ifcClippingPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1000);
 
     const edgeLineMaterial = new THREE.LineBasicMaterial({
@@ -2259,10 +2192,6 @@ async function inicializarVisorIFC(fileUrl, container) {
 
     ifcApiInstance.StreamAllMeshes(currentLoadedModelID, (flatMesh) => {
         const placedGeometries = flatMesh.geometries;
-        
-        // El flatMesh.expressID corresponde al elemento constructivo contenedor (IfcWall, IfcSlab, etc.)
-        const elementExpressID = flatMesh.expressID;
-        let categoriaAsignada = expressIdToCategory.get(elementExpressID) || "otros";
 
         for (let i = 0; i < placedGeometries.size(); i++) {
             const placedGeometry = placedGeometries.get(i);
@@ -2303,9 +2232,50 @@ async function inicializarVisorIFC(fileUrl, container) {
             const matrix = new THREE.Matrix4().fromArray(placedGeometry.flatTransformation);
             mesh.applyMatrix4(matrix);
 
+            // =================================================================
+            // CLASIFICACIÓN ROBUSTA POR NOMBRE DE ENTIDAD CONSTRUCTIVA (IFC2X3/4)
+            // =================================================================
+            let categoriaAsignada = "otros";
+            let elementExpressID = placedGeometry.geometryExpressID;
+
+            try {
+                const lineaData = ifcApiInstance.GetLine(currentLoadedModelID, placedGeometry.geometryExpressID);
+                if (lineaData) {
+                    const tipoCadena = (lineaData.__proto__ && lineaData.__proto__.constructor) 
+                        ? String(lineaData.__proto__.constructor.name).toUpperCase() 
+                        : "";
+                    const nombreCadena = (lineaData.Name && lineaData.Name.value) 
+                        ? String(lineaData.Name.value).toUpperCase() 
+                        : "";
+                    const objetoCadena = (lineaData.ObjectType && lineaData.ObjectType.value) 
+                        ? String(lineaData.ObjectType.value).toUpperCase() 
+                        : "";
+                    const descripTotal = `${tipoCadena} ${nombreCadena} ${objetoCadena}`;
+
+                    if (descripTotal.includes("WALL") || descripTotal.includes("MURO")) {
+                        categoriaAsignada = "muros";
+                    } else if (descripTotal.includes("SLAB") || descripTotal.includes("LOSA") || descripTotal.includes("ROOF") || descripTotal.includes("CUBIERTA") || descripTotal.includes("PISO") || descripTotal.includes("FORJADO") || descripTotal.includes("COVERING") || descripTotal.includes("PLATE")) {
+                        categoriaAsignada = "losas";
+                    } else if (descripTotal.includes("COLUMN") || descripTotal.includes("COLUMNA") || descripTotal.includes("PILAR")) {
+                        categoriaAsignada = "columnas";
+                    } else if (descripTotal.includes("BEAM") || descripTotal.includes("VIGA") || descripTotal.includes("MEMBER")) {
+                        categoriaAsignada = "vigas";
+                    } else if (descripTotal.includes("DOOR") || descripTotal.includes("PUERTA")) {
+                        categoriaAsignada = "puertas";
+                    } else if (descripTotal.includes("WINDOW") || descripTotal.includes("VENTANA")) {
+                        categoriaAsignada = "ventanas";
+                    } else if (descripTotal.includes("STAIR") || descripTotal.includes("RAMP") || descripTotal.includes("ESCALERA") || descripTotal.includes("RAILING") || descripTotal.includes("BARANDA")) {
+                        categoriaAsignada = "escaleras";
+                    } else if (descripTotal.includes("FLOW") || descripTotal.includes("PIPE") || descripTotal.includes("DUCT") || descripTotal.includes("DISTRIBUTION") || descripTotal.includes("ELECTRICAL") || descripTotal.includes("SANITARY")) {
+                        categoriaAsignada = "mep";
+                    } else if (descripTotal.includes("FURNISHING") || descripTotal.includes("FURNITURE") || descripTotal.includes("MOBILIARIO") || descripTotal.includes("MUEBLE")) {
+                        categoriaAsignada = "mobiliario";
+                    }
+                }
+            } catch (errParse) {}
+
             mesh.userData = {
                 expressID: elementExpressID,
-                geometryExpressID: placedGeometry.geometryExpressID,
                 modelID: currentLoadedModelID,
                 esPuerta: (categoriaAsignada === "puertas"),
                 esLosa: (categoriaAsignada === "losas"),
