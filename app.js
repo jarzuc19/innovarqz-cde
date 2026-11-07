@@ -85,6 +85,7 @@ let ifcEdgesVisible = true;
 
 // HERRAMIENTA DE MEDICIÓN 3D PUNTO A PUNTO (RESTAURADA UNIVERSAL)
 let isMeasureToolActive = false;
+let wasWalkingBeforeMeasure = false;
 let measurePoints = [];
 const measureVisualObjects = [];
 
@@ -166,6 +167,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (e.key === "Escape") {
             ocultarMenuHerramientasIFC();
             ocultarMenuContextualIFC();
+            cerrarPanelVisibilidadBIM();
             cancelarHerramientaActiva();
             cerrarCualquierModalAbierto();
         }
@@ -1403,6 +1405,7 @@ async function promoverArchivo(nombreArchivo, estadoOrigen, estadoDestino) {
     }
 }
 
+// RETIRO Y ARCHIVO DE ENTREGABLES (HACIA 04_ARCHIVED)
 async function archivarEntregableDirecto(nombreArchivo, estadoOrigen) {
     const motivo = prompt(`¿Confirma retirar y mover a ARCHIVED el entregable "${nombreArchivo}"?\n\nEscriba el motivo técnico del retiro (obligatorio):`);
     if (!motivo || motivo.trim() === "") {
@@ -2118,7 +2121,6 @@ async function inicializarVisorIFC(fileUrl, container) {
         const deltaX = Math.abs(e.clientX - pointerDownPos.x);
         const deltaY = Math.abs(e.clientY - pointerDownPos.y);
 
-        // V2.2: Permitir medición en cualquier modo (incluso en caminata o corte)
         if (deltaX < 6 && deltaY < 6 && (e.button === 0 || e.pointerType === 'touch')) {
             if (isMeasureToolActive || isPickSlabModeActive || !isWalkModeActive) {
                 onIfcModelClick(e);
@@ -2186,8 +2188,6 @@ async function inicializarVisorIFC(fileUrl, container) {
 
     ifcApiInstance.StreamAllMeshes(currentLoadedModelID, (flatMesh) => {
         const placedGeometries = flatMesh.geometries;
-
-        // V2.2: flatMesh.expressID es la identidad BIM del elemento padre (Muro, Losa, Puerta, etc.)
         const realElementExpressID = flatMesh.expressID;
 
         let categoriaAsignada = "otros";
@@ -3309,6 +3309,8 @@ function alternarModoMedicionIFC() {
     const container = document.getElementById("modalIfcContainer");
 
     if (isMeasureToolActive) {
+        // Recordar si veníamos caminando
+        wasWalkingBeforeMeasure = isWalkModeActive;
         cerrarCardPropiedadesIFC();
         abrirHerramientaEnBandeja("ifcMeasureCard");
         if (container) container.style.cursor = "crosshair";
@@ -3324,9 +3326,25 @@ function desactivarModoMedicion() {
     const container = document.getElementById("modalIfcContainer");
 
     cerrarHerramientaDeBandeja("ifcMeasureCard");
-    if (container && !isWalkModeActive) container.style.cursor = "default";
     limpiarMedicionIFC();
-    ocultarGuiaContextual();
+
+    // V2.2: Si veníamos del modo caminar, restaurar la experiencia en primera persona
+    if (wasWalkingBeforeMeasure && isWalkModeActive) {
+        if (container) container.style.cursor = "move";
+        const touchDpad = document.getElementById("walkTouchContainer");
+        const esDispositivoTactil = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 992);
+        if (esDispositivoTactil && touchDpad) {
+            touchDpad.style.display = "flex";
+            mostrarGuiaContextual("🚶 <strong>Caminata Activa:</strong> Usa el mando táctil para moverte y arrastra para mirar");
+        } else {
+            mostrarGuiaContextual("🚶 <strong>Modo Caminar:</strong> Usa <strong>W, A, S, D</strong> para moverte y arrastra el ratón para mirar");
+        }
+    } else {
+        if (container && !isWalkModeActive) container.style.cursor = "default";
+        ocultarGuiaContextual();
+    }
+
+    wasWalkingBeforeMeasure = false;
 }
 
 function limpiarMedicionIFC() {
@@ -3354,7 +3372,7 @@ function procesarClickMedicion(intersectPoint) {
 
     measurePoints.push(intersectPoint.clone());
 
-    // V2.2: Punto A celeste (0x38bdf8), Punto B verde (0x10b981) sin oclusión
+    // V2.2: Punto A celeste (0x38bdf8), Punto B verde (0x10b981)
     const esPuntoA = (measurePoints.length === 1);
     const colorEsfera = esPuntoA ? 0x38bdf8 : 0x10b981;
 
@@ -3383,7 +3401,6 @@ function procesarClickMedicion(intersectPoint) {
         const p1 = measurePoints[0];
         const p2 = measurePoints[1];
 
-        // Línea con prioridad de renderizado visible frente a cualquier superficie
         const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
         const lineMat = new THREE.LineBasicMaterial({ 
             color: 0x10b981, 
@@ -3493,18 +3510,18 @@ function onIfcModelClick(event) {
 
     if (intersects.length > 0) {
         let hit = null;
+
+        // V2.2: Descartar partes cortadas por el plano de sección
         for (let i = 0; i < intersects.length; i++) {
             const p = intersects[i].point;
-            // V2.2: Al medir, no descartar caras internas descubiertas por corte
-            if (!isMeasureToolActive && ifcClippingPlane && isSectionToolActive) {
-                if (ifcClippingPlane.distanceToPoint(p) >= 0) {
-                    hit = intersects[i];
-                    break;
+            if (ifcClippingPlane && isSectionToolActive) {
+                // distanceToPoint < 0 significa que el punto está del lado recortado/oculto
+                if (ifcClippingPlane.distanceToPoint(p) < 0) {
+                    continue; // Ignorar el techo o cara cortada y buscar la siguiente superficie real
                 }
-            } else {
-                hit = intersects[i];
-                break;
             }
+            hit = intersects[i];
+            break;
         }
 
         if (!hit) return;
