@@ -1,5 +1,5 @@
 // ==============================================================================
-// CONFIGURACIÓN CENTRALIZADA DE SERVICIOS - CDE INNOVARQZ (VERSIÓN 2.1)
+// CONFIGURACIÓN CENTRALIZADA DE SERVICIOS - CDE INNOVARQZ (VERSIÓN 2.2)
 // ==============================================================================
 const SUPABASE_URL = "https://bjlqtzrcrofpqlmyvoob.supabase.co";
 const SUPABASE_KEY = "sb_publishable_htPtQvL-1wrLfu7ACHBg1w_epAZsu1E";
@@ -59,7 +59,7 @@ let currentLoadedModelID = null;
 // ÁRBOL DE NIVELES BIM
 let ifcBuildingStoreys = [];
 
-// MAPA DE CATEGORÍAS BIM ATÓMICAS (VERSIÓN 2.1)
+// MAPA DE CATEGORÍAS BIM ATÓMICAS (VERSIÓN 2.2)
 const ifcCategoriesMap = {
     muros: { label: "🧱 Muros", meshes: [], visible: true },
     losas: { label: "🔲 Losas / Pisos", meshes: [], visible: true },
@@ -83,7 +83,7 @@ let isSectionToolActive = false;
 const ifcEdgesList = [];
 let ifcEdgesVisible = true;
 
-// HERRAMIENTA DE MEDICIÓN 3D PUNTO A PUNTO
+// HERRAMIENTA DE MEDICIÓN 3D PUNTO A PUNTO (RESTAURADA UNIVERSAL)
 let isMeasureToolActive = false;
 let measurePoints = [];
 const measureVisualObjects = [];
@@ -166,7 +166,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (e.key === "Escape") {
             ocultarMenuHerramientasIFC();
             ocultarMenuContextualIFC();
-            cerrarPanelVisibilidadBIM();
             cancelarHerramientaActiva();
             cerrarCualquierModalAbierto();
         }
@@ -1404,7 +1403,6 @@ async function promoverArchivo(nombreArchivo, estadoOrigen, estadoDestino) {
     }
 }
 
-// RETIRO Y ARCHIVO DE ENTREGABLES (HACIA 04_ARCHIVED)
 async function archivarEntregableDirecto(nombreArchivo, estadoOrigen) {
     const motivo = prompt(`¿Confirma retirar y mover a ARCHIVED el entregable "${nombreArchivo}"?\n\nEscriba el motivo técnico del retiro (obligatorio):`);
     if (!motivo || motivo.trim() === "") {
@@ -1968,7 +1966,6 @@ async function inicializarVisorIFC(fileUrl, container) {
     lastClickedMesh = null;
     walkLastKnownPosition = null;
 
-    // Reiniciar mapa de categorías BIM
     Object.keys(ifcCategoriesMap).forEach(k => {
         ifcCategoriesMap[k].meshes = [];
         ifcCategoriesMap[k].visible = true;
@@ -2089,7 +2086,7 @@ async function inicializarVisorIFC(fileUrl, container) {
         pointerDownPos.x = e.clientX;
         pointerDownPos.y = e.clientY;
 
-        if (isWalkModeActive && !isPickSlabModeActive && (e.button === 0 || e.pointerType === 'touch')) {
+        if (isWalkModeActive && !isPickSlabModeActive && !isMeasureToolActive && (e.button === 0 || e.pointerType === 'touch')) {
             walkIsDraggingLook = true;
             walkLastMousePos.x = e.clientX;
             walkLastMousePos.y = e.clientY;
@@ -2097,7 +2094,7 @@ async function inicializarVisorIFC(fileUrl, container) {
     });
 
     window.addEventListener('pointermove', (e) => {
-        if (isWalkModeActive && walkIsDraggingLook && !isPickSlabModeActive) {
+        if (isWalkModeActive && walkIsDraggingLook && !isPickSlabModeActive && !isMeasureToolActive) {
             const deltaX = e.clientX - walkLastMousePos.x;
             const deltaY = e.clientY - walkLastMousePos.y;
             walkLastMousePos.x = e.clientX;
@@ -2121,8 +2118,9 @@ async function inicializarVisorIFC(fileUrl, container) {
         const deltaX = Math.abs(e.clientX - pointerDownPos.x);
         const deltaY = Math.abs(e.clientY - pointerDownPos.y);
 
+        // V2.2: Permitir medición en cualquier modo (incluso en caminata o corte)
         if (deltaX < 6 && deltaY < 6 && (e.button === 0 || e.pointerType === 'touch')) {
-            if (isPickSlabModeActive || !isWalkModeActive) {
+            if (isMeasureToolActive || isPickSlabModeActive || !isWalkModeActive) {
                 onIfcModelClick(e);
             }
         }
@@ -2144,9 +2142,6 @@ async function inicializarVisorIFC(fileUrl, container) {
     walkClock.start();
     animate();
 
-    // =========================================================================
-    // INICIALIZACIÓN OFICIAL Y ESTABLE DEL MOTOR (v0.0.78)
-    // =========================================================================
     if (ifcApiInstance && currentLoadedModelID !== null) {
         try { ifcApiInstance.CloseModel(currentLoadedModelID); } catch(e){}
     }
@@ -2192,10 +2187,9 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcApiInstance.StreamAllMeshes(currentLoadedModelID, (flatMesh) => {
         const placedGeometries = flatMesh.geometries;
 
-        // flatMesh.expressID es el ID del elemento constructivo BIM (IfcRoof, IfcWall, etc.)
+        // V2.2: flatMesh.expressID es la identidad BIM del elemento padre (Muro, Losa, Puerta, etc.)
         const realElementExpressID = flatMesh.expressID;
 
-        // Clasificar una sola vez por elemento contenedor
         let categoriaAsignada = "otros";
         try {
             const lineaData = ifcApiInstance.GetLine(currentLoadedModelID, realElementExpressID);
@@ -2325,19 +2319,66 @@ async function inicializarVisorIFC(fileUrl, container) {
 }
 
 // ==============================================================================
-// GESTIÓN DE VISIBILIDAD Y FILTROS POR CATEGORÍAS HOMOGÉNEAS (VERSIÓN 2.1)
+// GESTIÓN DE LA BANDEJA LATERAL ACOPLABLE Y ACORDEÓN (VERSIÓN 2.2)
+// ==============================================================================
+function abrirHerramientaEnBandeja(panelId) {
+    const sideTray = document.getElementById("ifcSideTray");
+    const panel = document.getElementById(panelId);
+    if (!panel) return;
+
+    if (sideTray) sideTray.style.setProperty("display", "flex", "important");
+    panel.style.setProperty("display", "block", "important");
+
+    const body = panel.querySelector(".tray-card-body");
+    const toggleIcon = panel.querySelector(".btn-tray-toggle");
+    if (body) body.style.display = "block";
+    if (toggleIcon) toggleIcon.innerText = "▾";
+}
+
+function cerrarHerramientaDeBandeja(panelId) {
+    const panel = document.getElementById(panelId);
+    if (panel) panel.style.display = "none";
+
+    const sideTray = document.getElementById("ifcSideTray");
+    if (sideTray) {
+        const panelesAbiertos = Array.from(sideTray.querySelectorAll(".ifc-tray-card"))
+            .filter(card => card.style.display !== "none");
+        if (panelesAbiertos.length === 0) {
+            sideTray.style.display = "none";
+        }
+    }
+}
+
+function alternarColapsoBandejaCard(headerEl) {
+    const card = headerEl.closest(".ifc-tray-card");
+    if (!card) return;
+    const body = card.querySelector(".tray-card-body");
+    const toggleBtn = card.querySelector(".btn-tray-toggle");
+    if (!body) return;
+
+    const estaColapsado = (body.style.display === "none");
+    body.style.display = estaColapsado ? "block" : "none";
+    if (toggleBtn) toggleBtn.innerText = estaColapsado ? "▾" : "▸";
+}
+
+// ==============================================================================
+// GESTIÓN DE VISIBILIDAD Y FILTROS POR CATEGORÍAS HOMOGÉNEAS (VERSIÓN 2.2)
 // ==============================================================================
 function alternarPanelVisibilidadBIM() {
     const card = document.getElementById("ifcVisibilityCard");
     if (!card) return;
+
     const estaVisible = (card.style.display === "block");
-    card.style.display = estaVisible ? "none" : "block";
-    if (!estaVisible) renderizarTogglesCategoriasBIM();
+    if (estaVisible) {
+        cerrarPanelVisibilidadBIM();
+    } else {
+        abrirHerramientaEnBandeja("ifcVisibilityCard");
+        renderizarTogglesCategoriasBIM();
+    }
 }
 
 function cerrarPanelVisibilidadBIM() {
-    const card = document.getElementById("ifcVisibilityCard");
-    if (card) card.style.display = "none";
+    cerrarHerramientaDeBandeja("ifcVisibilityCard");
 }
 
 function renderizarTogglesCategoriasBIM() {
@@ -2525,7 +2566,7 @@ function ocultarElementoSeleccionadoIFC() {
 }
 
 // ==============================================================================
-// BANDEJA Y DISPARADOR DE CAPTURAS 3D (PC, TABLET Y MÓVIL)
+// BANDEJA Y DISPARADOR DE CAPTURAS 3D
 // ==============================================================================
 function agregarCapturaABandejaIFC() {
     ocultarMenuContextualIFC();
@@ -2663,7 +2704,6 @@ function descargarBlobTradicional(blob, fileName) {
     URL.revokeObjectURL(url);
 }
 
-// V2.0: Estandarización forzosa a informe formal PDF (cero imágenes sueltas en CDE)
 async function handleEnviarCapturasAlCDE(e) {
     e.preventDefault();
     if (capturasBandeja.length === 0) return;
@@ -2889,23 +2929,26 @@ function renderizarListaNivelesIFC() {
 }
 
 function alternarPanelNivelesIFC() {
-    const panel = document.getElementById("ifcLevelsCard");
-    if (!panel) return;
-    const visible = panel.style.display === "block";
-    panel.style.display = visible ? "none" : "block";
+    const card = document.getElementById("ifcLevelsCard");
+    if (!card) return;
+
+    const visible = (card.style.display === "block");
+    if (visible) {
+        cerrarPanelNivelesIFC();
+    } else {
+        abrirHerramientaEnBandeja("ifcLevelsCard");
+    }
 }
 
 function cerrarPanelNivelesIFC() {
-    const panel = document.getElementById("ifcLevelsCard");
-    if (panel) panel.style.display = "none";
+    cerrarHerramientaDeBandeja("ifcLevelsCard");
 }
 
 function cortarEnNivel(cotaLosaEscena) {
     if (!ifcClippingPlane) return;
 
     isSectionToolActive = true;
-    const panel = document.getElementById("ifcSectionToolPanel");
-    if (panel) panel.style.display = "block";
+    abrirHerramientaEnBandeja("ifcSectionToolPanel");
 
     const radios = document.getElementsByName("clipAxis");
     radios.forEach(r => { if (r.value === 'Y') r.checked = true; });
@@ -2922,7 +2965,7 @@ function cortarEnNivel(cotaLosaEscena) {
     const slider = document.getElementById("clipSlider");
     if (slider) slider.value = pct;
 
-    mostrarGuiaContextual("✂️ <strong>Corte de Sección Activo:</strong> Ajuste el nivel o eje en el panel inferior.");
+    mostrarGuiaContextual("✂️ <strong>Corte de Sección Activo:</strong> Ajuste el nivel o eje en el panel lateral.");
 }
 
 // ==============================================================================
@@ -3258,7 +3301,7 @@ function alternarAristasIFC() {
 }
 
 // ==============================================================================
-// HERRAMIENTA DE MEDICIÓN 3D PUNTO A PUNTO
+// HERRAMIENTA DE MEDICIÓN 3D PUNTO A PUNTO (UNIVERSAL V2.2)
 // ==============================================================================
 function alternarModoMedicionIFC() {
     isMeasureToolActive = !isMeasureToolActive;
@@ -3266,15 +3309,11 @@ function alternarModoMedicionIFC() {
     const container = document.getElementById("modalIfcContainer");
 
     if (isMeasureToolActive) {
-        desactivarModoCaminar();
-        cerrarPanelNivelesIFC();
-        ocultarMenuHerramientasIFC();
-        ocultarMenuContextualIFC();
-        if (card) card.style.display = "block";
-        if (container) container.style.cursor = "crosshair";
         cerrarCardPropiedadesIFC();
+        abrirHerramientaEnBandeja("ifcMeasureCard");
+        if (container) container.style.cursor = "crosshair";
         limpiarMedicionIFC();
-        mostrarGuiaContextual("📏 <strong>Medición 3D:</strong> Haz clic en el primer punto de interés...");
+        mostrarGuiaContextual("📏 <strong>Medición 3D:</strong> Haz clic en el primer punto (A)...");
     } else {
         desactivarModoMedicion();
     }
@@ -3282,10 +3321,9 @@ function alternarModoMedicionIFC() {
 
 function desactivarModoMedicion() {
     isMeasureToolActive = false;
-    const card = document.getElementById("ifcMeasureCard");
     const container = document.getElementById("modalIfcContainer");
 
-    if (card) card.style.display = "none";
+    cerrarHerramientaDeBandeja("ifcMeasureCard");
     if (container && !isWalkModeActive) container.style.cursor = "default";
     limpiarMedicionIFC();
     ocultarGuiaContextual();
@@ -3316,9 +3354,13 @@ function procesarClickMedicion(intersectPoint) {
 
     measurePoints.push(intersectPoint.clone());
 
-    const sphereGeo = new THREE.SphereGeometry(0.2, 16, 16);
+    // V2.2: Punto A celeste (0x38bdf8), Punto B verde (0x10b981) sin oclusión
+    const esPuntoA = (measurePoints.length === 1);
+    const colorEsfera = esPuntoA ? 0x38bdf8 : 0x10b981;
+
+    const sphereGeo = new THREE.SphereGeometry(0.18, 16, 16);
     const sphereMat = new THREE.MeshBasicMaterial({ 
-        color: (measurePoints.length === 1) ? 0x38bdf8 : 0x10b981, 
+        color: colorEsfera, 
         depthTest: false,
         depthWrite: false 
     });
@@ -3331,20 +3373,20 @@ function procesarClickMedicion(intersectPoint) {
     const status = document.getElementById("ifcMeasureStatus");
     const dataDiv = document.getElementById("ifcMeasureData");
 
-    if (measurePoints.length === 1) {
+    if (esPuntoA) {
         if (status) {
             status.innerText = "📍 Punto A fijado. Toca el Punto B...";
             status.style.color = "#38bdf8";
         }
-        mostrarGuiaContextual("📍 <strong>Punto A fijado:</strong> Haz clic en el segundo punto...");
-    } else if (measurePoints.length === 2) {
+        mostrarGuiaContextual("📍 <strong>Punto A fijado:</strong> Haz clic en el segundo punto (B)...");
+    } else {
         const p1 = measurePoints[0];
         const p2 = measurePoints[1];
 
+        // Línea con prioridad de renderizado visible frente a cualquier superficie
         const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
         const lineMat = new THREE.LineBasicMaterial({ 
             color: 0x10b981, 
-            linewidth: 3, 
             depthTest: false,
             depthWrite: false 
         });
@@ -3362,10 +3404,13 @@ function procesarClickMedicion(intersectPoint) {
             status.style.color = "#10b981";
         }
         if (dataDiv) {
-            dataDiv.style.display = "block";
-            document.getElementById("measureDistReal").innerText = `${distReal.toFixed(2)} m`;
-            document.getElementById("measureDistY").innerText = `${distY.toFixed(2)} m`;
-            document.getElementById("measureDistXZ").innerText = `${distXZ.toFixed(2)} m`;
+            dataDiv.style.setProperty("display", "block", "important");
+            const elReal = document.getElementById("measureDistReal");
+            const elY = document.getElementById("measureDistY");
+            const elXZ = document.getElementById("measureDistXZ");
+            if (elReal) elReal.innerText = `${distReal.toFixed(2)} m`;
+            if (elY) elY.innerText = `${distY.toFixed(2)} m`;
+            if (elXZ) elXZ.innerText = `${distXZ.toFixed(2)} m`;
         }
         mostrarGuiaContextual(`✅ <strong>Distancia Real:</strong> ${distReal.toFixed(2)} m | ΔY: ${distY.toFixed(2)} m`);
     }
@@ -3375,18 +3420,18 @@ function procesarClickMedicion(intersectPoint) {
 // HERRAMIENTA DE SECCIÓN Y CORTES 3D DINÁMICOS (CLIPPING LIMPIO)
 // ==============================================================================
 function alternarPanelCorteIFC() {
-    const panel = document.getElementById("ifcSectionToolPanel");
-    if (!panel) return;
+    const card = document.getElementById("ifcSectionToolPanel");
+    if (!card) return;
 
     isSectionToolActive = !isSectionToolActive;
-    panel.style.display = isSectionToolActive ? "block" : "none";
-
-    if (!isSectionToolActive && ifcClippingPlane) {
-        ifcClippingPlane.constant = 5000;
-        ocultarGuiaContextual();
-    } else {
+    if (isSectionToolActive) {
+        abrirHerramientaEnBandeja("ifcSectionToolPanel");
         configurarPlanoCorte();
-        mostrarGuiaContextual("✂️ <strong>Caja de Sección:</strong> Mueva la barra inferior para ajustar la cota de corte");
+        mostrarGuiaContextual("✂️ <strong>Caja de Sección:</strong> Mueva la barra lateral para ajustar la cota de corte");
+    } else {
+        cerrarHerramientaDeBandeja("ifcSectionToolPanel");
+        if (ifcClippingPlane) ifcClippingPlane.constant = 5000;
+        ocultarGuiaContextual();
     }
 }
 
@@ -3450,7 +3495,8 @@ function onIfcModelClick(event) {
         let hit = null;
         for (let i = 0; i < intersects.length; i++) {
             const p = intersects[i].point;
-            if (ifcClippingPlane && isSectionToolActive) {
+            // V2.2: Al medir, no descartar caras internas descubiertas por corte
+            if (!isMeasureToolActive && ifcClippingPlane && isSectionToolActive) {
                 if (ifcClippingPlane.distanceToPoint(p) >= 0) {
                     hit = intersects[i];
                     break;
@@ -3513,7 +3559,7 @@ function mostrarPropiedadesElementoIFC(userData) {
     const content = document.getElementById("ifcPropContent");
     if (!card || !content) return;
 
-    card.style.display = "block";
+    abrirHerramientaEnBandeja("ifcPropertyCard");
     title.innerText = `Elemento BIM (ID: ${userData.expressID || 'N/A'})`;
 
     let html = `
@@ -3543,8 +3589,7 @@ function mostrarPropiedadesElementoIFC(userData) {
 }
 
 function cerrarCardPropiedadesIFC() {
-    const card = document.getElementById("ifcPropertyCard");
-    if (card) card.style.display = "none";
+    cerrarHerramientaDeBandeja("ifcPropertyCard");
     if (highlightedMesh && originalMaterial) {
         highlightedMesh.material = originalMaterial;
         highlightedMesh = null;
@@ -3607,7 +3652,6 @@ async function loadFiles() {
 
             let cumpleNormaPestana = false;
 
-            // Segregación ISO 19650
             if (activeTab === "01_WIP") {
                 cumpleNormaPestana = (eDestino === "01_WIP") && (codigoEstado === "S0" || codigoEstado.startsWith("P0"));
             } else if (activeTab === "02_SHARED") {
@@ -3722,7 +3766,6 @@ async function loadFiles() {
                 botonPromocion = `<button class="btn-secondary" style="font-size:0.75rem; padding:0.25rem 0.5rem; background:#10b981; color:#fff;" onclick="promoverArchivo('${nombreCompleto}', '02_SHARED', '03_PUBLISHED')">Publicar a Cliente</button>`;
             }
 
-            // V2.0: Botón de archivar directo para Revisor, SuperAdmin y BIM Manager en SHARED o PUBLISHED
             if (puedeArchivar && (activeTab === "02_SHARED" || activeTab === "03_PUBLISHED")) {
                 botonArchivar = `<button class="btn-secondary" style="font-size:0.75rem; padding:0.25rem 0.5rem; background:#334155; color:#cbd5e1; border-color:#475569;" onclick="archivarEntregableDirecto('${nombreCompleto}', '${activeTab}')">📦 Archivar</button>`;
             }
@@ -3761,7 +3804,9 @@ async function loadFiles() {
     actualizarBarraAccionesPorLote();
 }
 
-// Helpers Modales Proyectos
+// ==============================================================================
+// HELPERS MODALES PROYECTOS
+// ==============================================================================
 async function prepareAndOpenProjectModal() {
     registrarAperturaModalEnHistorial("projectModal");
     const yearCurrent = new Date().getFullYear();
