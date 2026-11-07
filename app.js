@@ -127,7 +127,7 @@ let isSectionToolActive = false;
 const ifcEdgesList = [];
 let ifcEdgesVisible = true;
 
-// HERRAMIENTA DE MEDICIÓN 3D PUNTO A PUNTO (RESTAURADA UNIVERSAL)
+// HERRAMIENTA DE MEDICIÓN 3D PUNTO A PUNTO (UNIVERSAL V2.3)
 let isMeasureToolActive = false;
 let wasWalkingBeforeMeasure = false;
 let measurePoints = [];
@@ -2012,7 +2012,6 @@ async function inicializarVisorIFC(fileUrl, container) {
     lastClickedMesh = null;
     walkLastKnownPosition = null;
 
-    // V2.3: Reiniciar mapa dinámico de categorías
     Object.keys(ifcCategoriesMap).forEach(k => delete ifcCategoriesMap[k]);
 
     limpiarMedicionIFC();
@@ -2231,7 +2230,6 @@ async function inicializarVisorIFC(fileUrl, container) {
         const placedGeometries = flatMesh.geometries;
         const realElementExpressID = flatMesh.expressID;
 
-        // V2.3: Extracción dinámica y limpia del tipo nativo sin prefijo 'Ifc'
         let rawClass = "OTHER";
         try {
             const lineaData = ifcApiInstance.GetLine(currentLoadedModelID, realElementExpressID);
@@ -3039,7 +3037,7 @@ function activarSeleccionLosaCaminar() {
     ocultarMenuHerramientasIFC();
     ocultarMenuContextualIFC();
 
-    // V2.3: Al activarse directamente desde el menú, desvincular cualquier posición anterior
+    // V2.3: Al invocarse directamente desde el menú, desvincular cualquier posición anterior
     walkLastKnownPosition = null;
 
     isPickSlabModeActive = !isPickSlabModeActive;
@@ -3526,7 +3524,7 @@ function invertirPlanoCorte() {
 }
 
 // ==============================================================================
-// INSPECCIÓN DE PROPIEDADES BIM Y DISPATCHER DE CLICS / TOQUES
+// INSPECCIÓN DE PROPIEDADES BIM Y DISPATCHER DE CLICS / TOQUES (V2.3)
 // ==============================================================================
 function onIfcModelClick(event) {
     if (!ifcRenderer || !ifcCamera) return;
@@ -3543,15 +3541,22 @@ function onIfcModelClick(event) {
     if (intersects.length > 0) {
         let hit = null;
 
+        // V2.3: Descartar partes cortadas evaluando la distancia real al plano de sección
         for (let i = 0; i < intersects.length; i++) {
             const p = intersects[i].point;
             if (ifcClippingPlane && isSectionToolActive) {
+                // En Three.js, un punto recortado por un clippingPlane verifica: distanceToPoint(p) < 0
                 if (ifcClippingPlane.distanceToPoint(p) < 0) {
-                    continue;
+                    continue; // Ignorar la superficie cortada invisible y continuar el rayo
                 }
             }
             hit = intersects[i];
             break;
+        }
+
+        // Si por microdesviación el filtro estricto descartó todo, usar el primer impacto como fallback seguro
+        if (!hit && intersects.length > 0) {
+            hit = intersects[0];
         }
 
         if (!hit) return;
