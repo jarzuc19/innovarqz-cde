@@ -2393,6 +2393,7 @@ async function inicializarVisorIFC(fileUrl, container) {
     ifcBuildingStoreys = [];
     lastClickedMesh = null;
     walkLastKnownPosition = null;
+    wasWalkingBeforeMeasure = false;
 
     Object.keys(ifcCategoriesMap).forEach(k => delete ifcCategoriesMap[k]);
 
@@ -2511,6 +2512,7 @@ async function inicializarVisorIFC(fileUrl, container) {
         pointerDownPos.x = e.clientX;
         pointerDownPos.y = e.clientY;
 
+        // Si la medición está activa, no se activa el arrastre de vista para mantener estabilidad
         if (isWalkModeActive && !isPickSlabModeActive && !isMeasureToolActive && (e.button === 0 || e.pointerType === 'touch')) {
             walkIsDraggingLook = true;
             walkLastMousePos.x = e.clientX;
@@ -2543,9 +2545,12 @@ async function inicializarVisorIFC(fileUrl, container) {
         const deltaX = Math.abs(e.clientX - pointerDownPos.x);
         const deltaY = Math.abs(e.clientY - pointerDownPos.y);
 
+        // Aislamiento estricto: Sólo procesar clic sobre el modelo si el objetivo es directamente el canvas 3D
         if (deltaX < 6 && deltaY < 6 && (e.button === 0 || e.pointerType === 'touch')) {
-            if (isMeasureToolActive || isPickSlabModeActive || !isWalkModeActive) {
-                onIfcModelClick(e);
+            if (e.target === ifcRenderer.domElement) {
+                if (isMeasureToolActive || isPickSlabModeActive || !isWalkModeActive) {
+                    onIfcModelClick(e);
+                }
             }
         }
     });
@@ -2553,7 +2558,8 @@ async function inicializarVisorIFC(fileUrl, container) {
     function animate() {
         ifcAnimationId = requestAnimationFrame(animate);
 
-        if (isWalkModeActive && !isPickSlabModeActive) {
+        // Durante la medición dentro de caminata, se pausa la física para no desplazar el avatar
+        if (isWalkModeActive && !isPickSlabModeActive && !isMeasureToolActive) {
             actualizarFisicaCaminar(walkClock.getDelta());
         } else if (ifcControls) {
             ifcControls.update();
@@ -2828,7 +2834,7 @@ function alternarCategoriaBIM(key) {
     if (btn) {
         btn.innerText = cat.visible ? "Visible" : "Oculto";
         btn.style.background = cat.visible ? "#0284c7" : "#334155";
-        btn.style.color = "#fff";
+        btn.style.color = cat.visible ? "#fff" : "#94a3b8";
     }
 }
 
@@ -2900,9 +2906,20 @@ function ocultarGuiaContextual() {
 }
 
 function cancelarHerramientaActiva() {
-    if (isMeasureToolActive) desactivarModoMedicion();
-    if (isWalkModeActive) desactivarModoCaminar();
-    if (isPickSlabModeActive) desactivarSeleccionLosa();
+    // Si la medición estaba activa durante la caminata, desactivar sólo la medición y retornar fluidamente a caminar
+    if (isMeasureToolActive) {
+        desactivarModoMedicion();
+        return;
+    }
+    if (isWalkModeActive) {
+        desactivarModoCaminar();
+        return;
+    }
+    if (isPickSlabModeActive) {
+        desactivarSeleccionLosa();
+        ocultarGuiaContextual();
+        return;
+    }
     if (isSectionToolActive) alternarPanelCorteIFC();
     cerrarPanelNivelesIFC();
     cerrarPanelVisibilidadBIM();
@@ -3382,7 +3399,7 @@ function cortarEnNivel(cotaLosaEscena) {
 }
 
 // ==============================================================================
-// RECORRIDO EN PRIMERA PERSONA CON MEMORIA DE POSICIÓN (V2.3)
+// RECORRIDO EN PRIMERA PERSONA CON MEMORIA DE POSICIÓN (V2.5)
 // ==============================================================================
 function caminarEnNivel(cotaLosaEscena) {
     cerrarPanelNivelesIFC();
@@ -3419,7 +3436,9 @@ function activarSeleccionLosaCaminar() {
     ocultarMenuHerramientasIFC();
     ocultarMenuContextualIFC();
 
+    // Nueva invocación: Reset estricto de cualquier posición residual anterior
     walkLastKnownPosition = null;
+    wasWalkingBeforeMeasure = false;
 
     isPickSlabModeActive = !isPickSlabModeActive;
     const container = document.getElementById("modalIfcContainer");
@@ -3438,11 +3457,12 @@ function resaltarLosasTransitables(activar) {
         highlightedSlabs.length = 0;
         ifcMeshesList.forEach(mesh => {
             if (!mesh.visible || mesh.userData.esPuerta) return;
-            const box = new THREE.Box3().setFromObject(mesh);
-            const size = box.getSize(new THREE.Vector3());
-            const esHorizontal = (size.y < 0.6 && (size.x > 1.2 || size.z > 1.2));
+            
+            // FILTRADO SEMÁNTICO ESTRICTO: Únicamente IFCSLAB, excluyendo vigas, cubiertas y acabados
+            const cat = mesh.userData.categoriaBIM || "";
+            const esLosaTransitable = (cat === "SLAB" || mesh.userData.esLosa) && cat !== "ROOF" && cat !== "BEAM" && cat !== "COVERING" && cat !== "MEMBER";
 
-            if (mesh.userData.esLosa || esHorizontal) {
+            if (esLosaTransitable) {
                 highlightedSlabs.push({ mesh: mesh, matOriginal: mesh.material });
                 mesh.material = new THREE.MeshStandardMaterial({
                     color: 0x10b981,
@@ -3513,6 +3533,7 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
 }
 
 function desactivarModoCaminar() {
+    // Si no fue suspendido por la herramienta de medición, se purga la posición completamente
     if (!wasWalkingBeforeMeasure) {
         walkLastKnownPosition = null;
     }
@@ -3524,6 +3545,7 @@ function desactivarModoCaminar() {
     walkMovement.backward = false;
     walkMovement.left = false;
     walkMovement.right = false;
+    walkIsDraggingLook = false;
 
     const touchDpad = document.getElementById("walkTouchContainer");
     const container = document.getElementById("modalIfcContainer");
@@ -3583,7 +3605,7 @@ function configurarEscuchadoresVisorDiferidos() {
 
 function setupWalkKeyboardListeners() {
     window.addEventListener('keydown', (e) => {
-        if (!isWalkModeActive || isPickSlabModeActive) return;
+        if (!isWalkModeActive || isPickSlabModeActive || isMeasureToolActive) return;
         const key = e.key.toLowerCase();
         if (key === 'w' || key === 'arrowup') walkMovement.forward = true;
         if (key === 's' || key === 'arrowdown') walkMovement.backward = true;
@@ -3592,7 +3614,7 @@ function setupWalkKeyboardListeners() {
     });
 
     window.addEventListener('keyup', (e) => {
-        if (!isWalkModeActive || isPickSlabModeActive) return;
+        if (!isWalkModeActive || isPickSlabModeActive || isMeasureToolActive) return;
         const key = e.key.toLowerCase();
         if (key === 'w' || key === 'arrowup') walkMovement.forward = false;
         if (key === 's' || key === 'arrowdown') walkMovement.backward = false;
@@ -3609,7 +3631,7 @@ function setupWalkTouchListeners() {
         const start = (e) => {
             if (e.cancelable) e.preventDefault();
             e.stopPropagation();
-            walkMovement[direction] = true;
+            if (!isMeasureToolActive) walkMovement[direction] = true;
         };
 
         const stop = (e) => {
@@ -3662,6 +3684,7 @@ function ajustarVistaModeloIFC() {
     walkLastKnownPosition = null;
     wasWalkingBeforeMeasure = false;
     desactivarModoCaminar();
+    if (isMeasureToolActive) desactivarModoMedicion();
     cerrarPanelNivelesIFC();
     ocultarMenuHerramientasIFC();
     ocultarMenuContextualIFC();
@@ -3677,6 +3700,7 @@ function cambiarVistaIFC(tipo) {
     walkLastKnownPosition = null;
     wasWalkingBeforeMeasure = false;
     desactivarModoCaminar();
+    if (isMeasureToolActive) desactivarModoMedicion();
     cerrarPanelNivelesIFC();
     ocultarMenuHerramientasIFC();
     ocultarMenuContextualIFC();
@@ -3720,9 +3744,18 @@ function alternarAristasIFC() {
 function alternarModoMedicionIFC() {
     isMeasureToolActive = !isMeasureToolActive;
     const container = document.getElementById("modalIfcContainer");
+    const touchDpad = document.getElementById("walkTouchContainer");
 
     if (isMeasureToolActive) {
         wasWalkingBeforeMeasure = isWalkModeActive;
+        // Congelar inercia de paso y ocultar D-pad para dar paso a la cruz de precisión
+        walkMovement.forward = false;
+        walkMovement.backward = false;
+        walkMovement.left = false;
+        walkMovement.right = false;
+        walkIsDraggingLook = false;
+        if (touchDpad) touchDpad.style.display = "none";
+
         cerrarCardPropiedadesIFC();
         abrirHerramientaEnBandeja("ifcMeasureCard");
         if (container) container.style.cursor = "crosshair";
@@ -3736,13 +3769,14 @@ function alternarModoMedicionIFC() {
 function desactivarModoMedicion() {
     isMeasureToolActive = false;
     const container = document.getElementById("modalIfcContainer");
+    const touchDpad = document.getElementById("walkTouchContainer");
 
     cerrarHerramientaDeBandeja("ifcMeasureCard");
     limpiarMedicionIFC();
 
+    // RETORNO INTELIGENTE: Si provino de caminata, restaura inmediatamente la posición y el control táctil
     if (wasWalkingBeforeMeasure && isWalkModeActive) {
         if (container) container.style.cursor = "move";
-        const touchDpad = document.getElementById("walkTouchContainer");
         const esDispositivoTactil = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 992);
         if (esDispositivoTactil && touchDpad) {
             touchDpad.style.display = "flex";
@@ -3921,21 +3955,19 @@ function onIfcModelClick(event) {
     if (intersects.length > 0) {
         let hit = null;
 
+        // FILTRO ESTRICTO DE CORTE: En X, Y y Z, descartar caras invisibles del semiespacio cortado
         for (let i = 0; i < intersects.length; i++) {
             const p = intersects[i].point;
             if (ifcClippingPlane && isSectionToolActive) {
                 if (ifcClippingPlane.distanceToPoint(p) < 0) {
-                    continue;
+                    continue; // Cara cortada, ignorar
                 }
             }
             hit = intersects[i];
             break;
         }
 
-        if (!hit && intersects.length > 0) {
-            hit = intersects[0];
-        }
-
+        // Si no hay superficie visible sólida detrás del plano de corte, no registrar impacto
         if (!hit) return;
 
         if (isPickSlabModeActive) {
