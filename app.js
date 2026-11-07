@@ -2044,6 +2044,11 @@ ESTADO: A1 APROBADO`;
     page.drawText('"Construimos juntos el valor de tus espacios', { x: leftMargin, y: 39, size: 7.5, font: fontOblique, color: colorDark });
     page.drawText('DE PRINCIPIO A FIN"', { x: leftMargin, y: 27, size: 10, font: fontBold, color: colorCopper });
 
+    // Declaración requerida para el bloque de contacto derecho
+    const lineWeb = "Web Oficial: www.innovarqzsas.com";
+    const lineEmail = "Email: gerenciabim@innovarqzsas.com";
+    const lineTel = "TEL / WA: +57 315 850 5885";
+
     page.drawText(lineWeb, { x: rightMargin - fontRegular.widthOfTextAtSize(lineWeb, 7.5), y: 51, size: 7.5, font: fontRegular, color: colorDark });
     page.drawText(lineEmail, { x: rightMargin - fontRegular.widthOfTextAtSize(lineEmail, 7.5), y: 39, size: 7.5, font: fontRegular, color: colorDark });
     page.drawText(lineTel, { x: rightMargin - fontRegular.widthOfTextAtSize(lineTel, 7.5), y: 27, size: 7.5, font: fontBold, color: colorDark });
