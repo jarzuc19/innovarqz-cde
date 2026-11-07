@@ -208,7 +208,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (capturaForm) capturaForm.addEventListener("submit", handleEnviarCapturasAlCDE);
 
     vincularEventosNomenclaturaAsistida();
-    setupSignaturePad();
 
     setupDropdownWithOther("ubicacionSelect", "ubicacionOtherInput");
     setupDropdownWithOther("tipoSelect", "tipoOtherInput");
@@ -246,12 +245,6 @@ document.addEventListener("DOMContentLoaded", () => {
             if (clientCard && currentUser) {
                 const mostrarCard = (currentUser.cargo === "CLIENTE" && activeTab === "03_PUBLISHED");
                 clientCard.style.display = mostrarCard ? "block" : "none";
-                if (mostrarCard) {
-                    const inputSigner = document.getElementById("clientSignerName");
-                    if (inputSigner && !inputSigner.value) {
-                        inputSigner.value = currentUser.nombre_completo || "";
-                    }
-                }
             }
 
             renderizarBarraSubcarpetas();
@@ -275,8 +268,8 @@ function setupSignaturePad() {
 
     const obtenerCoordenadas = (e) => {
         const rect = signaturePadCanvas.getBoundingClientRect();
-        const clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
-        const clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+        const clientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+        const clientY = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
         const factorX = signaturePadCanvas.width / rect.width;
         const factorY = signaturePadCanvas.height / rect.height;
         return {
@@ -306,13 +299,13 @@ function setupSignaturePad() {
         isDrawingSignature = false;
     };
 
-    signaturePadCanvas.addEventListener("pointerdown", iniciarTrazo);
-    signaturePadCanvas.addEventListener("pointermove", moverTrazo);
-    window.addEventListener("pointerup", finalizarTrazo);
+    signaturePadCanvas.onpointerdown = iniciarTrazo;
+    signaturePadCanvas.onpointermove = moverTrazo;
+    window.onpointerup = finalizarTrazo;
 
-    signaturePadCanvas.addEventListener("touchstart", iniciarTrazo, { passive: false });
-    signaturePadCanvas.addEventListener("touchmove", moverTrazo, { passive: false });
-    window.addEventListener("touchend", finalizarTrazo);
+    signaturePadCanvas.ontouchstart = iniciarTrazo;
+    signaturePadCanvas.ontouchmove = moverTrazo;
+    window.ontouchend = finalizarTrazo;
 }
 
 function limpiarLienzoFirma() {
@@ -323,6 +316,187 @@ function limpiarLienzoFirma() {
     if (signaturePadCanvas && signaturePadCtx) {
         signaturePadCtx.clearRect(0, 0, signaturePadCanvas.width, signaturePadCanvas.height);
         hasDrawnSignature = false;
+    }
+}
+
+function abrirModalFirmaCliente() {
+    const asunto = document.getElementById("clientSubject")?.value.trim() || "";
+    if (!asunto) {
+        alert("⚠️ Por favor ingrese un asunto o resumen de la revisión antes de proceder a la firma.");
+        document.getElementById("clientSubject")?.focus();
+        return;
+    }
+
+    const inputSigner = document.getElementById("clientSignerName");
+    if (inputSigner && !inputSigner.value && currentUser) {
+        inputSigner.value = currentUser.nombre_completo || "";
+    }
+
+    registrarAperturaModalEnHistorial("clientSignatureModal");
+    const modal = document.getElementById("clientSignatureModal");
+    if (modal) {
+        modal.style.display = "flex";
+        modal.classList.remove("modal-hidden");
+        modal.classList.add("modal-overlay");
+    }
+
+    setTimeout(() => {
+        setupSignaturePad();
+    }, 50);
+}
+
+function closeClientSignatureModal(triggerHistory = true) {
+    const modal = document.getElementById("clientSignatureModal");
+    if (modal) {
+        modal.style.display = "none";
+        modal.classList.remove("modal-overlay");
+        modal.classList.add("modal-hidden");
+    }
+    if (triggerHistory && window.history.state && window.history.state.modalOpen) {
+        window.history.back();
+    }
+}
+
+async function procesarSolicitudAjustesCliente() {
+    const asunto = document.getElementById("clientSubject")?.value.trim() || "";
+    const observaciones = document.getElementById("clientComments")?.value.trim() || "";
+
+    if (!asunto) {
+        alert("⚠️ Por favor ingrese el asunto de la solicitud de ajustes.");
+        document.getElementById("clientSubject")?.focus();
+        return;
+    }
+    if (!observaciones) {
+        alert("⚠️ Por favor ingrese sus observaciones técnicas detalladas para que el modelador realice las correcciones.");
+        document.getElementById("clientComments")?.focus();
+        return;
+    }
+
+    if (!confirm("¿Confirma enviar esta solicitud de ajustes técnicos al hilo de interacción del proyecto?")) return;
+
+    const payloadRechazo = {
+        accion: "APROBACION_CLIENTE",
+        proyecto_id: activeProjectId,
+        codigo_proyecto: activeProjectCode,
+        usuario_nombre: currentUser.nombre_completo,
+        usuario_email: currentUser.email,
+        estado_aprobacion: "RECHAZADO",
+        asunto: asunto,
+        observaciones: observaciones
+    };
+
+    try {
+        const res = await fetch(WEBHOOK_APPS_SCRIPT, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify(payloadRechazo)
+        });
+        const data = await res.json();
+        if (data.status === "success") {
+            alert("🚨 Solicitud de ajustes notificada formalmente en la bitácora y en el hilo técnico.");
+            document.getElementById("clientComments").value = "";
+            evaluarNotasTecnicasActivas();
+            cargarTimelineActividad();
+        } else {
+            alert("⚠️ " + data.message);
+        }
+    } catch (err) {
+        alert("Error de comunicación: " + err.message);
+    }
+}
+
+async function ejecutarFirmaYAprobacionActa(e) {
+    if (e) e.preventDefault();
+
+    const asunto = document.getElementById("clientSubject")?.value.trim() || "";
+    const observaciones = document.getElementById("clientComments")?.value.trim() || "";
+
+    const signerName = document.getElementById("clientSignerName")?.value.trim() || "";
+    const signerRole = document.getElementById("clientSignerRole")?.value.trim() || "";
+    const docType = document.getElementById("clientDocType")?.value || "C.C.";
+    const docNumber = document.getElementById("clientDocNumber")?.value.trim() || "";
+
+    if (!signerName || signerName.length < 3) {
+        alert("⚠️ Por favor ingrese el nombre completo del firmante.");
+        return;
+    }
+    if (!signerRole || signerRole.length < 3) {
+        alert("⚠️ Por favor especifique el cargo o calidad en que actúa el firmante.");
+        return;
+    }
+    if (!docNumber || docNumber.length < 4) {
+        alert("⚠️ Por favor ingrese un número de documento de identificación válido.");
+        return;
+    }
+    if (!hasDrawnSignature || !signaturePadCanvas) {
+        alert("⚠️ Por favor trace su firma / rúbrica manuscrita en el recuadro antes de autorizar.");
+        return;
+    }
+
+    const confirmMsg = `¿Confirma formalizar el Acta de Recibo a Satisfacción con su firma digital?\n\nFirmante: ${signerName}\nDocumento: ${docType} ${docNumber}\nCalidad: ${signerRole}`;
+    if (!confirm(confirmMsg)) return;
+
+    const btnSubmit = document.getElementById("btnConfirmarFirmaActa");
+    if (btnSubmit) {
+        btnSubmit.disabled = true;
+        btnSubmit.innerText = "Compilando Acta Oficial y Sello QR...";
+    }
+
+    const signaturePngDataUrl = signaturePadCanvas.toDataURL("image/png");
+    const datosClienteFirmante = {
+        nombre: signerName,
+        cargo: signerRole,
+        tipoDoc: docType,
+        numDoc: docNumber,
+        asunto: asunto,
+        observaciones: observaciones,
+        signaturePng: signaturePngDataUrl
+    };
+
+    try {
+        const nombreActaISO = `${activeProjectCode || 'PRY'}_INNO_ZZ_ACT_CLI_A1.pdf`;
+        const pdfBase64 = await generarPDFActaRecibo(datosClienteFirmante, nombreActaISO);
+
+        const payloadAprobado = {
+            accion: "APROBACION_CLIENTE",
+            proyecto_id: activeProjectId,
+            codigo_proyecto: activeProjectCode,
+            usuario_nombre: currentUser.nombre_completo,
+            usuario_email: currentUser.email,
+            firmante_nombre: signerName,
+            firmante_doc: `${docType} ${docNumber}`,
+            firmante_cargo: signerRole,
+            estado_aprobacion: "APROBADO",
+            asunto: asunto,
+            observaciones: observaciones,
+            pdf_acta_base64: pdfBase64,
+            nombre_acta: nombreActaISO
+        };
+
+        const res = await fetch(WEBHOOK_APPS_SCRIPT, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify(payloadAprobado)
+        });
+        const data = await res.json();
+
+        if (data.status === "success") {
+            alert(`✅ ¡Acta formal "${nombreActaISO}" generada y custodiada exitosamente en 03_PUBLISHED!`);
+            closeClientSignatureModal();
+            limpiarLienzoFirma();
+            loadFiles();
+            cargarTimelineActividad();
+            evaluarNotasTecnicasActivas();
+        } else {
+            alert("⚠️ " + data.message);
+        }
+    } catch (err) {
+        alert("Error al formalizar acta: " + err.message);
+    } finally {
+        if (btnSubmit) {
+            btnSubmit.disabled = false;
+            btnSubmit.innerText = "✅ Estampar Firma y Generar Acta Formal";
+        }
     }
 }
 
@@ -348,6 +522,12 @@ function registrarAperturaModalEnHistorial(modalId) {
 
 function cerrarCualquierModalAbierto(triggerHistoryBack = true) {
     let seCerro = false;
+
+    const sModal = document.getElementById("clientSignatureModal");
+    if (sModal && (sModal.style.display === "flex" || sModal.classList.contains("modal-overlay"))) {
+        closeClientSignatureModal(false);
+        seCerro = true;
+    }
 
     const cModal = document.getElementById("capturaConsolidadaModal");
     if (cModal && (cModal.style.display === "flex" || cModal.classList.contains("modal-overlay"))) {
@@ -1040,12 +1220,6 @@ function aplicarRestriccionPestanasVisuales() {
     if (clientCard) {
         const esVisible = (currentUser.cargo === "CLIENTE" && activeTab === "03_PUBLISHED");
         clientCard.style.display = esVisible ? "block" : "none";
-        if (esVisible) {
-            const inputSigner = document.getElementById("clientSignerName");
-            if (inputSigner && !inputSigner.value) {
-                inputSigner.value = currentUser.nombre_completo || "";
-            }
-        }
     }
 
     const techNoteCard = document.getElementById("technicalNoteCard");
@@ -1589,130 +1763,6 @@ async function archivarEntregableDirecto(nombreArchivo, estadoOrigen) {
 }
 
 // ==============================================================================
-// GESTIÓN DE APROBACIÓN FORMAL Y FIRMA DEL CLIENTE (V2.5)
-// ==============================================================================
-async function procesarAprobacionCliente(estadoAprobacion) {
-    const asunto = document.getElementById("clientSubject")?.value.trim() || "";
-    const observaciones = document.getElementById("clientComments")?.value.trim() || "";
-
-    if (!asunto) {
-        alert("⚠️ Por favor ingrese un asunto/declaración para la aprobación o solicitud.");
-        return;
-    }
-
-    if (estadoAprobacion === "RECHAZADO") {
-        if (!observaciones) {
-            alert("⚠️ Por favor ingrese sus observaciones técnicas detalladas para solicitar ajustes.");
-            return;
-        }
-        if (!confirm("¿Confirma emitir esta solicitud de ajustes y registrarla en el hilo técnico?")) return;
-
-        const payloadRechazo = {
-            accion: "APROBACION_CLIENTE",
-            proyecto_id: activeProjectId,
-            codigo_proyecto: activeProjectCode,
-            usuario_nombre: currentUser.nombre_completo,
-            usuario_email: currentUser.email,
-            estado_aprobacion: "RECHAZADO",
-            asunto: asunto,
-            observaciones: observaciones
-        };
-
-        try {
-            await fetch(WEBHOOK_APPS_SCRIPT, {
-                method: "POST",
-                headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: JSON.stringify(payloadRechazo)
-            });
-            alert("🚨 Solicitud de ajustes notificada formalmente en la bitácora.");
-            evaluarNotasTecnicasActivas();
-            cargarTimelineActividad();
-        } catch (err) {
-            alert("Error de comunicación: " + err.message);
-        }
-        return;
-    }
-
-    // FLUJO DE APROBACIÓN CONTRACTUAL (A1)
-    const signerName = document.getElementById("clientSignerName")?.value.trim() || "";
-    const signerRole = document.getElementById("clientSignerRole")?.value.trim() || "";
-    const docType = document.getElementById("clientDocType")?.value || "C.C.";
-    const docNumber = document.getElementById("clientDocNumber")?.value.trim() || "";
-
-    if (!signerName || signerName.length < 3) {
-        alert("⚠️ Por favor ingrese el nombre completo del firmante.");
-        return;
-    }
-    if (!signerRole || signerRole.length < 3) {
-        alert("⚠️ Por favor especifique el cargo o calidad en que actúa el firmante.");
-        return;
-    }
-    if (!docNumber || docNumber.length < 4) {
-        alert("⚠️ Por favor ingrese un número de documento de identificación válido.");
-        return;
-    }
-    if (!hasDrawnSignature || !signaturePadCanvas) {
-        alert("⚠️ Por favor trace su firma / rúbrica manuscrita en el recuadro antes de autorizar.");
-        return;
-    }
-
-    const confirmMsg = `¿Confirma emitir el visto bueno definitivo y generar el Acta de Recibo a Satisfacción?\n\nFirmante: ${signerName}\nDocumento: ${docType} ${docNumber}\nCalidad: ${signerRole}`;
-    if (!confirm(confirmMsg)) return;
-
-    alert("Generando Acta de Recibo Formal con sello institucional y rúbrica digital...");
-
-    const signaturePngDataUrl = signaturePadCanvas.toDataURL("image/png");
-    const datosClienteFirmante = {
-        nombre: signerName,
-        cargo: signerRole,
-        tipoDoc: docType,
-        numDoc: docNumber,
-        asunto: asunto,
-        observaciones: observaciones,
-        signaturePng: signaturePngDataUrl
-    };
-
-    try {
-        const nombreActaISO = `${activeProjectCode || 'PRY'}_INNO_ZZ_ACT_CLI_A1.pdf`;
-        const pdfBase64 = await generarPDFActaRecibo(datosClienteFirmante, nombreActaISO);
-
-        const payloadAprobado = {
-            accion: "APROBACION_CLIENTE",
-            proyecto_id: activeProjectId,
-            codigo_proyecto: activeProjectCode,
-            usuario_nombre: currentUser.nombre_completo,
-            usuario_email: currentUser.email,
-            firmante_nombre: signerName,
-            firmante_doc: `${docType} ${docNumber}`,
-            firmante_cargo: signerRole,
-            estado_aprobacion: "APROBADO",
-            asunto: asunto,
-            observaciones: observaciones,
-            pdf_acta_base64: pdfBase64,
-            nombre_acta: nombreActaISO
-        };
-
-        const res = await fetch(WEBHOOK_APPS_SCRIPT, {
-            method: "POST",
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify(payloadAprobado)
-        });
-        const data = await res.json();
-        if (data.status === "success") {
-            alert(`✅ ¡Acta formal "${nombreActaISO}" generada y custodiada exitosamente en 03_PUBLISHED!`);
-            limpiarLienzoFirma();
-            loadFiles();
-            cargarTimelineActividad();
-            evaluarNotasTecnicasActivas();
-        } else {
-            alert("⚠️ " + data.message);
-        }
-    } catch (err) {
-        alert("Error al generar acta: " + err.message);
-    }
-}
-
-// ==============================================================================
 // GENERACIÓN DE ACTA PDF FORMAL CON QR VECTORIAL Y RÚBRICA (V2.5)
 // ==============================================================================
 async function generarPDFActaRecibo(datosCliente, nombreActaISO) {
@@ -1744,59 +1794,94 @@ async function generarPDFActaRecibo(datosCliente, nombreActaISO) {
     const rightMargin = pageWidth - 50;
     const printableWidth = rightMargin - leftMargin;
 
-    // Marca de agua institucional de fondo
+    // Marca de agua de fondo
     page.drawText("InnovArqZ", {
-        x: 140, y: 290, size: 72, font: fontBold,
+        x: 130, y: 300, size: 76, font: fontBold,
         color: rgb(15 / 255, 23 / 255, 42 / 255),
         opacity: 0.035, rotate: degrees(32)
     });
 
-    // Membrete Corporativo
-    page.drawText("Innov", { x: leftMargin, y: 738, size: 24, font: fontBold, color: colorDark });
-    page.drawText("ArqZ", { x: leftMargin + 65, y: 738, size: 24, font: fontBold, color: colorCopper });
-    page.drawText("SOLUCIONES INTEGRALES", { x: leftMargin, y: 724, size: 8, font: fontBold, color: colorSlate });
-    page.drawText("Consultoría BIM/CIM • Arquitectura • Ingeniería", { x: leftMargin, y: 711, size: 7.5, font: fontBold, color: colorCopper });
+    // 1. MEMBRETE CORPORATIVO
+    page.drawText("Innov", { x: leftMargin, y: 740, size: 24, font: fontBold, color: colorDark });
+    page.drawText("ArqZ", { x: leftMargin + 65, y: 740, size: 24, font: fontBold, color: colorCopper });
+    page.drawText("SOLUCIONES INTEGRALES", { x: leftMargin, y: 726, size: 8, font: fontBold, color: colorSlate });
+    page.drawText("Consultoría BIM/CIM • Arquitectura • Ingeniería", { x: leftMargin, y: 713, size: 7.5, font: fontBold, color: colorCopper });
 
     const credDirector = "DIRECTOR: Arq. James R. Zuñiga C.";
     const credMatricula = "M.P CPNAA No: A137812026-1122783013";
     const credWeb = "PORTAFOLIO: www.innovarqzsas.com/portafolio";
 
-    page.drawText(credDirector, { x: rightMargin - fontRegular.widthOfTextAtSize(credDirector, 7.5), y: 738, size: 7.5, font: fontRegular, color: colorDark });
-    page.drawText(credMatricula, { x: rightMargin - fontRegular.widthOfTextAtSize(credMatricula, 7.5), y: 724, size: 7.5, font: fontRegular, color: colorDark });
-    page.drawText(credWeb, { x: rightMargin - fontRegular.widthOfTextAtSize(credWeb, 7.5), y: 711, size: 7.5, font: fontRegular, color: colorDark });
+    page.drawText(credDirector, { x: rightMargin - fontRegular.widthOfTextAtSize(credDirector, 7.5), y: 740, size: 7.5, font: fontRegular, color: colorDark });
+    page.drawText(credMatricula, { x: rightMargin - fontRegular.widthOfTextAtSize(credMatricula, 7.5), y: 726, size: 7.5, font: fontRegular, color: colorDark });
+    page.drawText(credWeb, { x: rightMargin - fontRegular.widthOfTextAtSize(credWeb, 7.5), y: 713, size: 7.5, font: fontRegular, color: colorDark });
 
-    const yLine = 698;
+    const yLine = 700;
     const copperWidth = printableWidth * 0.32;
     page.drawLine({ start: { x: leftMargin, y: yLine }, end: { x: leftMargin + copperWidth, y: yLine }, thickness: 2.5, color: colorCopper });
     page.drawLine({ start: { x: leftMargin + copperWidth, y: yLine }, end: { x: rightMargin, y: yLine }, thickness: 2.5, color: colorDark });
 
-    page.drawText("ACTA DE RECIBO A SATISFACCIÓN Y CIERRE DE HITO", { x: leftMargin, y: 668, size: 11.5, font: fontBold, color: colorDark });
+    // 2. TÍTULO PRINCIPAL Y REFERENCIA ISO 19650
+    page.drawText("ACTA DE RECIBO A SATISFACCIÓN Y CIERRE DE HITO", { x: leftMargin, y: 668, size: 13, font: fontBold, color: colorDark });
+    page.drawText(`ESTÁNDAR ISO 19650-2 • ID: ${nombreActaISO}`, { x: leftMargin, y: 652, size: 8.5, font: fontBold, color: colorCopper });
 
     const fechaStr = new Date().toLocaleString("es-CO", { timeZone: "America/Bogota" });
-    
-    // Encabezado de Metadatos del Acta
-    let yMeta = 642;
-    page.drawText(`Proyecto: ${activeProjectCode || 'PRY-GENERAL'}`, { x: leftMargin, y: yMeta, size: 9, font: fontBold, color: colorDark });
-    yMeta -= 13;
-    page.drawText(`Cliente / Razón Social: ${currentUser.nombre_completo || 'Cliente'}`, { x: leftMargin, y: yMeta, size: 8.5, font: fontRegular, color: colorDark });
-    yMeta -= 13;
-    page.drawText(`Representante / Firmante: ${datosCliente.nombre} (${datosCliente.tipoDoc} No. ${datosCliente.numDoc})`, { x: leftMargin, y: yMeta, size: 8.5, font: fontBold, color: colorDark });
-    yMeta -= 13;
-    page.drawText(`Cargo / Calidad: ${datosCliente.cargo} • Correo: ${currentUser.email || ''}`, { x: leftMargin, y: yMeta, size: 8.5, font: fontRegular, color: colorSlate });
-    yMeta -= 13;
-    page.drawText(`Fecha y Hora de Firma Digital: ${fechaStr}`, { x: leftMargin, y: yMeta, size: 8, font: fontRegular, color: colorSlate });
 
-    let yDecl = yMeta - 18;
-    page.drawText("DECLARACIÓN DE CONFORMIDAD", { x: leftMargin, y: yDecl, size: 9.5, font: fontBold, color: colorCopper });
-    yDecl -= 14;
-    page.drawText("Por medio del presente documento, el cliente hace constar que INNOVARQZ SOLUCIONES INTEGRALES S.A.S. cumplió a cabalidad con los entregables técnicos de información, planos y modelos acordados. Se confirma la recepción a satisfacción de la documentación técnica aprobada y se autoriza formalmente el cierre del hito correspondiente.", {
-        x: leftMargin, y: yDecl, size: 8, font: fontRegular, color: colorDark, maxWidth: printableWidth, lineHeight: 11
+    // 3. CAJA DE METADATOS Y PARTES INTERVINIENTES (DISTRIBUCIÓN EQUILIBRADA)
+    const yBoxTop = 640;
+    const boxHeight = 90;
+    page.drawRectangle({
+        x: leftMargin,
+        y: yBoxTop - boxHeight,
+        width: printableWidth,
+        height: boxHeight,
+        color: rgb(248 / 255, 250 / 255, 252 / 255),
+        borderColor: colorBorder,
+        borderWidth: 1
     });
 
-    let yList = yDecl - 34;
-    page.drawText("LISTA DE ENTREGABLES APROBADOS (03_PUBLISHED):", { x: leftMargin, y: yList, size: 9, font: fontBold, color: colorDark });
+    const col1X = leftMargin + 14;
+    const col2X = leftMargin + 270;
+    let yRow = yBoxTop - 18;
 
-    // Consulta de entregables aprobados para el acta y el manifiesto QR
+    page.drawText("PROYECTO:", { x: col1X, y: yRow, size: 8, font: fontBold, color: colorSlate });
+    page.drawText(`${activeProjectCode || 'PRY-GENERAL'}`, { x: col1X + 75, y: yRow, size: 9, font: fontBold, color: colorDark });
+
+    page.drawText("FECHA / HORA:", { x: col2X, y: yRow, size: 8, font: fontBold, color: colorSlate });
+    page.drawText(`${fechaStr}`, { x: col2X + 80, y: yRow, size: 8.5, font: fontRegular, color: colorDark });
+
+    yRow -= 18;
+    page.drawText("CLIENTE:", { x: col1X, y: yRow, size: 8, font: fontBold, color: colorSlate });
+    page.drawText(`${currentUser.nombre_completo || 'Cliente'}`, { x: col1X + 75, y: yRow, size: 8.5, font: fontBold, color: colorDark });
+
+    page.drawText("CALIDAD / CARGO:", { x: col2X, y: yRow, size: 8, font: fontBold, color: colorSlate });
+    page.drawText(`${datosCliente.cargo}`, { x: col2X + 80, y: yRow, size: 8.5, font: fontRegular, color: colorDark });
+
+    yRow -= 18;
+    page.drawText("FIRMANTE:", { x: col1X, y: yRow, size: 8, font: fontBold, color: colorSlate });
+    page.drawText(`${datosCliente.nombre}`, { x: col1X + 75, y: yRow, size: 8.5, font: fontRegular, color: colorDark });
+
+    page.drawText("CORREO CDE:", { x: col2X, y: yRow, size: 8, font: fontBold, color: colorSlate });
+    page.drawText(`${currentUser.email || ''}`, { x: col2X + 80, y: yRow, size: 8.5, font: fontRegular, color: colorSlate });
+
+    yRow -= 18;
+    page.drawText("IDENTIFICACIÓN:", { x: col1X, y: yRow, size: 8, font: fontBold, color: colorSlate });
+    page.drawText(`${datosCliente.tipoDoc} No. ${datosCliente.numDoc}`, { x: col1X + 75, y: yRow, size: 8.5, font: fontBold, color: colorDark });
+
+    page.drawText("ESTADO / HITO:", { x: col2X, y: yRow, size: 8, font: fontBold, color: colorSlate });
+    page.drawText("APROBADO CONTRACTUAL (A1)", { x: col2X + 80, y: yRow, size: 8.5, font: fontBold, color: colorCopper });
+
+    // 4. DECLARACIÓN DE CONFORMIDAD FORMAL (CUERPO 10 pt)
+    let yDecl = yBoxTop - boxHeight - 24;
+    page.drawText("DECLARACIÓN DE CONFORMIDAD Y RECIBO A SATISFACCIÓN", { x: leftMargin, y: yDecl, size: 10.5, font: fontBold, color: colorCopper });
+    yDecl -= 16;
+    page.drawText("Por medio del presente documento, el cliente hace constar que INNOVARQZ SOLUCIONES INTEGRALES S.A.S. cumplió a cabalidad con el objeto contractual, alcance, especificaciones técnicas y entregables de información acordados. Se confirma la recepción a entera satisfacción de los modelos BIM, planimetrías y memorias técnicas, autorizándose formalmente el cierre del hito contractual y el resguardo inmutable en el repositorio 03_PUBLISHED.", {
+        x: leftMargin, y: yDecl, size: 9.5, font: fontRegular, color: colorDark, maxWidth: printableWidth, lineHeight: 14
+    });
+
+    // 5. RELACIÓN DE ENTREGABLES APROBADOS (ESTRUCTURA DE TABLA)
+    let yList = yDecl - 54;
+    page.drawText("RELACIÓN DE ENTREGABLES TÉCNICOS APROBADOS (03_PUBLISHED):", { x: leftMargin, y: yList, size: 10, font: fontBold, color: colorDark });
+
     const { data: files } = await supabaseClient
         .from("audit_logs")
         .select("*")
@@ -1805,73 +1890,91 @@ async function generarPDFActaRecibo(datosCliente, nombreActaISO) {
         .eq("activo", true);
 
     const unicosPublishedNombres = [];
-    let yPos = yList - 14;
+    const unicosPublishedMap = new Map();
 
     if (files && files.length > 0) {
-        const unicosPublished = new Map();
         files.forEach(f => {
             if (!f.archivo_nombre.includes("ACTA_") && !f.archivo_nombre.includes("NOTA_TECNICA") && !f.archivo_nombre.includes("CARGA DE ENTREGABLE") && !f.archivo_nombre.includes("PROMOCIÓN_") && !f.archivo_nombre.includes("CARGA_LOTE_ENTREGABLES")) {
-                if (!unicosPublished.has(f.archivo_nombre)) {
-                    unicosPublished.set(f.archivo_nombre, f);
+                if (!unicosPublishedMap.has(f.archivo_nombre)) {
+                    unicosPublishedMap.set(f.archivo_nombre, f);
                     unicosPublishedNombres.push(f.archivo_nombre);
                 }
             }
         });
+    }
 
-        unicosPublished.forEach(f => {
-            if (yPos > 215) {
-                page.drawText(`• ${f.archivo_nombre} (${f.version || 'V1.0'})`, { x: leftMargin + 8, y: yPos, size: 7.5, font: fontRegular, color: colorDark });
-                yPos -= 12;
-            }
+    // Cabecera de la tabla de entregables
+    let yTable = yList - 18;
+    page.drawRectangle({
+        x: leftMargin,
+        y: yTable - 18,
+        width: printableWidth,
+        height: 18,
+        color: rgb(241 / 255, 245 / 255, 249 / 255),
+        borderColor: colorBorder,
+        borderWidth: 0.8
+    });
+
+    page.drawText("#", { x: leftMargin + 8, y: yTable - 12, size: 8, font: fontBold, color: colorSlate });
+    page.drawText("CONTENEDOR DE INFORMACIÓN ISO 19650", { x: leftMargin + 28, y: yTable - 12, size: 8, font: fontBold, color: colorSlate });
+    page.drawText("VERSIÓN / FECHA", { x: rightMargin - 100, y: yTable - 12, size: 8, font: fontBold, color: colorSlate });
+
+    let yRowFile = yTable - 32;
+    const itemsAMostrar = Array.from(unicosPublishedMap.values()).slice(0, 5);
+
+    itemsAMostrar.forEach((f, idx) => {
+        page.drawText(`${idx + 1}`, { x: leftMargin + 8, y: yRowFile, size: 8, font: fontBold, color: colorCopper });
+        page.drawText(`${f.archivo_nombre}`, { x: leftMargin + 28, y: yRowFile, size: 8.5, font: fontRegular, color: colorDark });
+        page.drawText(`${f.version || 'V1.0'}`, { x: rightMargin - 100, y: yRowFile, size: 8, font: fontRegular, color: colorSlate });
+        yRowFile -= 14;
+    });
+
+    if (unicosPublishedMap.size > 5) {
+        page.drawText(`• (... y ${unicosPublishedMap.size - 5} entregable(s) adicional(es) verificado(s) en el repositorio CDE)`, {
+            x: leftMargin + 28, y: yRowFile, size: 8, font: fontOblique, color: colorSlate
         });
     }
 
-    // Cálculo Criptográfico de Integridad (SHA-256)
+    // Cálculo Criptográfico SHA-256
     const semillaHash = `${nombreActaISO}|${activeProjectCode}|${datosCliente.nombre}|${datosCliente.numDoc}|${fechaStr}|${unicosPublishedNombres.join(';')}`;
     const hashSHA256 = await calcularHashSHA256Local(semillaHash);
 
-    // Manifiesto de Seguridad Inmutable para el Código QR Offline
-    const resumenArchivosQR = unicosPublishedNombres.slice(0, 6).map((n, i) => `${i + 1}. ${n}`).join('\n');
-    const manifiestoQROffline = 
-`========================================
-CERTIFICADO DE RECIBO A SATISFACCIÓN
-INNOVARQZ SOLUCIONES INTEGRALES S.A.S.
-NORMA: ISO 19650-2 | CDE OFICIAL
-========================================
-ACTA ID: ${nombreActaISO}
-PROYECTO: ${activeProjectCode || 'PRY-GENERAL'}
-FECHA/HORA: ${fechaStr}
-
---- EMISOR (INNOVARQZ) ---
-RESPONSABLE: Arq. James R. Zuñiga C.
-CARGO: Representante Legal
-M.P. CPNAA: A137812026-1122783013
-
---- RECEPTOR (CLIENTE AUTORIZADO) ---
+    // 6. CÓDIGO QR COMPACTO OFFLINE (< 250 caracteres para escaneo ultra-rápido)
+    const manifiestoQRCompacto = 
+`CERTIFICADO RECIBO SATISFACCION
+INNOVARQZ SOLUCIONES INTEGRALES SAS
+ISO 19650-2 | CDE OFICIAL
+ACTA: ${nombreActaISO}
+PROYECTO: ${activeProjectCode || 'PRY'}
+FECHA: ${fechaStr}
+EMISOR: Arq. James R. Zuñiga C. (MP: A137812026-1122783013)
 FIRMANTE: ${datosCliente.nombre}
-DOCUMENTO: ${datosCliente.tipoDoc} ${datosCliente.numDoc}
+DOC: ${datosCliente.tipoDoc} ${datosCliente.numDoc}
 CARGO: ${datosCliente.cargo}
-CORREO: ${currentUser.email || ''}
-
---- ENTREGABLES APROBADOS (PUBLISHED) ---
 TOTAL ITEMS: ${unicosPublishedNombres.length}
-${resumenArchivosQR}
+HASH SHA-256: ${hashSHA256.substring(0, 32)}
+ESTADO: A1 APROBADO`;
 
---- SELLO DE SEGURIDAD LOCAL ---
-HASH SHA-256:
-${hashSHA256}
-ESTADO: APROBADO CONTRACTUAL (A1)
-========================================`;
-
-    // Renderizado Vectorial del Código QR (Garantía de nitidez absoluta en plóter/móvil)
-    const qrSize = 68;
+    const qrSize = 92;
     const qrPosX = leftMargin;
-    const qrPosY_Top = 195;
+    const qrPosY_Bottom = 150;
+    const qrPosY_Top = qrPosY_Bottom + qrSize;
+
+    // Placa de contraste blanco puro con Zona de Silencio (Quiet Zone)
+    page.drawRectangle({
+        x: qrPosX - 4,
+        y: qrPosY_Bottom - 4,
+        width: qrSize + 8,
+        height: qrSize + 8,
+        color: rgb(1, 1, 1),
+        borderColor: colorBorder,
+        borderWidth: 1
+    });
 
     if (window.qrcode) {
         try {
             const qr = window.qrcode(0, 'M');
-            qr.addData(manifiestoQROffline);
+            qr.addData(manifiestoQRCompacto);
             qr.make();
             const modCount = qr.getModuleCount();
             const modSize = qrSize / modCount;
@@ -1890,61 +1993,59 @@ ESTADO: APROBADO CONTRACTUAL (A1)
                 }
             }
         } catch (eQR) {
-            console.warn("Fallo en render QR vectorial:", eQR);
+            console.warn("Fallo render QR vectorial:", eQR);
         }
     }
 
-    // COLUMNA IZQUIERDA: DATOS INSTITUCIONALES INNOVARQZ + QR
-    const infoTextX = qrPosX + qrSize + 10;
-    page.drawText("ARQ. JAMES RAMIRO ZUÑIGA CAIPE", { x: infoTextX, y: 190, size: 8, font: fontBold, color: colorDark });
-    page.drawText("Representante Legal", { x: infoTextX, y: 178, size: 7.5, font: fontRegular, color: colorSlate });
-    page.drawText("INNOVARQZ SOLUCIONES INTEGRALES S.A.S.", { x: infoTextX, y: 167, size: 7, font: fontBold, color: colorDark });
-    page.drawText("M.P CPNAA No: A137812026-1122783013", { x: infoTextX, y: 156, size: 6.8, font: fontRegular, color: colorSlate });
-    page.drawText(`Hash SHA-256: ${hashSHA256.substring(0, 20)}...`, { x: infoTextX, y: 144, size: 6.2, font: fontRegular, color: colorCopper });
-    page.drawText("Sello Digital Notarial CDE ISO 19650", { x: infoTextX, y: 133, size: 6.5, font: fontBold, color: colorDark });
+    // 7. BLOQUE DE FIRMAS BALANCEADO Y SELLO NOTARIAL
+    // Columna Izquierda: InnovArqZ
+    const infoTextX = qrPosX + qrSize + 14;
+    page.drawText("CERTIFICACIÓN INSTITUCIONAL", { x: infoTextX, y: qrPosY_Top - 2, size: 8.5, font: fontBold, color: colorCopper });
+    page.drawText("ARQ. JAMES RAMIRO ZUÑIGA CAIPE", { x: infoTextX, y: qrPosY_Top - 15, size: 9, font: fontBold, color: colorDark });
+    page.drawText("Representante Legal", { x: infoTextX, y: qrPosY_Top - 27, size: 8, font: fontRegular, color: colorSlate });
+    page.drawText("INNOVARQZ SOLUCIONES INTEGRALES S.A.S.", { x: infoTextX, y: qrPosY_Top - 39, size: 7.5, font: fontBold, color: colorDark });
+    page.drawText("M.P CPNAA No: A137812026-1122783013", { x: infoTextX, y: qrPosY_Top - 50, size: 7.5, font: fontRegular, color: colorSlate });
+    page.drawText("Hash SHA-256 (Checksum):", { x: infoTextX, y: qrPosY_Top - 64, size: 7, font: fontBold, color: colorDark });
+    page.drawText(`${hashSHA256.substring(0, 28)}...`, { x: infoTextX, y: qrPosY_Top - 75, size: 7, font: fontRegular, color: colorCopper });
+    page.drawText("Sello Digital Notarial CDE • Verificación Offline", { x: infoTextX, y: qrPosY_Top - 87, size: 6.8, font: fontRegular, color: colorSlate });
 
-    const yFirmaLine = 125;
-    page.drawLine({ start: { x: leftMargin, y: yFirmaLine }, end: { x: leftMargin + 220, y: yFirmaLine }, thickness: 1, color: colorSlate });
-    page.drawText("Firma Institucional y Certificación Técnica", { x: leftMargin, y: yFirmaLine - 10, size: 6.8, font: fontRegular, color: colorSlate });
+    const yFirmaLine = 138;
+    page.drawLine({ start: { x: leftMargin, y: yFirmaLine }, end: { x: leftMargin + 235, y: yFirmaLine }, thickness: 1, color: colorSlate });
+    page.drawText("Firma Autorizada InnovArqZ Soluciones Integrales S.A.S.", { x: leftMargin, y: yFirmaLine - 11, size: 7.5, font: fontRegular, color: colorSlate });
 
-    // COLUMNA DERECHA: RÚBRICA MANUSCRITA Y DATOS DEL CLIENTE
-    const colRightX = rightMargin - 210;
+    // Columna Derecha: Rúbrica del Cliente
+    const colRightX = rightMargin - 215;
 
-    // Incrustación de la rúbrica dibujada por el cliente
     if (datosCliente.signaturePng) {
         try {
             const signatureBytes = UtilitiesBase64ToUint8(datosCliente.signaturePng.split(',')[1]);
             const embeddedSignature = await pdfDoc.embedPng(signatureBytes);
             page.drawImage(embeddedSignature, {
-                x: colRightX + 15,
+                x: colRightX + 20,
                 y: yFirmaLine + 5,
                 width: 170,
-                height: 48
+                height: 52
             });
         } catch (eSig) {
-            console.warn("Fallo incrustando rúbrica cliente:", eSig);
+            console.warn("Fallo incrustando rúbrica:", eSig);
         }
     }
 
     page.drawLine({ start: { x: colRightX, y: yFirmaLine }, end: { x: rightMargin, y: yFirmaLine }, thickness: 1, color: colorSlate });
-    page.drawText(datosCliente.nombre.toUpperCase(), { x: colRightX, y: yFirmaLine - 12, size: 8, font: fontBold, color: colorDark });
-    page.drawText(`${datosCliente.tipoDoc} No. ${datosCliente.numDoc}`, { x: colRightX, y: yFirmaLine - 23, size: 7.5, font: fontRegular, color: colorSlate });
-    page.drawText(datosCliente.cargo, { x: colRightX, y: yFirmaLine - 34, size: 7.5, font: fontBold, color: colorDark });
-    page.drawText(`Verificación CDE: ${currentUser.email || ''}`, { x: colRightX, y: yFirmaLine - 45, size: 6.8, font: fontRegular, color: colorSlate });
+    page.drawText(datosCliente.nombre.toUpperCase(), { x: colRightX, y: yFirmaLine - 12, size: 9, font: fontBold, color: colorDark });
+    page.drawText(`${datosCliente.tipoDoc} No. ${datosCliente.numDoc}`, { x: colRightX, y: yFirmaLine - 24, size: 8.5, font: fontRegular, color: colorSlate });
+    page.drawText(datosCliente.cargo, { x: colRightX, y: yFirmaLine - 36, size: 8, font: fontBold, color: colorDark });
+    page.drawText(`Verificación CDE: ${currentUser.email || ''}`, { x: colRightX, y: yFirmaLine - 48, size: 7.5, font: fontRegular, color: colorSlate });
 
-    // Pie de Página Institucional
+    // 8. PIE DE PÁGINA CORPORATIVO
     const yFooterLine = 66;
     page.drawLine({ start: { x: leftMargin, y: yFooterLine }, end: { x: rightMargin, y: yFooterLine }, thickness: 1, color: colorBorder });
-    page.drawText("InnovArqZ Soluciones Integrales", { x: leftMargin, y: 52, size: 8, font: fontBold, color: colorDark });
-    page.drawText('"Construimos juntos el valor de tus espacios', { x: leftMargin, y: 40, size: 7.5, font: fontOblique, color: colorDark });
+    page.drawText("InnovArqZ Soluciones Integrales", { x: leftMargin, y: 51, size: 8.5, font: fontBold, color: colorDark });
+    page.drawText('"Construimos juntos el valor de tus espacios', { x: leftMargin, y: 39, size: 7.5, font: fontOblique, color: colorDark });
     page.drawText('DE PRINCIPIO A FIN"', { x: leftMargin, y: 27, size: 10, font: fontBold, color: colorCopper });
 
-    const lineWeb = "Web Oficial: www.innovarqzsas.com";
-    const lineEmail = "Email: gerenciabim@innovarqzsas.com";
-    const lineTel = "TEL / WA: +57 315 850 5885";
-
-    page.drawText(lineWeb, { x: rightMargin - fontRegular.widthOfTextAtSize(lineWeb, 7.5), y: 52, size: 7.5, font: fontRegular, color: colorDark });
-    page.drawText(lineEmail, { x: rightMargin - fontRegular.widthOfTextAtSize(lineEmail, 7.5), y: 40, size: 7.5, font: fontRegular, color: colorDark });
+    page.drawText(lineWeb, { x: rightMargin - fontRegular.widthOfTextAtSize(lineWeb, 7.5), y: 51, size: 7.5, font: fontRegular, color: colorDark });
+    page.drawText(lineEmail, { x: rightMargin - fontRegular.widthOfTextAtSize(lineEmail, 7.5), y: 39, size: 7.5, font: fontRegular, color: colorDark });
     page.drawText(lineTel, { x: rightMargin - fontRegular.widthOfTextAtSize(lineTel, 7.5), y: 27, size: 7.5, font: fontBold, color: colorDark });
 
     return await pdfDoc.saveAsBase64({ dataUri: false });
