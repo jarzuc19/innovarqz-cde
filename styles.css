@@ -359,7 +359,7 @@ tr:hover {
 }
 
 /* ==============================================================================
-   PANEL DE VISTO BUENO Y FIRMA DIGITAL DEL CLIENTE (VERSIÓN 2.5)
+   PANEL DE REVISIÓN Y MODAL DE FIRMA DIGITAL DEL CLIENTE (VERSIÓN 2.5)
    ============================================================================== */
 #clientApprovalCard {
     border-left: 4px solid var(--accent-copper);
@@ -368,7 +368,8 @@ tr:hover {
     transition: all 0.2s ease-in-out;
 }
 
-#clientApprovalCard label {
+#clientApprovalCard label,
+#clientSignatureModal label {
     display: block;
     color: var(--text-muted);
     margin-bottom: 2px;
@@ -377,7 +378,10 @@ tr:hover {
 
 #clientApprovalCard input[type="text"],
 #clientApprovalCard select,
-#clientApprovalCard textarea {
+#clientApprovalCard textarea,
+#clientSignatureModal input[type="text"],
+#clientSignatureModal select,
+#clientSignatureModal textarea {
     background: #0b1120;
     border: 1px solid var(--card-border);
     border-radius: 6px;
@@ -389,7 +393,10 @@ tr:hover {
 
 #clientApprovalCard input[type="text"]:focus,
 #clientApprovalCard select:focus,
-#clientApprovalCard textarea:focus {
+#clientApprovalCard textarea:focus,
+#clientSignatureModal input[type="text"]:focus,
+#clientSignatureModal select:focus,
+#clientSignatureModal textarea:focus {
     border-color: var(--accent-copper);
     background: #0f172a;
 }
@@ -1062,8 +1069,9 @@ tr:hover {
         max-height: 340px;
     }
 
-    /* Adaptación del panel de aprobación y firma en móviles */
-    #clientApprovalCard div[style*="grid-template-columns: 1fr 1fr"] {
+    /* Adaptación del panel de aprobación y modal de firma en móviles */
+    #clientApprovalCard div[style*="grid-template-columns: 1fr 1fr"],
+    #clientSignatureModal div[style*="grid-template-columns: 1fr 1fr"] {
         grid-template-columns: 1fr !important;
         gap: 6px !important;
     }
