@@ -1,5 +1,5 @@
 /* ==============================================================================
-   VARIABLES GENERALES Y BASE CDE INNOVARQZ (VERSIÓN 2.2)
+   VARIABLES GENERALES Y BASE CDE INNOVARQZ (VERSIÓN 2.5)
    ============================================================================== */
 :root {
     --bg-dark: #0b1120;
@@ -359,6 +359,53 @@ tr:hover {
 }
 
 /* ==============================================================================
+   PANEL DE VISTO BUENO Y FIRMA DIGITAL DEL CLIENTE (VERSIÓN 2.5)
+   ============================================================================== */
+#clientApprovalCard {
+    border-left: 4px solid var(--accent-copper);
+    background: rgba(217, 119, 6, 0.05);
+    margin-bottom: 1rem;
+    transition: all 0.2s ease-in-out;
+}
+
+#clientApprovalCard label {
+    display: block;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+    font-weight: 500;
+}
+
+#clientApprovalCard input[type="text"],
+#clientApprovalCard select,
+#clientApprovalCard textarea {
+    background: #0b1120;
+    border: 1px solid var(--card-border);
+    border-radius: 6px;
+    color: #fff;
+    padding: 7px 10px;
+    font-size: 0.8rem;
+    transition: border-color 0.2s, background-color 0.2s;
+}
+
+#clientApprovalCard input[type="text"]:focus,
+#clientApprovalCard select:focus,
+#clientApprovalCard textarea:focus {
+    border-color: var(--accent-copper);
+    background: #0f172a;
+}
+
+#clientSignatureCanvas {
+    background: #ffffff !important;
+    border-radius: 4px;
+    cursor: crosshair;
+    touch-action: none !important;
+    max-width: 100%;
+    display: block;
+    margin: 0 auto;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+/* ==============================================================================
    PIE DE PÁGINA CORPORATIVO (CENTRADO, SOBRIO Y DISCRETO)
    ============================================================================== */
 .cde-footer {
@@ -551,7 +598,7 @@ tr:hover {
 }
 
 /* ==============================================================================
-   COMPONENTES EXCLUSIVOS VISOR 3D (VERSIÓN 2.2)
+   COMPONENTES EXCLUSIVOS VISOR 3D (VERSIÓN 2.5)
    ============================================================================== */
 /* Botonera superior de accesos fijos */
 #ifcMainToolbar {
@@ -728,7 +775,7 @@ tr:hover {
 }
 
 /* ==============================================================================
-   BANDEJA LATERAL ACOPLABLE ("DOCKING TRAY" ESTILO SKETCHUP V2.2)
+   BANDEJA LATERAL ACOPLABLE ("DOCKING TRAY" ESTILO SKETCHUP)
    ============================================================================== */
 .ifc-side-tray {
     position: absolute;
@@ -1013,6 +1060,17 @@ tr:hover {
     .monitoring-panel {
         min-height: 240px;
         max-height: 340px;
+    }
+
+    /* Adaptación del panel de aprobación y firma en móviles */
+    #clientApprovalCard div[style*="grid-template-columns: 1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+        gap: 6px !important;
+    }
+
+    #clientSignatureCanvas {
+        width: 100% !important;
+        height: 95px !important;
     }
 
     .viewer-modal-layout {
