@@ -167,7 +167,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (e.key === "Escape") {
             ocultarMenuHerramientasIFC();
             ocultarMenuContextualIFC();
-            cerrarPanelVisibilidadBIM();
             cancelarHerramientaActiva();
             cerrarCualquierModalAbierto();
         }
@@ -2969,7 +2968,7 @@ function cortarEnNivel(cotaLosaEscena) {
 }
 
 // ==============================================================================
-// RECORRIDO EN PRIMERA PERSONA CON MEMORIA DE POSICIÓN
+// RECORRIDO EN PRIMERA PERSONA CON MEMORIA DE POSICIÓN (V2.2)
 // ==============================================================================
 function caminarEnNivel(cotaLosaEscena) {
     cerrarPanelNivelesIFC();
@@ -3006,10 +3005,8 @@ function activarSeleccionLosaCaminar() {
     ocultarMenuHerramientasIFC();
     ocultarMenuContextualIFC();
 
-    if (walkLastKnownPosition && !isWalkModeActive) {
-        iniciarModoCaminarEnCoordenadas(walkLastKnownPosition.x, walkLastKnownPosition.y - 1.65, walkLastKnownPosition.z);
-        return;
-    }
+    // V2.2: Al activarse directamente desde el menú, desvincular cualquier posición anterior
+    walkLastKnownPosition = null;
 
     isPickSlabModeActive = !isPickSlabModeActive;
     const container = document.getElementById("modalIfcContainer");
@@ -3103,8 +3100,9 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
 }
 
 function desactivarModoCaminar() {
-    if (isWalkModeActive && ifcCamera) {
-        walkLastKnownPosition = ifcCamera.position.clone();
+    // V2.2: La posición solo se recuerda si se suspendió para medir distancias
+    if (!wasWalkingBeforeMeasure) {
+        walkLastKnownPosition = null;
     }
 
     isWalkModeActive = false;
@@ -3249,6 +3247,9 @@ function setupWalkTouchListeners() {
 // ==============================================================================
 function ajustarVistaModeloIFC() {
     if (!ifcCamera || !ifcControls) return;
+    // V2.2: Al encuadrar se resetea cualquier memoria de posición previa
+    walkLastKnownPosition = null;
+    wasWalkingBeforeMeasure = false;
     desactivarModoCaminar();
     cerrarPanelNivelesIFC();
     ocultarMenuHerramientasIFC();
@@ -3262,6 +3263,9 @@ function ajustarVistaModeloIFC() {
 
 function cambiarVistaIFC(tipo) {
     if (!ifcCamera || !ifcControls) return;
+    // V2.2: Al cambiar de vista ortogonal se resetea la memoria de posición
+    walkLastKnownPosition = null;
+    wasWalkingBeforeMeasure = false;
     desactivarModoCaminar();
     cerrarPanelNivelesIFC();
     ocultarMenuHerramientasIFC();
@@ -3305,7 +3309,6 @@ function alternarAristasIFC() {
 // ==============================================================================
 function alternarModoMedicionIFC() {
     isMeasureToolActive = !isMeasureToolActive;
-    const card = document.getElementById("ifcMeasureCard");
     const container = document.getElementById("modalIfcContainer");
 
     if (isMeasureToolActive) {
@@ -3372,7 +3375,6 @@ function procesarClickMedicion(intersectPoint) {
 
     measurePoints.push(intersectPoint.clone());
 
-    // V2.2: Punto A celeste (0x38bdf8), Punto B verde (0x10b981)
     const esPuntoA = (measurePoints.length === 1);
     const colorEsfera = esPuntoA ? 0x38bdf8 : 0x10b981;
 
@@ -3511,13 +3513,11 @@ function onIfcModelClick(event) {
     if (intersects.length > 0) {
         let hit = null;
 
-        // V2.2: Descartar partes cortadas por el plano de sección
         for (let i = 0; i < intersects.length; i++) {
             const p = intersects[i].point;
             if (ifcClippingPlane && isSectionToolActive) {
-                // distanceToPoint < 0 significa que el punto está del lado recortado/oculto
                 if (ifcClippingPlane.distanceToPoint(p) < 0) {
-                    continue; // Ignorar el techo o cara cortada y buscar la siguiente superficie real
+                    continue;
                 }
             }
             hit = intersects[i];
