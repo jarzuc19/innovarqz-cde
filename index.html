@@ -10,12 +10,14 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+    <!-- Generador QR Vectorial Autónomo (Offline) v2.5 -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
 
     <!-- Motor 3D Three.js y OrbitControls -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
-    <!-- ESTILOS AISLADOS EXCLUSIVOS PARA EL VISOR 3D, BANDEJA LATERAL ACOPLABLE Y MODO CAMINAR (V2.2) -->
+    <!-- ESTILOS AISLADOS EXCLUSIVOS PARA EL VISOR 3D, BANDEJA LATERAL ACOPLABLE Y MODO CAMINAR (V2.5) -->
     <style>
         /* Bloqueo estricto del pull-to-refresh confinado ÚNICAMENTE al visor 3D y canvas */
         #viewerModal, #modalIfcContainer, #modalIfcContainer canvas {
@@ -33,7 +35,7 @@
             -ms-user-select: none !important;
         }
 
-        /* Botonera y Menú Desplegable V2.2 */
+        /* Botonera y Menú Desplegable */
         .btn-subtool {
             background: #1e293b;
             color: #f8fafc;
@@ -91,7 +93,7 @@
         }
 
         /* ==========================================================================
-           BANDEJA LATERAL ACOPLABLE ("DOCKING TRAY" ESTILO SKETCHUP V2.2)
+           BANDEJA LATERAL ACOPLABLE ("DOCKING TRAY" ESTILO SKETCHUP)
            ========================================================================== */
         .ifc-side-tray {
             position: absolute;
@@ -459,17 +461,59 @@
                     <!-- BARRA DINÁMICA DE SUBCARPETAS (JERARQUÍA ISO 19650) -->
                     <div id="subcarpetas-bar" class="card" style="display: none; padding: 8px 12px; margin-bottom: 12px; background: rgba(30, 41, 59, 0.6); border: 1px solid #334155; gap: 8px; flex-wrap: wrap; align-items: center;"></div>
 
-                    <!-- VISTO BUENO Y FIRMA DIGITAL (EXCLUSIVO CLIENTE) -->
+                    <!-- VISTO BUENO, IDENTIFICACIÓN PLENA Y FIRMA DIGITAL (EXCLUSIVO CLIENTE V2.5) -->
                     <div id="clientApprovalCard" class="card" style="display: none; border-left: 4px solid var(--accent-copper); background: rgba(217, 119, 6, 0.05); margin-bottom: 1rem;">
-                        <h3>📜 Visto Bueno & Firma del Acta de Recibo</h3>
-                        <p><small>Al autorizar, el sistema generará el Acta de Recibo en PDF formal con el checklist de entregables vigentes en 03_PUBLISHED.</small></p>
+                        <h3 style="color: var(--accent-copper); margin-bottom: 4px;">📜 Visto Bueno & Firma del Acta de Recibo</h3>
+                        <p><small style="color: var(--text-muted);">Diligencie sus datos de identificación para certificar la recepción formal de los entregables aprobados en 03_PUBLISHED.</small></p>
                         
-                        <div style="margin-top: 8px;">
-                            <input type="text" id="clientSubject" placeholder="Asunto / Resumen corto de la firma o revisión..." style="width: 100%; padding: 8px; margin-bottom: 6px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #fff;" required>
-                            <textarea id="clientComments" placeholder="Escriba sus observaciones detalladas..." style="width: 100%; height: 60px; padding: 8px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #fff;"></textarea>
+                        <!-- DATOS COMPLETOS DE IDENTIFICACIÓN DEL FIRMANTE -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px;">
+                            <div>
+                                <label><small>Nombre Completo del Firmante:</small></label>
+                                <input type="text" id="clientSignerName" placeholder="Nombres y apellidos completos" required style="width: 100%; margin-top: 2px;">
+                            </div>
+                            <div>
+                                <label><small>Cargo / Calidad en que actúa:</small></label>
+                                <input type="text" id="clientSignerRole" placeholder="Ej: Representante Legal / Interventor" required style="width: 100%; margin-top: 2px;">
+                            </div>
+                            <div>
+                                <label><small>Tipo de Documento:</small></label>
+                                <select id="clientDocType" style="width: 100%; margin-top: 2px;">
+                                    <option value="C.C." selected>Cédula de Ciudadanía (C.C.)</option>
+                                    <option value="C.E.">Cédula de Extranjería (C.E.)</option>
+                                    <option value="NIT">NIT / Empresa</option>
+                                    <option value="PAS">Pasaporte</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label><small>Número de Documento:</small></label>
+                                <input type="text" id="clientDocNumber" placeholder="Número de identificación" required style="width: 100%; margin-top: 2px;">
+                            </div>
                         </div>
-                        <div style="margin-top: 8px; display: flex; gap: 10px;">
-                            <button class="btn-primary" onclick="procesarAprobacionCliente('APROBADO')">Aprobar y Generar Acta PDF</button>
+
+                        <!-- ASUNTO Y OBSERVACIONES -->
+                        <div style="margin-top: 8px;">
+                            <label><small>Asunto / Declaración:</small></label>
+                            <input type="text" id="clientSubject" placeholder="Asunto / Resumen de recibo a satisfacción..." style="width: 100%; margin-top: 2px; margin-bottom: 6px;" required>
+                            <label><small>Observaciones o Salvedades:</small></label>
+                            <textarea id="clientComments" placeholder="Escriba aquí sus observaciones o salvedades de recibo..." style="width: 100%; height: 55px; margin-top: 2px;"></textarea>
+                        </div>
+
+                        <!-- LIENZO DE RÚBRICA MANUSCRITA TÁCTIL / MOUSE -->
+                        <div style="margin-top: 8px;">
+                            <label><small>Rúbrica Manuscrita Digital (Firme aquí con el dedo o mouse):</small></label>
+                            <div style="background: #0b1120; border: 1px dashed var(--accent-copper); border-radius: 6px; padding: 6px; text-align: center; margin-top: 4px;">
+                                <canvas id="clientSignatureCanvas" width="460" height="110" style="background: #ffffff; border-radius: 4px; cursor: crosshair; touch-action: none; max-width: 100%; display: block; margin: 0 auto;"></canvas>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; padding: 0 4px;">
+                                    <small style="color: #64748b; font-size: 0.7rem;">Trazo directo capturado con validación criptográfica</small>
+                                    <button type="button" class="btn-secondary" onclick="limpiarLienzoFirma()" style="font-size: 0.7rem; padding: 3px 8px; border-color: #64748b;">🧹 Borrar y Repetir Firma</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ACCIONES -->
+                        <div style="margin-top: 12px; display: flex; gap: 10px;">
+                            <button class="btn-primary" onclick="procesarAprobacionCliente('APROBADO')">Aprobar y Generar Acta Formal</button>
                             <button class="btn-secondary" style="background: #ef4444; color: #fff; border:none;" onclick="procesarAprobacionCliente('RECHAZADO')">Solicitar Ajustes</button>
                         </div>
                     </div>
@@ -835,7 +879,7 @@
                     </div>
 
                     <!-- =========================================================================
-                         BANDEJA LATERAL ACOPLABLE Y ACORDEÓN ("DOCKING TRAY" ESTILO SKETCHUP V2.2)
+                         BANDEJA LATERAL ACOPLABLE Y ACORDEÓN ("DOCKING TRAY" ESTILO SKETCHUP)
                          ========================================================================= -->
                     <div id="ifcSideTray" class="ifc-side-tray">
                         
