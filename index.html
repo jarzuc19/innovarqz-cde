@@ -15,7 +15,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
-    <!-- ESTILOS AISLADOS EXCLUSIVOS PARA EL VISOR 3D, NIVELES, FILTROS, BANDEJA CAPTURAS Y MODO CAMINAR -->
+    <!-- ESTILOS AISLADOS EXCLUSIVOS PARA EL VISOR 3D, BANDEJA LATERAL ACOPLABLE Y MODO CAMINAR (V2.2) -->
     <style>
         /* Bloqueo estricto del pull-to-refresh confinado ÚNICAMENTE al visor 3D y canvas */
         #viewerModal, #modalIfcContainer, #modalIfcContainer canvas {
@@ -24,8 +24,8 @@
             touch-action: none !important;
         }
 
-        /* Bloqueo estricto de selección de texto en la botonera flotante */
-        #ifcMainToolbar, #ifcMainToolbar *, #ifcToolsDropdownMenu, #ifcToolsDropdownMenu *, #ifcVisibilityCard, #ifcVisibilityCard * {
+        /* Bloqueo estricto de selección de texto en la botonera flotante y bandeja */
+        #ifcMainToolbar, #ifcMainToolbar *, #ifcToolsDropdownMenu, #ifcToolsDropdownMenu *, #ifcSideTray, #ifcSideTray * {
             user-select: none !important;
             -webkit-user-select: none !important;
             -webkit-touch-callout: none !important;
@@ -33,7 +33,7 @@
             -ms-user-select: none !important;
         }
 
-        /* Botonera y Menú Desplegable V2.1 */
+        /* Botonera y Menú Desplegable V2.2 */
         .btn-subtool {
             background: #1e293b;
             color: #f8fafc;
@@ -90,49 +90,108 @@
             box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
         }
 
-        /* Panel flotante de árbol de niveles IFC */
-        #ifcLevelsCard {
+        /* ==========================================================================
+           BANDEJA LATERAL ACOPLABLE ("DOCKING TRAY" ESTILO SKETCHUP V2.2)
+           ========================================================================== */
+        .ifc-side-tray {
             position: absolute;
-            top: 12px;
-            left: 12px;
-            z-index: 25;
-            background: rgba(15, 23, 42, 0.95);
-            padding: 10px 14px;
-            border-radius: 8px;
-            backdrop-filter: blur(8px);
-            border: 1px solid #10b981;
-            color: #fff;
-            max-width: 320px;
-            width: calc(100vw - 40px);
-            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+            top: 56px;
+            right: 12px;
+            bottom: 20px;
+            width: 300px;
+            max-width: calc(100vw - 24px);
+            z-index: 45;
             display: none;
-            user-select: none;
-            -webkit-user-select: none;
+            flex-direction: column;
+            gap: 8px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            pointer-events: none;
+            padding-right: 2px;
         }
 
+        .ifc-tray-card {
+            background: rgba(15, 23, 42, 0.96);
+            border: 1px solid #334155;
+            border-radius: 8px;
+            backdrop-filter: blur(8px);
+            color: #fff;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+            display: none;
+            pointer-events: auto;
+            flex-shrink: 0;
+            overflow: hidden;
+            transition: border-color 0.2s ease;
+        }
+        .ifc-tray-card:hover {
+            border-color: #475569;
+        }
+
+        .tray-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: rgba(30, 41, 59, 0.7);
+            border-bottom: 1px solid #334155;
+            cursor: pointer;
+            user-select: none;
+        }
+        .tray-card-header:hover {
+            background: rgba(51, 65, 85, 0.8);
+        }
+
+        .tray-card-title {
+            font-size: 0.78rem;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .tray-card-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-tray-toggle, .btn-tray-close {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            font-size: 0.85rem;
+            cursor: pointer;
+            padding: 2px 4px;
+            border-radius: 4px;
+            transition: color 0.15s;
+        }
+        .btn-tray-toggle:hover { color: #38bdf8; }
+        .btn-tray-close:hover { color: #ef4444; }
+
+        .tray-card-body {
+            padding: 10px 12px;
+            font-size: 0.74rem;
+            color: #cbd5e1;
+        }
+
+        /* Árbol de niveles dentro de la bandeja */
         .ifc-levels-list {
             display: flex;
             flex-direction: column;
             gap: 6px;
-            max-height: 220px;
+            max-height: 180px;
             overflow-y: auto;
-            margin-top: 8px;
+            margin-top: 6px;
         }
 
         .ifc-level-item {
             background: rgba(30, 41, 59, 0.85);
             border: 1px solid #334155;
-            padding: 6px 8px;
-            border-radius: 6px;
+            padding: 5px 8px;
+            border-radius: 5px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            font-size: 0.75rem;
-        }
-
-        .ifc-level-actions {
-            display: flex;
-            gap: 4px;
+            font-size: 0.73rem;
         }
 
         .btn-level-act {
@@ -142,24 +201,6 @@
             font-size: 0.68rem;
             cursor: pointer;
             font-weight: bold;
-        }
-
-        /* Panel Flotante de Gestión de Visibilidad y Filtros BIM (v2.1) */
-        #ifcVisibilityCard {
-            position: absolute;
-            top: 12px;
-            left: 12px;
-            z-index: 25;
-            background: rgba(15, 23, 42, 0.96);
-            padding: 12px 14px;
-            border-radius: 8px;
-            backdrop-filter: blur(8px);
-            border: 1px solid #38bdf8;
-            color: #fff;
-            max-width: 310px;
-            width: calc(100vw - 30px);
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
-            display: none;
         }
 
         /* Menú Contextual Flotante de Clic Derecho (Exclusivo BIM) */
@@ -343,18 +384,11 @@
                 width: calc(100vw - 20px) !important;
                 max-width: 250px !important;
             }
-            #ifcSectionToolPanel, #ifcMeasureCard {
-                bottom: 8px !important;
-                left: 8px !important;
+            .ifc-side-tray {
+                top: 50px !important;
                 right: 8px !important;
-                min-width: auto !important;
-                max-width: calc(100vw - 16px) !important;
-                padding: 8px 10px !important;
-            }
-            #ifcPropertyCard, #ifcLevelsCard, #ifcVisibilityCard {
-                top: 8px !important;
-                left: 8px !important;
-                max-width: calc(100vw - 50px) !important;
+                bottom: 80px !important;
+                width: calc(100vw - 16px) !important;
             }
             .walk-touch-container {
                 position: absolute !important;
@@ -766,7 +800,6 @@
                         <div class="menu-tool-row" onclick="ejecutarHerramientaIFC('NIVELES')">
                             <span>🏢 Árbol de Pisos / Niveles</span>
                         </div>
-                        <!-- Submenú de Visibilidad y Filtros BIM (v2.1) -->
                         <div class="menu-tool-row" onclick="ejecutarHerramientaIFC('VISIBILIDAD')">
                             <span>👁️ Filtros y Visibilidad BIM</span>
                         </div>
@@ -801,94 +834,132 @@
                         <div class="ifc-context-item" onclick="restablecerVisibilidadIFC()">🔄 Mostrar Todo</div>
                     </div>
 
-                    <!-- Panel Flotante de Árbol de Niveles IFC -->
-                    <div id="ifcLevelsCard">
-                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 4px;">
-                            <strong style="color: #10b981; font-size: 0.8rem;">🏢 Pisos y Niveles BIM</strong>
-                            <button type="button" onclick="alternarPanelNivelesIFC()" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 0.9rem;">✕</button>
-                        </div>
-                        <div id="ifcLevelsList" class="ifc-levels-list">
-                            <small style="color: #94a3b8;">Cargando niveles del archivo...</small>
-                        </div>
-                    </div>
-
-                    <!-- Panel Flotante de Gestión de Visibilidad y Filtros BIM (v2.1) -->
-                    <div id="ifcVisibilityCard">
-                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 6px; margin-bottom: 8px;">
-                            <strong style="color: #38bdf8; font-size: 0.82rem;">👁️ Filtros y Visibilidad BIM</strong>
-                            <button type="button" onclick="cerrarPanelVisibilidadBIM()" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 0.95rem;">✕</button>
-                        </div>
-
-                        <!-- Control Individual Táctil -->
-                        <div style="background: rgba(30, 41, 59, 0.7); border: 1px solid #334155; border-radius: 6px; padding: 8px; margin-bottom: 10px;">
-                            <div style="font-size: 0.7rem; color: #94a3b8; margin-bottom: 4px;">ELEMENTO SELECCIONADO:</div>
-                            <div id="visElemNombre" style="font-size: 0.76rem; font-weight: bold; color: #f8fafc; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                                Ninguno seleccionado
+                    <!-- =========================================================================
+                         BANDEJA LATERAL ACOPLABLE Y ACORDEÓN ("DOCKING TRAY" ESTILO SKETCHUP V2.2)
+                         ========================================================================= -->
+                    <div id="ifcSideTray" class="ifc-side-tray">
+                        
+                        <!-- 1. Tarjeta: Propiedades del Elemento Seleccionado -->
+                        <div id="ifcPropertyCard" class="ifc-tray-card" style="border-left: 3px solid var(--accent-copper, #d97706);">
+                            <div class="tray-card-header" onclick="alternarColapsoBandejaCard(this)">
+                                <div class="tray-card-title" style="color: var(--accent-copper, #d97706);">
+                                    <span id="ifcPropTitle">📋 Propiedades BIM</span>
+                                </div>
+                                <div class="tray-card-actions">
+                                    <button type="button" onclick="event.stopPropagation(); ocultarElementoActual();" title="Ocultar esta pieza seleccionada" style="background: #334155; border: 1px solid #475569; color: #fca5a5; border-radius: 4px; padding: 1px 5px; font-size: 0.65rem; cursor: pointer; font-weight: bold;">👁️ Ocultar</button>
+                                    <button type="button" class="btn-tray-toggle" title="Minimizar / Expandir">▾</button>
+                                    <button type="button" class="btn-tray-close" onclick="event.stopPropagation(); cerrarCardPropiedadesIFC();" title="Cerrar panel">✕</button>
+                                </div>
                             </div>
-                            <div style="display: flex; gap: 6px;">
-                                <button type="button" id="btnVisOcultarSeleccionado" onclick="ocultarElementoActual()" disabled style="flex: 1; font-size: 0.7rem; padding: 5px; border-radius: 4px; border: 1px solid #ef4444; background: rgba(239, 68, 68, 0.2); color: #fca5a5; cursor: not-allowed; font-weight: bold;">
-                                    👁️ Ocultar Pieza
-                                </button>
-                                <button type="button" onclick="restablecerVisibilidadIFC()" style="flex: 1; font-size: 0.7rem; padding: 5px; border-radius: 4px; border: 1px solid #10b981; background: rgba(16, 185, 129, 0.2); color: #6ee7b7; cursor: pointer; font-weight: bold;">
-                                    🔄 Ver Todo
-                                </button>
+                            <div class="tray-card-body">
+                                <div id="ifcPropContent" style="max-height: 180px; overflow-y: auto;"></div>
                             </div>
                         </div>
 
-                        <!-- Categorías Atómicas Homogéneas -->
-                        <div style="font-size: 0.7rem; color: #94a3b8; margin-bottom: 6px;">CATEGORÍAS PRESENTES:</div>
-                        <div id="ifcCategoryTogglesList" style="display: flex; flex-direction: column; gap: 5px; max-height: 220px; overflow-y: auto; padding-right: 2px;">
-                            <small style="color: #64748b;">Abra un modelo para clasificar categorías...</small>
-                        </div>
-                    </div>
-
-                    <!-- Panel Flotante de Herramienta de Sección / Corte (Clipping) -->
-                    <div id="ifcSectionToolPanel" style="position: absolute; bottom: 12px; left: 12px; z-index: 20; display: none; background: rgba(15, 23, 42, 0.95); padding: 10px 14px; border-radius: 8px; backdrop-filter: blur(6px); border: 1px solid #38bdf8; color: #fff; box-shadow: 0 4px 14px rgba(0,0,0,0.4); min-width: 250px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                            <strong style="font-size: 0.75rem; color: #38bdf8;">✂ Caja de Sección / Cortes</strong>
-                            <button type="button" onclick="alternarPanelCorteIFC()" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 0.85rem;">✕</button>
-                        </div>
-                        <div style="display: flex; gap: 6px; margin-bottom: 8px; font-size: 0.72rem;">
-                            <label><input type="radio" name="clipAxis" value="Y" checked onchange="configurarPlanoCorte()"> Nivel (Y)</label>
-                            <label><input type="radio" name="clipAxis" value="X" onchange="configurarPlanoCorte()"> Transv. (X)</label>
-                            <label><input type="radio" name="clipAxis" value="Z" onchange="configurarPlanoCorte()"> Long. (Z)</label>
-                        </div>
-                        <input type="range" id="clipSlider" min="0" max="100" value="100" style="width: 100%; cursor: pointer;" oninput="actualizarPosicionCorte(this.value)">
-                        <div style="display: flex; justify-content: space-between; font-size: 0.68rem; color: #94a3b8; margin-top: 4px;">
-                            <span id="clipMinVal">Base</span>
-                            <button type="button" onclick="invertirPlanoCorte()" style="background: #334155; border: none; color: #cbd5e1; border-radius: 3px; padding: 2px 6px; cursor: pointer;">Invertir Lado</button>
-                            <span id="clipMaxVal">Techo</span>
-                        </div>
-                    </div>
-
-                    <!-- Panel Flotante de Resultados de Medición 3D -->
-                    <div id="ifcMeasureCard" style="position: absolute; bottom: 12px; right: 12px; z-index: 20; display: none; background: rgba(15, 23, 42, 0.95); padding: 10px 14px; border-radius: 8px; backdrop-filter: blur(6px); border: 1px solid #38bdf8; color: #fff; box-shadow: 0 4px 14px rgba(0,0,0,0.4); min-width: 230px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 4px; margin-bottom: 6px;">
-                            <strong style="font-size: 0.75rem; color: #38bdf8;">📏 Herramienta de Medición</strong>
-                            <button type="button" onclick="alternarModoMedicionIFC()" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 0.85rem;">✕</button>
-                        </div>
-                        <div id="ifcMeasureStatus" style="font-size: 0.72rem; color: #fbbf24; margin-bottom: 4px;">Haz clic en el Punto A...</div>
-                        <div id="ifcMeasureData" style="font-size: 0.75rem; display: none; line-height: 1.4;">
-                            <div><strong>Distancia Real:</strong> <span id="measureDistReal" style="color: #10b981; font-weight: bold;">0.00 m</span></div>
-                            <div><strong>Δ Altura (Y):</strong> <span id="measureDistY">0.00 m</span></div>
-                            <div><strong>Δ Planta (XZ):</strong> <span id="measureDistXZ">0.00 m</span></div>
-                        </div>
-                        <div style="margin-top: 8px; text-align: right;">
-                            <button type="button" onclick="limpiarMedicionIFC()" style="background: #334155; border: none; color: #cbd5e1; border-radius: 4px; padding: 3px 8px; font-size: 0.68rem; cursor: pointer;">Reiniciar Puntos</button>
-                        </div>
-                    </div>
-
-                    <!-- Tarjeta Informativa de Propiedades BIM al Seleccionar (con botón Ocultar para móviles) -->
-                    <div id="ifcPropertyCard" style="position: absolute; top: 12px; left: 12px; z-index: 20; display: none; background: rgba(15, 23, 42, 0.95); padding: 10px 14px; border-radius: 8px; backdrop-filter: blur(6px); border: 1px solid var(--accent-copper); color: #fff; max-width: 280px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
-                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 4px; margin-bottom: 6px;">
-                            <strong id="ifcPropTitle" style="font-size: 0.75rem; color: var(--accent-copper);">Elemento BIM</strong>
-                            <div style="display: flex; gap: 6px; align-items: center;">
-                                <button type="button" onclick="ocultarElementoActual()" title="Ocultar esta pieza seleccionada" style="background: #334155; border: 1px solid #475569; color: #fca5a5; border-radius: 4px; padding: 2px 6px; font-size: 0.68rem; cursor: pointer; font-weight: bold;">👁️ Ocultar</button>
-                                <button type="button" onclick="cerrarCardPropiedadesIFC()" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 0.85rem;">✕</button>
+                        <!-- 2. Tarjeta: Filtros y Visibilidad BIM -->
+                        <div id="ifcVisibilityCard" class="ifc-tray-card" style="border-left: 3px solid #38bdf8;">
+                            <div class="tray-card-header" onclick="alternarColapsoBandejaCard(this)">
+                                <div class="tray-card-title" style="color: #38bdf8;">
+                                    <span>👁️ Filtros y Visibilidad BIM</span>
+                                </div>
+                                <div class="tray-card-actions">
+                                    <button type="button" class="btn-tray-toggle" title="Minimizar / Expandir">▾</button>
+                                    <button type="button" class="btn-tray-close" onclick="event.stopPropagation(); cerrarPanelVisibilidadBIM();" title="Cerrar panel">✕</button>
+                                </div>
+                            </div>
+                            <div class="tray-card-body">
+                                <div style="background: rgba(30, 41, 59, 0.7); border: 1px solid #334155; border-radius: 6px; padding: 6px 8px; margin-bottom: 8px;">
+                                    <div style="font-size: 0.68rem; color: #94a3b8; margin-bottom: 2px;">ELEMENTO SELECCIONADO:</div>
+                                    <div id="visElemNombre" style="font-size: 0.74rem; font-weight: bold; color: #f8fafc; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                        Ninguno seleccionado
+                                    </div>
+                                    <div style="display: flex; gap: 6px;">
+                                        <button type="button" id="btnVisOcultarSeleccionado" onclick="ocultarElementoActual()" disabled style="flex: 1; font-size: 0.68rem; padding: 4px; border-radius: 4px; border: 1px solid #ef4444; background: rgba(239, 68, 68, 0.2); color: #fca5a5; cursor: not-allowed; font-weight: bold;">
+                                            👁️ Ocultar
+                                        </button>
+                                        <button type="button" onclick="restablecerVisibilidadIFC()" style="flex: 1; font-size: 0.68rem; padding: 4px; border-radius: 4px; border: 1px solid #10b981; background: rgba(16, 185, 129, 0.2); color: #6ee7b7; cursor: pointer; font-weight: bold;">
+                                            🔄 Ver Todo
+                                        </button>
+                                    </div>
+                                </div>
+                                <div style="font-size: 0.68rem; color: #94a3b8; margin-bottom: 4px;">CATEGORÍAS PRESENTES:</div>
+                                <div id="ifcCategoryTogglesList" style="display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto;">
+                                    <small style="color: #64748b;">Abra un modelo para clasificar categorías...</small>
+                                </div>
                             </div>
                         </div>
-                        <div id="ifcPropContent" style="font-size: 0.72rem; color: #cbd5e1; max-height: 160px; overflow-y: auto;"></div>
+
+                        <!-- 3. Tarjeta: Herramienta de Medición 3D -->
+                        <div id="ifcMeasureCard" class="ifc-tray-card" style="border-left: 3px solid #fbbf24;">
+                            <div class="tray-card-header" onclick="alternarColapsoBandejaCard(this)">
+                                <div class="tray-card-title" style="color: #fbbf24;">
+                                    <span>📏 Herramienta de Medición</span>
+                                </div>
+                                <div class="tray-card-actions">
+                                    <button type="button" class="btn-tray-toggle" title="Minimizar / Expandir">▾</button>
+                                    <button type="button" class="btn-tray-close" onclick="event.stopPropagation(); alternarModoMedicionIFC();" title="Cerrar panel">✕</button>
+                                </div>
+                            </div>
+                            <div class="tray-card-body">
+                                <div id="ifcMeasureStatus" style="font-size: 0.72rem; color: #fbbf24; margin-bottom: 6px;">Haz clic en el Punto A...</div>
+                                <div id="ifcMeasureData" style="display: none; background: rgba(15, 23, 42, 0.6); border: 1px solid #334155; border-radius: 6px; padding: 6px 8px; line-height: 1.5; margin-bottom: 6px;">
+                                    <div><strong>Distancia Real:</strong> <span id="measureDistReal" style="color: #10b981; font-weight: bold;">0.00 m</span></div>
+                                    <div><strong>Δ Altura (Y):</strong> <span id="measureDistY">0.00 m</span></div>
+                                    <div><strong>Δ Planta (XZ):</strong> <span id="measureDistXZ">0.00 m</span></div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <button type="button" onclick="limpiarMedicionIFC()" style="background: #334155; border: 1px solid #475569; color: #cbd5e1; border-radius: 4px; padding: 3px 8px; font-size: 0.68rem; cursor: pointer;">Reiniciar Puntos</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 4. Tarjeta: Caja de Sección / Cortes -->
+                        <div id="ifcSectionToolPanel" class="ifc-tray-card" style="border-left: 3px solid #38bdf8;">
+                            <div class="tray-card-header" onclick="alternarColapsoBandejaCard(this)">
+                                <div class="tray-card-title" style="color: #38bdf8;">
+                                    <span>✂️ Caja de Sección / Cortes</span>
+                                </div>
+                                <div class="tray-card-actions">
+                                    <button type="button" class="btn-tray-toggle" title="Minimizar / Expandir">▾</button>
+                                    <button type="button" class="btn-tray-close" onclick="event.stopPropagation(); alternarPanelCorteIFC();" title="Cerrar panel">✕</button>
+                                </div>
+                            </div>
+                            <div class="tray-card-body">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.72rem;">
+                                    <label><input type="radio" name="clipAxis" value="Y" checked onchange="configurarPlanoCorte()"> Nivel (Y)</label>
+                                    <label><input type="radio" name="clipAxis" value="X" onchange="configurarPlanoCorte()"> Transv. (X)</label>
+                                    <label><input type="radio" name="clipAxis" value="Z" onchange="configurarPlanoCorte()"> Long. (Z)</label>
+                                </div>
+                                <input type="range" id="clipSlider" min="0" max="100" value="100" style="width: 100%; cursor: pointer;" oninput="actualizarPosicionCorte(this.value)">
+                                <div style="display: flex; justify-content: space-between; font-size: 0.68rem; color: #94a3b8; margin-top: 6px;">
+                                    <span id="clipMinVal">Base</span>
+                                    <button type="button" onclick="invertirPlanoCorte()" style="background: #334155; border: 1px solid #475569; color: #cbd5e1; border-radius: 3px; padding: 2px 6px; cursor: pointer;">Invertir Lado</button>
+                                    <span id="clipMaxVal">Techo</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 5. Tarjeta: Árbol de Pisos y Niveles -->
+                        <div id="ifcLevelsCard" class="ifc-tray-card" style="border-left: 3px solid #10b981;">
+                            <div class="tray-card-header" onclick="alternarColapsoBandejaCard(this)">
+                                <div class="tray-card-title" style="color: #10b981;">
+                                    <span>🏢 Pisos y Niveles BIM</span>
+                                </div>
+                                <div class="tray-card-actions">
+                                    <button type="button" class="btn-tray-toggle" title="Minimizar / Expandir">▾</button>
+                                    <button type="button" class="btn-tray-close" onclick="event.stopPropagation(); cerrarPanelNivelesIFC();" title="Cerrar panel">✕</button>
+                                </div>
+                            </div>
+                            <div class="tray-card-body">
+                                <div id="ifcLevelsList" class="ifc-levels-list">
+                                    <small style="color: #94a3b8;">Cargando niveles del archivo...</small>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
+                    <!-- Fin #ifcSideTray -->
+
                 </div>
 
                 <!-- 4. Overlay de Arrastre -->
