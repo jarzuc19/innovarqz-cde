@@ -1,5 +1,5 @@
 // ==============================================================================
-// CONFIGURACIÓN CENTRALIZADA DE SERVICIOS - CDE INNOVARQZ (VERSIÓN 2.2)
+// CONFIGURACIÓN CENTRALIZADA DE SERVICIOS - CDE INNOVARQZ (VERSIÓN 2.3)
 // ==============================================================================
 const SUPABASE_URL = "https://bjlqtzrcrofpqlmyvoob.supabase.co";
 const SUPABASE_KEY = "sb_publishable_htPtQvL-1wrLfu7ACHBg1w_epAZsu1E";
@@ -59,19 +59,63 @@ let currentLoadedModelID = null;
 // ÁRBOL DE NIVELES BIM
 let ifcBuildingStoreys = [];
 
-// MAPA DE CATEGORÍAS BIM ATÓMICAS (VERSIÓN 2.2)
-const ifcCategoriesMap = {
-    muros: { label: "🧱 Muros", meshes: [], visible: true },
-    losas: { label: "🔲 Losas / Pisos", meshes: [], visible: true },
-    columnas: { label: "🏛️ Columnas", meshes: [], visible: true },
-    vigas: { label: "🏗️ Vigas", meshes: [], visible: true },
-    puertas: { label: "🚪 Puertas", meshes: [], visible: true },
-    ventanas: { label: "🪟 Ventanas", meshes: [], visible: true },
-    escaleras: { label: "🪜 Escaleras", meshes: [], visible: true },
-    mep: { label: "🔧 Instalaciones MEP", meshes: [], visible: true },
-    mobiliario: { label: "🪑 Mobiliario", meshes: [], visible: true },
-    otros: { label: "📦 Otros", meshes: [], visible: true }
+// MAPA DINÁMICO UNIVERSAL DE CATEGORÍAS BIM (VERSIÓN 2.3)
+const ifcCategoriesMap = {};
+
+// DICCIONARIO BILINGÜE SEMÁNTICO (SIN PREFIJO 'IFC')
+const DICCIONARIO_BILINGUE_IFC = {
+    "WALL": { label: "Muro / Pared", en: "Wall", icon: "🧱" },
+    "WALLSTANDARDCASE": { label: "Muro Estándar", en: "Standard Wall", icon: "🧱" },
+    "SLAB": { label: "Piso / Losa", en: "Floor Slab", icon: "🔲" },
+    "ROOF": { label: "Techo / Cubierta", en: "Roof", icon: "🏠" },
+    "COVERING": { label: "Cielorraso / Acabado", en: "Ceiling / Covering", icon: "🌫️" },
+    "COLUMN": { label: "Columna / Pilar", en: "Column", icon: "🏛️" },
+    "BEAM": { label: "Viga", en: "Beam", icon: "🏗️" },
+    "MEMBER": { label: "Elemento Estructural", en: "Structural Member", icon: "🔩" },
+    "PLATE": { label: "Placa", en: "Plate", icon: "⬛" },
+    "DOOR": { label: "Puerta", en: "Door", icon: "🚪" },
+    "WINDOW": { label: "Ventana", en: "Window", icon: "🪟" },
+    "STAIR": { label: "Escalera", en: "Stair", icon: "🪜" },
+    "STAIRFLIGHT": { label: "Tramo de Escalera", en: "Stair Flight", icon: "🪜" },
+    "RAMP": { label: "Rampa", en: "Ramp", icon: "📐" },
+    "RAMPFLIGHT": { label: "Tramo de Rampa", en: "Ramp Flight", icon: "📐" },
+    "RAILING": { label: "Baranda / Barandilla", en: "Railing", icon: "🛡️" },
+    "CURTAINWALL": { label: "Muro Cortina", en: "Curtain Wall", icon: "🪟" },
+    "FOOTING": { label: "Zapata / Cimentación", en: "Footing", icon: "⚓" },
+    "PILE": { label: "Pilote", en: "Pile", icon: "📍" },
+    "FLOWTERMINAL": { label: "Terminal MEP", en: "Flow Terminal", icon: "🚰" },
+    "FLOWSEGMENT": { label: "Tramo Tubería / Ducto", en: "Flow Segment", icon: "🔧" },
+    "FLOWFITTING": { label: "Accesorio MEP", en: "Flow Fitting", icon: "🔩" },
+    "PIPESEGMENT": { label: "Tubería", en: "Pipe Segment", icon: "🚿" },
+    "DUCTSEGMENT": { label: "Ducto de Ventilación", en: "Duct Segment", icon: "💨" },
+    "SANITARYTERMINAL": { label: "Aparato Sanitario", en: "Sanitary Terminal", icon: "🚽" },
+    "LIGHTFIXTURE": { label: "Luminaria", en: "Light Fixture", icon: "💡" },
+    "ELECTRICALAPPLIANCE": { label: "Dispositivo Eléctrico", en: "Electrical Device", icon: "⚡" },
+    "DISTRIBUTIONELEMENT": { label: "Elemento Distribución", en: "Distribution Element", icon: "🎛️" },
+    "FURNISHINGELEMENT": { label: "Mobiliario", en: "Furnishing Element", icon: "🪑" },
+    "FURNITURE": { label: "Mueble", en: "Furniture", icon: "🛋️" },
+    "SPACE": { label: "Espacio / Habitación", en: "Space", icon: "📦" },
+    "OPENINGELEMENT": { label: "Hueco / Vano", en: "Opening", icon: "🕳️" },
+    "BUILDINGELEMENTPROXY": { label: "Elemento Genérico", en: "Generic Proxy", icon: "🧩" }
 };
+
+function resolverMetadataCategoriaBIM(rawName) {
+    let clean = String(rawName || "OTHER").trim().replace(/^IFC/i, "").toUpperCase();
+    if (DICCIONARIO_BILINGUE_IFC[clean]) {
+        const item = DICCIONARIO_BILINGUE_IFC[clean];
+        return {
+            key: clean,
+            label: `${item.icon} ${item.en} (${item.label})`,
+            icon: item.icon
+        };
+    }
+    const humanName = clean.charAt(0) + clean.slice(1).toLowerCase();
+    return {
+        key: clean,
+        label: `📦 ${clean} (${humanName})`,
+        icon: "📦"
+    };
+}
 
 // GESTIÓN DE PLANOS DE CORTE LIMPIOS (NATIVOS DE THREE.JS)
 let ifcClippingPlane = null;
@@ -1968,10 +2012,8 @@ async function inicializarVisorIFC(fileUrl, container) {
     lastClickedMesh = null;
     walkLastKnownPosition = null;
 
-    Object.keys(ifcCategoriesMap).forEach(k => {
-        ifcCategoriesMap[k].meshes = [];
-        ifcCategoriesMap[k].visible = true;
-    });
+    // V2.3: Reiniciar mapa dinámico de categorías
+    Object.keys(ifcCategoriesMap).forEach(k => delete ifcCategoriesMap[k]);
 
     limpiarMedicionIFC();
     cancelarHerramientaActiva();
@@ -2189,42 +2231,25 @@ async function inicializarVisorIFC(fileUrl, container) {
         const placedGeometries = flatMesh.geometries;
         const realElementExpressID = flatMesh.expressID;
 
-        let categoriaAsignada = "otros";
+        // V2.3: Extracción dinámica y limpia del tipo nativo sin prefijo 'Ifc'
+        let rawClass = "OTHER";
         try {
             const lineaData = ifcApiInstance.GetLine(currentLoadedModelID, realElementExpressID);
-            if (lineaData) {
-                const tipoCadena = (lineaData.__proto__ && lineaData.__proto__.constructor) 
-                    ? String(lineaData.__proto__.constructor.name).toUpperCase() 
-                    : "";
-                const nombreCadena = (lineaData.Name && lineaData.Name.value) 
-                    ? String(lineaData.Name.value).toUpperCase() 
-                    : "";
-                const objetoCadena = (lineaData.ObjectType && lineaData.ObjectType.value) 
-                    ? String(lineaData.ObjectType.value).toUpperCase() 
-                    : "";
-                const descripTotal = `${tipoCadena} ${nombreCadena} ${objetoCadena}`;
-
-                if (descripTotal.includes("WALL") || descripTotal.includes("MURO")) {
-                    categoriaAsignada = "muros";
-                } else if (descripTotal.includes("SLAB") || descripTotal.includes("LOSA") || descripTotal.includes("ROOF") || descripTotal.includes("CUBIERTA") || descripTotal.includes("PISO") || descripTotal.includes("FORJADO") || descripTotal.includes("COVERING") || descripTotal.includes("PLATE")) {
-                    categoriaAsignada = "losas";
-                } else if (descripTotal.includes("COLUMN") || descripTotal.includes("COLUMNA") || descripTotal.includes("PILAR")) {
-                    categoriaAsignada = "columnas";
-                } else if (descripTotal.includes("BEAM") || descripTotal.includes("VIGA") || descripTotal.includes("MEMBER")) {
-                    categoriaAsignada = "vigas";
-                } else if (descripTotal.includes("DOOR") || descripTotal.includes("PUERTA")) {
-                    categoriaAsignada = "puertas";
-                } else if (descripTotal.includes("WINDOW") || descripTotal.includes("VENTANA")) {
-                    categoriaAsignada = "ventanas";
-                } else if (descripTotal.includes("STAIR") || descripTotal.includes("RAMP") || descripTotal.includes("ESCALERA") || descripTotal.includes("RAILING") || descripTotal.includes("BARANDA")) {
-                    categoriaAsignada = "escaleras";
-                } else if (descripTotal.includes("FLOW") || descripTotal.includes("PIPE") || descripTotal.includes("DUCT") || descripTotal.includes("DISTRIBUTION") || descripTotal.includes("ELECTRICAL") || descripTotal.includes("SANITARY")) {
-                    categoriaAsignada = "mep";
-                } else if (descripTotal.includes("FURNISHING") || descripTotal.includes("FURNITURE") || descripTotal.includes("MOBILIARIO") || descripTotal.includes("MUEBLE")) {
-                    categoriaAsignada = "mobiliario";
-                }
+            if (lineaData && lineaData.__proto__ && lineaData.__proto__.constructor) {
+                rawClass = String(lineaData.__proto__.constructor.name).toUpperCase();
             }
         } catch (errParse) {}
+
+        const metaCat = resolverMetadataCategoriaBIM(rawClass);
+        const categoriaKey = metaCat.key;
+
+        if (!ifcCategoriesMap[categoriaKey]) {
+            ifcCategoriesMap[categoriaKey] = {
+                label: metaCat.label,
+                meshes: [],
+                visible: true
+            };
+        }
 
         for (let i = 0; i < placedGeometries.size(); i++) {
             const placedGeometry = placedGeometries.get(i);
@@ -2269,14 +2294,12 @@ async function inicializarVisorIFC(fileUrl, container) {
                 expressID: realElementExpressID,
                 geometryExpressID: placedGeometry.geometryExpressID,
                 modelID: currentLoadedModelID,
-                esPuerta: (categoriaAsignada === "puertas"),
-                esLosa: (categoriaAsignada === "losas"),
-                categoriaBIM: categoriaAsignada
+                esPuerta: (categoriaKey === "DOOR"),
+                esLosa: (categoriaKey === "SLAB"),
+                categoriaBIM: categoriaKey
             };
 
-            if (ifcCategoriesMap[categoriaAsignada]) {
-                ifcCategoriesMap[categoriaAsignada].meshes.push(mesh);
-            }
+            ifcCategoriesMap[categoriaKey].meshes.push(mesh);
 
             if (!esTransparente && posFloats.length < 6000) {
                 const edges = new THREE.EdgesGeometry(bufferGeometry, 24);
@@ -2318,7 +2341,7 @@ async function inicializarVisorIFC(fileUrl, container) {
 }
 
 // ==============================================================================
-// GESTIÓN DE LA BANDEJA LATERAL ACOPLABLE Y ACORDEÓN (VERSIÓN 2.2)
+// GESTIÓN DE LA BANDEJA LATERAL ACOPLABLE Y ACORDEÓN (VERSIÓN 2.3)
 // ==============================================================================
 function abrirHerramientaEnBandeja(panelId) {
     const sideTray = document.getElementById("ifcSideTray");
@@ -2361,7 +2384,7 @@ function alternarColapsoBandejaCard(headerEl) {
 }
 
 // ==============================================================================
-// GESTIÓN DE VISIBILIDAD Y FILTROS POR CATEGORÍAS HOMOGÉNEAS (VERSIÓN 2.2)
+// GESTIÓN DE VISIBILIDAD Y FILTROS DINÁMICOS UNIVERSALES (VERSIÓN 2.3)
 // ==============================================================================
 function alternarPanelVisibilidadBIM() {
     const card = document.getElementById("ifcVisibilityCard");
@@ -2385,15 +2408,26 @@ function renderizarTogglesCategoriasBIM() {
     if (!container) return;
     container.innerHTML = "";
 
-    Object.keys(ifcCategoriesMap).forEach(key => {
+    const keys = Object.keys(ifcCategoriesMap).sort((a, b) => {
+        return ifcCategoriesMap[b].meshes.length - ifcCategoriesMap[a].meshes.length;
+    });
+
+    if (keys.length === 0) {
+        container.innerHTML = `<small style="color: #64748b;">No hay categorías presentes en este modelo.</small>`;
+        return;
+    }
+
+    keys.forEach(key => {
         const cat = ifcCategoriesMap[key];
         if (!cat.meshes || cat.meshes.length === 0) return;
 
         const row = document.createElement("div");
         row.style.cssText = "display: flex; justify-content: space-between; align-items: center; background: rgba(30, 41, 59, 0.6); padding: 5px 8px; border-radius: 4px; font-size: 0.74rem;";
         row.innerHTML = `
-            <span>${cat.label} <small style="color: #94a3b8;">(${cat.meshes.length})</small></span>
-            <button type="button" onclick="alternarCategoriaBIM('${key}')" id="btnCat_${key}" style="border: none; padding: 3px 8px; border-radius: 4px; font-size: 0.68rem; font-weight: bold; cursor: pointer; ${cat.visible ? 'background: #0284c7; color: #fff;' : 'background: #334155; color: #94a3b8;'}">
+            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 195px;" title="${cat.label}">
+                ${cat.label} <small style="color: #94a3b8;">(${cat.meshes.length})</small>
+            </span>
+            <button type="button" onclick="alternarCategoriaBIM('${key}')" id="btnCat_${key}" style="border: none; padding: 3px 8px; border-radius: 4px; font-size: 0.68rem; font-weight: bold; cursor: pointer; flex-shrink: 0; ${cat.visible ? 'background: #0284c7; color: #fff;' : 'background: #334155; color: #94a3b8;'}">
                 ${cat.visible ? 'Visible' : 'Oculto'}
             </button>
         `;
@@ -2968,7 +3002,7 @@ function cortarEnNivel(cotaLosaEscena) {
 }
 
 // ==============================================================================
-// RECORRIDO EN PRIMERA PERSONA CON MEMORIA DE POSICIÓN (V2.2)
+// RECORRIDO EN PRIMERA PERSONA CON MEMORIA DE POSICIÓN (V2.3)
 // ==============================================================================
 function caminarEnNivel(cotaLosaEscena) {
     cerrarPanelNivelesIFC();
@@ -3005,7 +3039,7 @@ function activarSeleccionLosaCaminar() {
     ocultarMenuHerramientasIFC();
     ocultarMenuContextualIFC();
 
-    // V2.2: Al activarse directamente desde el menú, desvincular cualquier posición anterior
+    // V2.3: Al activarse directamente desde el menú, desvincular cualquier posición anterior
     walkLastKnownPosition = null;
 
     isPickSlabModeActive = !isPickSlabModeActive;
@@ -3100,7 +3134,7 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
 }
 
 function desactivarModoCaminar() {
-    // V2.2: La posición solo se recuerda si se suspendió para medir distancias
+    // V2.3: La posición solo se recuerda si se suspendió para medir distancias
     if (!wasWalkingBeforeMeasure) {
         walkLastKnownPosition = null;
     }
@@ -3247,7 +3281,6 @@ function setupWalkTouchListeners() {
 // ==============================================================================
 function ajustarVistaModeloIFC() {
     if (!ifcCamera || !ifcControls) return;
-    // V2.2: Al encuadrar se resetea cualquier memoria de posición previa
     walkLastKnownPosition = null;
     wasWalkingBeforeMeasure = false;
     desactivarModoCaminar();
@@ -3263,7 +3296,6 @@ function ajustarVistaModeloIFC() {
 
 function cambiarVistaIFC(tipo) {
     if (!ifcCamera || !ifcControls) return;
-    // V2.2: Al cambiar de vista ortogonal se resetea la memoria de posición
     walkLastKnownPosition = null;
     wasWalkingBeforeMeasure = false;
     desactivarModoCaminar();
@@ -3305,14 +3337,13 @@ function alternarAristasIFC() {
 }
 
 // ==============================================================================
-// HERRAMIENTA DE MEDICIÓN 3D PUNTO A PUNTO (UNIVERSAL V2.2)
+// HERRAMIENTA DE MEDICIÓN 3D PUNTO A PUNTO (UNIVERSAL V2.3)
 // ==============================================================================
 function alternarModoMedicionIFC() {
     isMeasureToolActive = !isMeasureToolActive;
     const container = document.getElementById("modalIfcContainer");
 
     if (isMeasureToolActive) {
-        // Recordar si veníamos caminando
         wasWalkingBeforeMeasure = isWalkModeActive;
         cerrarCardPropiedadesIFC();
         abrirHerramientaEnBandeja("ifcMeasureCard");
@@ -3331,7 +3362,6 @@ function desactivarModoMedicion() {
     cerrarHerramientaDeBandeja("ifcMeasureCard");
     limpiarMedicionIFC();
 
-    // V2.2: Si veníamos del modo caminar, restaurar la experiencia en primera persona
     if (wasWalkingBeforeMeasure && isWalkModeActive) {
         if (container) container.style.cursor = "move";
         const touchDpad = document.getElementById("walkTouchContainer");
@@ -3541,7 +3571,7 @@ function onIfcModelClick(event) {
         const visNombre = document.getElementById("visElemNombre");
         const btnOcultarVis = document.getElementById("btnVisOcultarSeleccionado");
         if (visNombre) {
-            const catLabel = ifcCategoriesMap[hit.object.userData.categoriaBIM]?.label || "Elemento";
+            const catLabel = ifcCategoriesMap[hit.object.userData.categoriaBIM]?.label || hit.object.userData.categoriaBIM;
             visNombre.innerText = `${catLabel} (ID: ${hit.object.userData.expressID || 'N/A'})`;
         }
         if (btnOcultarVis) {
@@ -3581,7 +3611,7 @@ function mostrarPropiedadesElementoIFC(userData) {
 
     let html = `
         <div style="margin-bottom: 4px;"><strong>ExpressID:</strong> ${userData.expressID}</div>
-        <div style="margin-bottom: 4px;"><strong>Familia BIM:</strong> ${ifcCategoriesMap[userData.categoriaBIM]?.label || 'Genérico'}</div>
+        <div style="margin-bottom: 4px;"><strong>Familia BIM:</strong> ${ifcCategoriesMap[userData.categoriaBIM]?.label || userData.categoriaBIM}</div>
         <div style="margin-bottom: 4px;"><strong>Norma:</strong> ISO 19650 Compliance</div>
     `;
 
