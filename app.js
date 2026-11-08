@@ -1,5 +1,5 @@
 // ==============================================================================
-// CONFIGURACIÓN CENTRALIZADA DE SERVICIOS - CDE INNOVARQZ (VERSIÓN 2.5)
+// CONFIGURACIÓN CENTRALIZADA DE SERVICIOS - CDE INNOVARQZ (VERSIÓN 2.6)
 // ==============================================================================
 const SUPABASE_URL = "https://bjlqtzrcrofpqlmyvoob.supabase.co";
 const SUPABASE_KEY = "sb_publishable_htPtQvL-1wrLfu7ACHBg1w_epAZsu1E";
@@ -59,7 +59,7 @@ let currentLoadedModelID = null;
 // ÁRBOL DE NIVELES BIM
 let ifcBuildingStoreys = [];
 
-// MAPA DINÁMICO UNIVERSAL DE CATEGORÍAS BIM (VERSIÓN 2.5)
+// MAPA DINÁMICO UNIVERSAL DE CATEGORÍAS BIM (VERSIÓN 2.6)
 const ifcCategoriesMap = {};
 
 // DICCIONARIO BILINGÜE SEMÁNTICO (SIN PREFIJO 'IFC')
@@ -127,7 +127,7 @@ let isSectionToolActive = false;
 const ifcEdgesList = [];
 let ifcEdgesVisible = true;
 
-// HERRAMIENTA DE MEDICIÓN 3D PUNTO A PUNTO (UNIVERSAL V2.5)
+// HERRAMIENTA DE MEDICIÓN 3D PUNTO A PUNTO (UNIVERSAL V2.6)
 let isMeasureToolActive = false;
 let wasWalkingBeforeMeasure = false;
 let measurePoints = [];
@@ -176,7 +176,7 @@ let currentExternalUrl = "";
 // CONTROL DE PILA DE HISTORIAL
 let modalActivoId = null;
 
-// GESTIÓN DE LIENZO DE FIRMA MANUSCRITA (V2.5)
+// GESTIÓN DE LIENZO DE FIRMA MANUSCRITA (V2.6)
 let signaturePadCanvas = null;
 let signaturePadCtx = null;
 let isDrawingSignature = false;
@@ -254,7 +254,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 // ==============================================================================
-// CONTROLADOR DE RÚBRICA MANUSCRITA TÁCTIL / MOUSE (V2.5)
+// CONTROLADOR DE RÚBRICA MANUSCRITA TÁCTIL / MOUSE (V2.6)
 // ==============================================================================
 function setupSignaturePad() {
     signaturePadCanvas = document.getElementById("clientSignatureCanvas");
@@ -1763,7 +1763,7 @@ async function archivarEntregableDirecto(nombreArchivo, estadoOrigen) {
 }
 
 // ==============================================================================
-// GENERACIÓN DE ACTA PDF FORMAL MULTIPÁGINA CON QR Y RÚBRICA (V2.5)
+// GENERACIÓN DE ACTA PDF FORMAL MULTIPÁGINA CON QR Y RÚBRICA (V2.6)
 // ==============================================================================
 async function generarPDFActaRecibo(datosCliente, nombreActaISO) {
     if (!window.PDFLib) {
@@ -1983,8 +1983,6 @@ ESTADO: A1 APROBADO`;
     const qrSize = 95;
     const qrPosX = leftMargin;
 
-    // Verificar si en la página actual queda espacio suficiente para estampar el bloque de firmas (requiere ~110 pt libres sobre el pie de página)
-    // Si yRowFile bajó de 185, abrimos página nueva para que las firmas nunca choquen con el pie de página
     let ySignTop = 215;
     if (yRowFile < 185) {
         currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
@@ -1994,11 +1992,9 @@ ESTADO: A1 APROBADO`;
         });
         ySignTop = 625;
     } else {
-        // Si hay amplio espacio en la página, colocar las firmas a una distancia estética debajo de la tabla (o en 215 si la lista fue muy corta)
         ySignTop = Math.min(220, yRowFile - 20);
     }
 
-    // Generación de imagen PNG de alta densidad en canvas para evitar micro-fisuras subpixel
     let embeddedQR = null;
     if (window.qrcode) {
         try {
@@ -2097,7 +2093,6 @@ ESTADO: A1 APROBADO`;
         p.drawText('"Construimos juntos el valor de tus espacios', { x: leftMargin, y: 39, size: 7.5, font: fontOblique, color: colorDark });
         p.drawText('DE PRINCIPIO A FIN"', { x: leftMargin, y: 27, size: 10, font: fontBold, color: colorCopper });
 
-        // Numeración formal centrada
         const pageNumText = `Página ${idx + 1} de ${totalPages}`;
         const pageNumWidth = fontBold.widthOfTextAtSize(pageNumText, 8);
         p.drawText(pageNumText, {
@@ -2563,8 +2558,8 @@ async function inicializarVisorIFC(fileUrl, container) {
         pointerDownPos.x = e.clientX;
         pointerDownPos.y = e.clientY;
 
-        // Si la medición está activa, no se activa el arrastre de vista para mantener estabilidad
-        if (isWalkModeActive && !isPickSlabModeActive && !isMeasureToolActive && (e.button === 0 || e.pointerType === 'touch')) {
+        // V2.6: Permitir girar la cabeza libremente en modo caminar aunque la regla esté activa
+        if (isWalkModeActive && !isPickSlabModeActive && (e.button === 0 || e.pointerType === 'touch')) {
             walkIsDraggingLook = true;
             walkLastMousePos.x = e.clientX;
             walkLastMousePos.y = e.clientY;
@@ -2572,7 +2567,7 @@ async function inicializarVisorIFC(fileUrl, container) {
     });
 
     window.addEventListener('pointermove', (e) => {
-        if (isWalkModeActive && walkIsDraggingLook && !isPickSlabModeActive && !isMeasureToolActive) {
+        if (isWalkModeActive && walkIsDraggingLook && !isPickSlabModeActive) {
             const deltaX = e.clientX - walkLastMousePos.x;
             const deltaY = e.clientY - walkLastMousePos.y;
             walkLastMousePos.x = e.clientX;
@@ -2609,10 +2604,10 @@ async function inicializarVisorIFC(fileUrl, container) {
     function animate() {
         ifcAnimationId = requestAnimationFrame(animate);
 
-        // Durante la medición dentro de caminata, se pausa la física para no desplazar el avatar
-        if (isWalkModeActive && !isPickSlabModeActive && !isMeasureToolActive) {
+        // V2.6: Jamás invocar ifcControls.update() si isWalkModeActive es true, evitando que la cámara salte hacia arriba
+        if (isWalkModeActive && !isPickSlabModeActive) {
             actualizarFisicaCaminar(walkClock.getDelta());
-        } else if (ifcControls) {
+        } else if (ifcControls && !isWalkModeActive) {
             ifcControls.update();
         }
 
@@ -2778,7 +2773,7 @@ async function inicializarVisorIFC(fileUrl, container) {
 }
 
 // ==============================================================================
-// GESTIÓN DE LA BANDEJA LATERAL ACOPLABLE Y ACORDEÓN (VERSIÓN 2.5)
+// GESTIÓN DE LA BANDEJA LATERAL ACOPLABLE Y ACORDEÓN (VERSIÓN 2.6)
 // ==============================================================================
 function abrirHerramientaEnBandeja(panelId) {
     const sideTray = document.getElementById("ifcSideTray");
@@ -2821,7 +2816,7 @@ function alternarColapsoBandejaCard(headerEl) {
 }
 
 // ==============================================================================
-// GESTIÓN DE VISIBILIDAD Y FILTROS DINÁMICOS UNIVERSALES (VERSIÓN 2.5)
+// GESTIÓN DE VISIBILIDAD Y FILTROS DINÁMICOS UNIVERSALES (VERSIÓN 2.6)
 // ==============================================================================
 function alternarPanelVisibilidadBIM() {
     const card = document.getElementById("ifcVisibilityCard");
@@ -2957,7 +2952,6 @@ function ocultarGuiaContextual() {
 }
 
 function cancelarHerramientaActiva() {
-    // Si la medición estaba activa durante la caminata, desactivar sólo la medición y retornar fluidamente a caminar
     if (isMeasureToolActive) {
         desactivarModoMedicion();
         return;
@@ -3450,7 +3444,7 @@ function cortarEnNivel(cotaLosaEscena) {
 }
 
 // ==============================================================================
-// RECORRIDO EN PRIMERA PERSONA CON MEMORIA DE POSICIÓN (V2.5)
+// RECORRIDO EN PRIMERA PERSONA CON MEMORIA DE POSICIÓN (V2.6)
 // ==============================================================================
 function caminarEnNivel(cotaLosaEscena) {
     cerrarPanelNivelesIFC();
@@ -3487,7 +3481,6 @@ function activarSeleccionLosaCaminar() {
     ocultarMenuHerramientasIFC();
     ocultarMenuContextualIFC();
 
-    // Nueva invocación: Reset estricto de cualquier posición residual anterior
     walkLastKnownPosition = null;
     wasWalkingBeforeMeasure = false;
 
@@ -3584,7 +3577,6 @@ function iniciarModoCaminarEnCoordenadas(x, yLosa, z) {
 }
 
 function desactivarModoCaminar() {
-    // Si no fue suspendido por la herramienta de medición, se purga la posición completamente
     if (!wasWalkingBeforeMeasure) {
         walkLastKnownPosition = null;
     }
@@ -3656,7 +3648,7 @@ function configurarEscuchadoresVisorDiferidos() {
 
 function setupWalkKeyboardListeners() {
     window.addEventListener('keydown', (e) => {
-        if (!isWalkModeActive || isPickSlabModeActive || isMeasureToolActive) return;
+        if (!isWalkModeActive || isPickSlabModeActive) return;
         const key = e.key.toLowerCase();
         if (key === 'w' || key === 'arrowup') walkMovement.forward = true;
         if (key === 's' || key === 'arrowdown') walkMovement.backward = true;
@@ -3665,7 +3657,7 @@ function setupWalkKeyboardListeners() {
     });
 
     window.addEventListener('keyup', (e) => {
-        if (!isWalkModeActive || isPickSlabModeActive || isMeasureToolActive) return;
+        if (!isWalkModeActive || isPickSlabModeActive) return;
         const key = e.key.toLowerCase();
         if (key === 'w' || key === 'arrowup') walkMovement.forward = false;
         if (key === 's' || key === 'arrowdown') walkMovement.backward = false;
@@ -3682,7 +3674,7 @@ function setupWalkTouchListeners() {
         const start = (e) => {
             if (e.cancelable) e.preventDefault();
             e.stopPropagation();
-            if (!isMeasureToolActive) walkMovement[direction] = true;
+            walkMovement[direction] = true;
         };
 
         const stop = (e) => {
@@ -3790,22 +3782,19 @@ function alternarAristasIFC() {
 }
 
 // ==============================================================================
-// HERRAMIENTA DE MEDICIÓN 3D PUNTO A PUNTO (UNIVERSAL V2.5)
+// HERRAMIENTA DE MEDICIÓN 3D PUNTO A PUNTO (UNIVERSAL V2.6)
 // ==============================================================================
 function alternarModoMedicionIFC() {
     isMeasureToolActive = !isMeasureToolActive;
     const container = document.getElementById("modalIfcContainer");
-    const touchDpad = document.getElementById("walkTouchContainer");
 
     if (isMeasureToolActive) {
         wasWalkingBeforeMeasure = isWalkModeActive;
-        // Congelar inercia de paso y ocultar D-pad para dar paso a la cruz de precisión
         walkMovement.forward = false;
         walkMovement.backward = false;
         walkMovement.left = false;
         walkMovement.right = false;
         walkIsDraggingLook = false;
-        if (touchDpad) touchDpad.style.display = "none";
 
         cerrarCardPropiedadesIFC();
         abrirHerramientaEnBandeja("ifcMeasureCard");
@@ -3825,7 +3814,7 @@ function desactivarModoMedicion() {
     cerrarHerramientaDeBandeja("ifcMeasureCard");
     limpiarMedicionIFC();
 
-    // RETORNO INTELIGENTE: Si provino de caminata, restaura inmediatamente la posición y el control táctil
+    // RETORNO INTELIGENTE: Si provino de caminata, restaura inmediatamente la guía y el control táctil sin mover la cámara
     if (wasWalkingBeforeMeasure && isWalkModeActive) {
         if (container) container.style.cursor = "move";
         const esDispositivoTactil = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 992);
@@ -3989,7 +3978,7 @@ function invertirPlanoCorte() {
 }
 
 // ==============================================================================
-// INSPECCIÓN DE PROPIEDADES BIM Y DISPATCHER DE CLICS / TOQUES (V2.5)
+// INSPECCIÓN DE PROPIEDADES BIM Y DISPATCHER DE CLICS / TOQUES (V2.6)
 // ==============================================================================
 function onIfcModelClick(event) {
     if (!ifcRenderer || !ifcCamera) return;
