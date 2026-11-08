@@ -1763,7 +1763,7 @@ async function archivarEntregableDirecto(nombreArchivo, estadoOrigen) {
 }
 
 // ==============================================================================
-// GENERACIÓN DE ACTA PDF FORMAL CON QR VECTORIAL/PNG Y RÚBRICA (V2.5)
+// GENERACIÓN DE ACTA PDF FORMAL MULTIPÁGINA CON QR Y RÚBRICA (V2.5)
 // ==============================================================================
 async function generarPDFActaRecibo(datosCliente, nombreActaISO) {
     if (!window.PDFLib) {
@@ -1779,7 +1779,6 @@ async function generarPDFActaRecibo(datosCliente, nombreActaISO) {
     const pdfDoc = await PDFDocument.create();
     const pageWidth = 612;
     const pageHeight = 792;
-    const page = pdfDoc.addPage([pageWidth, pageHeight]);
 
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -1794,42 +1793,70 @@ async function generarPDFActaRecibo(datosCliente, nombreActaISO) {
     const rightMargin = pageWidth - 50;
     const printableWidth = rightMargin - leftMargin;
 
-    // Marca de agua de fondo
-    page.drawText("InnovArqZ", {
-        x: 130, y: 300, size: 76, font: fontBold,
-        color: rgb(15 / 255, 23 / 255, 42 / 255),
-        opacity: 0.035, rotate: degrees(32)
-    });
+    // Función auxiliar para estampar el Membrete Corporativo Completo (Opción A) y marca de agua en cada página
+    const dibujarMembreteYMarcaDeAgua = (targetPage) => {
+        targetPage.drawText("InnovArqZ", {
+            x: 130, y: 300, size: 76, font: fontBold,
+            color: rgb(15 / 255, 23 / 255, 42 / 255),
+            opacity: 0.035, rotate: degrees(32)
+        });
 
-    // 1. MEMBRETE CORPORATIVO
-    page.drawText("Innov", { x: leftMargin, y: 740, size: 24, font: fontBold, color: colorDark });
-    page.drawText("ArqZ", { x: leftMargin + 65, y: 740, size: 24, font: fontBold, color: colorCopper });
-    page.drawText("SOLUCIONES INTEGRALES", { x: leftMargin, y: 726, size: 8, font: fontBold, color: colorSlate });
-    page.drawText("Consultoría BIM/CIM • Arquitectura • Ingeniería", { x: leftMargin, y: 713, size: 7.5, font: fontBold, color: colorCopper });
+        targetPage.drawText("Innov", { x: leftMargin, y: 740, size: 24, font: fontBold, color: colorDark });
+        targetPage.drawText("ArqZ", { x: leftMargin + 65, y: 740, size: 24, font: fontBold, color: colorCopper });
+        targetPage.drawText("SOLUCIONES INTEGRALES", { x: leftMargin, y: 726, size: 8, font: fontBold, color: colorSlate });
+        targetPage.drawText("Consultoría BIM/CIM • Arquitectura • Ingeniería", { x: leftMargin, y: 713, size: 7.5, font: fontBold, color: colorCopper });
 
-    const credDirector = "DIRECTOR: Arq. James R. Zuñiga C.";
-    const credMatricula = "M.P CPNAA No: A137812026-1122783013";
-    const credWeb = "PORTAFOLIO: www.innovarqzsas.com/portafolio";
+        const credDirector = "DIRECTOR: Arq. James R. Zuñiga C.";
+        const credMatricula = "M.P CPNAA No: A137812026-1122783013";
+        const credWeb = "PORTAFOLIO: www.innovarqzsas.com/portafolio";
 
-    page.drawText(credDirector, { x: rightMargin - fontRegular.widthOfTextAtSize(credDirector, 7.5), y: 740, size: 7.5, font: fontRegular, color: colorDark });
-    page.drawText(credMatricula, { x: rightMargin - fontRegular.widthOfTextAtSize(credMatricula, 7.5), y: 726, size: 7.5, font: fontRegular, color: colorDark });
-    page.drawText(credWeb, { x: rightMargin - fontRegular.widthOfTextAtSize(credWeb, 7.5), y: 713, size: 7.5, font: fontRegular, color: colorDark });
+        targetPage.drawText(credDirector, { x: rightMargin - fontRegular.widthOfTextAtSize(credDirector, 7.5), y: 740, size: 7.5, font: fontRegular, color: colorDark });
+        targetPage.drawText(credMatricula, { x: rightMargin - fontRegular.widthOfTextAtSize(credMatricula, 7.5), y: 726, size: 7.5, font: fontRegular, color: colorDark });
+        targetPage.drawText(credWeb, { x: rightMargin - fontRegular.widthOfTextAtSize(credWeb, 7.5), y: 713, size: 7.5, font: fontRegular, color: colorDark });
 
-    const yLine = 700;
-    const copperWidth = printableWidth * 0.32;
-    page.drawLine({ start: { x: leftMargin, y: yLine }, end: { x: leftMargin + copperWidth, y: yLine }, thickness: 2.5, color: colorCopper });
-    page.drawLine({ start: { x: leftMargin + copperWidth, y: yLine }, end: { x: rightMargin, y: yLine }, thickness: 2.5, color: colorDark });
+        const yLine = 700;
+        const copperWidth = printableWidth * 0.32;
+        targetPage.drawLine({ start: { x: leftMargin, y: yLine }, end: { x: leftMargin + copperWidth, y: yLine }, thickness: 2.5, color: colorCopper });
+        targetPage.drawLine({ start: { x: leftMargin + copperWidth, y: yLine }, end: { x: rightMargin, y: yLine }, thickness: 2.5, color: colorDark });
+    };
+
+    // Función auxiliar para estampar la cabecera de la tabla de entregables
+    const dibujarCabeceraTabla = (targetPage, yTopHeader, esContinuacion = false) => {
+        if (esContinuacion) {
+            targetPage.drawText(`CONTINUACIÓN RELACIÓN DE ENTREGABLES (${activeProjectCode || 'PRY'}) • ACTA: ${nombreActaISO}`, {
+                x: leftMargin, y: yTopHeader + 10, size: 8.5, font: fontBold, color: colorCopper
+            });
+        }
+
+        targetPage.drawRectangle({
+            x: leftMargin,
+            y: yTopHeader - 18,
+            width: printableWidth,
+            height: 18,
+            color: rgb(241 / 255, 245 / 255, 249 / 255),
+            borderColor: colorBorder,
+            borderWidth: 0.8
+        });
+
+        targetPage.drawText("#", { x: leftMargin + 8, y: yTopHeader - 12, size: 8, font: fontBold, color: colorSlate });
+        targetPage.drawText("CONTENEDOR DE INFORMACIÓN ISO 19650", { x: leftMargin + 28, y: yTopHeader - 12, size: 8, font: fontBold, color: colorSlate });
+        targetPage.drawText("VERSIÓN / FECHA", { x: rightMargin - 100, y: yTopHeader - 12, size: 8, font: fontBold, color: colorSlate });
+    };
+
+    // Creación de la primera página
+    let currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
+    dibujarMembreteYMarcaDeAgua(currentPage);
 
     // 2. TÍTULO PRINCIPAL Y REFERENCIA ISO 19650
-    page.drawText("ACTA DE RECIBO A SATISFACCIÓN Y CIERRE DE HITO", { x: leftMargin, y: 668, size: 13, font: fontBold, color: colorDark });
-    page.drawText(`ESTÁNDAR ISO 19650-2 • ID: ${nombreActaISO}`, { x: leftMargin, y: 652, size: 8.5, font: fontBold, color: colorCopper });
+    currentPage.drawText("ACTA DE RECIBO A SATISFACCIÓN Y CIERRE DE HITO", { x: leftMargin, y: 668, size: 13, font: fontBold, color: colorDark });
+    currentPage.drawText(`ESTÁNDAR ISO 19650-2 • ID: ${nombreActaISO}`, { x: leftMargin, y: 652, size: 8.5, font: fontBold, color: colorCopper });
 
     const fechaStr = new Date().toLocaleString("es-CO", { timeZone: "America/Bogota" });
 
-    // 3. CAJA DE METADATOS Y PARTES INTERVINIENTES (DISTRIBUCIÓN Y TABULACIÓN PERFECTA)
+    // 3. CAJA DE METADATOS Y PARTES INTERVINIENTES
     const yBoxTop = 640;
     const boxHeight = 90;
-    page.drawRectangle({
+    currentPage.drawRectangle({
         x: leftMargin,
         y: yBoxTop - boxHeight,
         width: printableWidth,
@@ -1845,45 +1872,45 @@ async function generarPDFActaRecibo(datosCliente, nombreActaISO) {
     const label2Offset = 95;
     let yRow = yBoxTop - 18;
 
-    page.drawText("PROYECTO:", { x: col1X, y: yRow, size: 8, font: fontBold, color: colorSlate });
-    page.drawText(`${activeProjectCode || 'PRY-GENERAL'}`, { x: col1X + label1Offset, y: yRow, size: 9, font: fontBold, color: colorDark });
+    currentPage.drawText("PROYECTO:", { x: col1X, y: yRow, size: 8, font: fontBold, color: colorSlate });
+    currentPage.drawText(`${activeProjectCode || 'PRY-GENERAL'}`, { x: col1X + label1Offset, y: yRow, size: 9, font: fontBold, color: colorDark });
 
-    page.drawText("FECHA / HORA:", { x: col2X, y: yRow, size: 8, font: fontBold, color: colorSlate });
-    page.drawText(`${fechaStr}`, { x: col2X + label2Offset, y: yRow, size: 8.5, font: fontRegular, color: colorDark });
-
-    yRow -= 18;
-    page.drawText("CLIENTE:", { x: col1X, y: yRow, size: 8, font: fontBold, color: colorSlate });
-    page.drawText(`${currentUser.nombre_completo || 'Cliente'}`, { x: col1X + label1Offset, y: yRow, size: 8.5, font: fontBold, color: colorDark });
-
-    page.drawText("CALIDAD / CARGO:", { x: col2X, y: yRow, size: 8, font: fontBold, color: colorSlate });
-    page.drawText(`${datosCliente.cargo}`, { x: col2X + label2Offset, y: yRow, size: 8.5, font: fontRegular, color: colorDark });
+    currentPage.drawText("FECHA / HORA:", { x: col2X, y: yRow, size: 8, font: fontBold, color: colorSlate });
+    currentPage.drawText(`${fechaStr}`, { x: col2X + label2Offset, y: yRow, size: 8.5, font: fontRegular, color: colorDark });
 
     yRow -= 18;
-    page.drawText("FIRMANTE:", { x: col1X, y: yRow, size: 8, font: fontBold, color: colorSlate });
-    page.drawText(`${datosCliente.nombre}`, { x: col1X + label1Offset, y: yRow, size: 8.5, font: fontRegular, color: colorDark });
+    currentPage.drawText("CLIENTE:", { x: col1X, y: yRow, size: 8, font: fontBold, color: colorSlate });
+    currentPage.drawText(`${currentUser.nombre_completo || 'Cliente'}`, { x: col1X + label1Offset, y: yRow, size: 8.5, font: fontBold, color: colorDark });
 
-    page.drawText("CORREO CDE:", { x: col2X, y: yRow, size: 8, font: fontBold, color: colorSlate });
-    page.drawText(`${currentUser.email || ''}`, { x: col2X + label2Offset, y: yRow, size: 8.5, font: fontRegular, color: colorSlate });
+    currentPage.drawText("CALIDAD / CARGO:", { x: col2X, y: yRow, size: 8, font: fontBold, color: colorSlate });
+    currentPage.drawText(`${datosCliente.cargo}`, { x: col2X + label2Offset, y: yRow, size: 8.5, font: fontRegular, color: colorDark });
 
     yRow -= 18;
-    page.drawText("IDENTIFICACIÓN:", { x: col1X, y: yRow, size: 8, font: fontBold, color: colorSlate });
-    page.drawText(`${datosCliente.tipoDoc} No. ${datosCliente.numDoc}`, { x: col1X + label1Offset, y: yRow, size: 8.5, font: fontBold, color: colorDark });
+    currentPage.drawText("FIRMANTE:", { x: col1X, y: yRow, size: 8, font: fontBold, color: colorSlate });
+    currentPage.drawText(`${datosCliente.nombre}`, { x: col1X + label1Offset, y: yRow, size: 8.5, font: fontRegular, color: colorDark });
 
-    page.drawText("ESTADO / HITO:", { x: col2X, y: yRow, size: 8, font: fontBold, color: colorSlate });
-    page.drawText("APROBADO CONTRACTUAL (A1)", { x: col2X + label2Offset, y: yRow, size: 8.5, font: fontBold, color: colorCopper });
+    currentPage.drawText("CORREO CDE:", { x: col2X, y: yRow, size: 8, font: fontBold, color: colorSlate });
+    currentPage.drawText(`${currentUser.email || ''}`, { x: col2X + label2Offset, y: yRow, size: 8.5, font: fontRegular, color: colorSlate });
 
-    // 4. DECLARACIÓN DE CONFORMIDAD FORMAL (CUERPO 9.5 pt, CÁLCULO DINÁMICO DE ALTURA)
+    yRow -= 18;
+    currentPage.drawText("IDENTIFICACIÓN:", { x: col1X, y: yRow, size: 8, font: fontBold, color: colorSlate });
+    currentPage.drawText(`${datosCliente.tipoDoc} No. ${datosCliente.numDoc}`, { x: col1X + label1Offset, y: yRow, size: 8.5, font: fontBold, color: colorDark });
+
+    currentPage.drawText("ESTADO / HITO:", { x: col2X, y: yRow, size: 8, font: fontBold, color: colorSlate });
+    currentPage.drawText("APROBADO CONTRACTUAL (A1)", { x: col2X + label2Offset, y: yRow, size: 8.5, font: fontBold, color: colorCopper });
+
+    // 4. DECLARACIÓN DE CONFORMIDAD FORMAL
     const yDecl = yBoxTop - boxHeight - 20;
-    page.drawText("DECLARACIÓN DE CONFORMIDAD Y RECIBO A SATISFACCIÓN", { x: leftMargin, y: yDecl, size: 10.5, font: fontBold, color: colorCopper });
+    currentPage.drawText("DECLARACIÓN DE CONFORMIDAD Y RECIBO A SATISFACCIÓN", { x: leftMargin, y: yDecl, size: 10.5, font: fontBold, color: colorCopper });
     
     const yDeclText = yDecl - 16;
-    page.drawText("Por medio del presente documento, el cliente hace constar que INNOVARQZ SOLUCIONES INTEGRALES S.A.S. cumplió a cabalidad con el objeto contractual, alcance, especificaciones técnicas y entregables de información acordados. Se confirma la recepción a entera satisfacción de los modelos BIM, planimetrías y memorias técnicas, autorizándose formalmente el cierre del hito contractual y el resguardo inmutable en el repositorio 03_PUBLISHED.", {
+    currentPage.drawText("Por medio del presente documento, el cliente hace constar que INNOVARQZ SOLUCIONES INTEGRALES S.A.S. cumplió a cabalidad con el objeto contractual, alcance, especificaciones técnicas y entregables de información acordados. Se confirma la recepción a entera satisfacción de los modelos BIM, planimetrías y memorias técnicas, autorizándose formalmente el cierre del hito contractual y el resguardo inmutable en el repositorio 03_PUBLISHED.", {
         x: leftMargin, y: yDeclText, size: 9.5, font: fontRegular, color: colorDark, maxWidth: printableWidth, lineHeight: 14
     });
 
-    // 5. RELACIÓN DE ENTREGABLES APROBADOS (SEPARACIÓN HOLGADA DE 32 pt)
-    const yList = yDeclText - 72; // Espacio de respiración garantizado tras las 4 líneas de la declaración
-    page.drawText("RELACIÓN DE ENTREGABLES TÉCNICOS APROBADOS (03_PUBLISHED):", { x: leftMargin, y: yList, size: 10, font: fontBold, color: colorDark });
+    // 5. RELACIÓN COMPLETA DE ENTREGABLES APROBADOS (MULTIPÁGINA DINÁMICA)
+    const yList = yDeclText - 72;
+    currentPage.drawText("RELACIÓN DE ENTREGABLES TÉCNICOS APROBADOS (03_PUBLISHED):", { x: leftMargin, y: yList, size: 10, font: fontBold, color: colorDark });
 
     const { data: files } = await supabaseClient
         .from("audit_logs")
@@ -1906,43 +1933,42 @@ async function generarPDFActaRecibo(datosCliente, nombreActaISO) {
         });
     }
 
-    // Cabecera de la tabla de entregables
     const yTable = yList - 16;
-    page.drawRectangle({
-        x: leftMargin,
-        y: yTable - 18,
-        width: printableWidth,
-        height: 18,
-        color: rgb(241 / 255, 245 / 255, 249 / 255),
-        borderColor: colorBorder,
-        borderWidth: 0.8
-    });
-
-    page.drawText("#", { x: leftMargin + 8, y: yTable - 12, size: 8, font: fontBold, color: colorSlate });
-    page.drawText("CONTENEDOR DE INFORMACIÓN ISO 19650", { x: leftMargin + 28, y: yTable - 12, size: 8, font: fontBold, color: colorSlate });
-    page.drawText("VERSIÓN / FECHA", { x: rightMargin - 100, y: yTable - 12, size: 8, font: fontBold, color: colorSlate });
+    dibujarCabeceraTabla(currentPage, yTable, false);
 
     let yRowFile = yTable - 32;
-    const itemsAMostrar = Array.from(unicosPublishedMap.values()).slice(0, 4);
+    const todosLosEntregables = Array.from(unicosPublishedMap.values());
 
-    itemsAMostrar.forEach((f, idx) => {
-        page.drawText(`${idx + 1}`, { x: leftMargin + 8, y: yRowFile, size: 8, font: fontBold, color: colorCopper });
-        page.drawText(`${f.archivo_nombre}`, { x: leftMargin + 28, y: yRowFile, size: 8.5, font: fontRegular, color: colorDark });
-        page.drawText(`${f.version || 'V1.0'}`, { x: rightMargin - 100, y: yRowFile, size: 8, font: fontRegular, color: colorSlate });
-        yRowFile -= 14;
-    });
-
-    if (unicosPublishedMap.size > 4) {
-        page.drawText(`• (... y ${unicosPublishedMap.size - 4} entregable(s) adicional(es) verificado(s) en el repositorio CDE)`, {
-            x: leftMargin + 28, y: yRowFile, size: 8, font: fontOblique, color: colorSlate
+    if (todosLosEntregables.length === 0) {
+        currentPage.drawText("No se registran contenedores adicionales en esta fase.", {
+            x: leftMargin + 28, y: yRowFile, size: 8.5, font: fontOblique, color: colorSlate
         });
+        yRowFile -= 15;
+    } else {
+        for (let idx = 0; idx < todosLosEntregables.length; idx++) {
+            const f = todosLosEntregables[idx];
+
+            // Si la fila se acerca al pie de página (Y < 95), crear nueva hoja con membrete completo
+            if (yRowFile < 95) {
+                currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
+                dibujarMembreteYMarcaDeAgua(currentPage);
+                const yTopContinuacion = 660;
+                dibujarCabeceraTabla(currentPage, yTopContinuacion, true);
+                yRowFile = yTopContinuacion - 32;
+            }
+
+            currentPage.drawText(`${idx + 1}`, { x: leftMargin + 8, y: yRowFile, size: 8, font: fontBold, color: colorCopper });
+            currentPage.drawText(`${f.archivo_nombre}`, { x: leftMargin + 28, y: yRowFile, size: 8.5, font: fontRegular, color: colorDark });
+            currentPage.drawText(`${f.version || 'V1.0'}`, { x: rightMargin - 100, y: yRowFile, size: 8, font: fontRegular, color: colorSlate });
+            yRowFile -= 15;
+        }
     }
 
-    // Cálculo Criptográfico SHA-256
+    // Cálculo Criptográfico SHA-256 sobre el 100% de los entregables
     const semillaHash = `${nombreActaISO}|${activeProjectCode}|${datosCliente.nombre}|${datosCliente.numDoc}|${fechaStr}|${unicosPublishedNombres.join(';')}`;
     const hashSHA256 = await calcularHashSHA256Local(semillaHash);
 
-    // 6. CÓDIGO QR COMPACTO OFFLINE (Ultra-rápido, matriz abierta < 160 caracteres)
+    // 6. CÓDIGO QR COMPACTO OFFLINE
     const manifiestoQRCompacto = 
 `INNOVARQZ CDE ISO 19650
 ACTA: ${nombreActaISO}
@@ -1956,7 +1982,21 @@ ESTADO: A1 APROBADO`;
 
     const qrSize = 95;
     const qrPosX = leftMargin;
-    const ySignTop = 230; // Cota superior exacta compartida para ambas columnas
+
+    // Verificar si en la página actual queda espacio suficiente para estampar el bloque de firmas (requiere ~110 pt libres sobre el pie de página)
+    // Si yRowFile bajó de 185, abrimos página nueva para que las firmas nunca choquen con el pie de página
+    let ySignTop = 215;
+    if (yRowFile < 185) {
+        currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
+        dibujarMembreteYMarcaDeAgua(currentPage);
+        currentPage.drawText(`CIERRE Y SUSCRIPCIÓN NOTARIAL DEL ACTA • ID: ${nombreActaISO}`, {
+            x: leftMargin, y: 668, size: 10.5, font: fontBold, color: colorCopper
+        });
+        ySignTop = 625;
+    } else {
+        // Si hay amplio espacio en la página, colocar las firmas a una distancia estética debajo de la tabla (o en 215 si la lista fue muy corta)
+        ySignTop = Math.min(220, yRowFile - 20);
+    }
 
     // Generación de imagen PNG de alta densidad en canvas para evitar micro-fisuras subpixel
     let embeddedQR = null;
@@ -1966,7 +2006,7 @@ ESTADO: A1 APROBADO`;
             qr.addData(manifiestoQRCompacto);
             qr.make();
             const modCount = qr.getModuleCount();
-            const quietModules = 3; // Zona de silencio reglamentaria
+            const quietModules = 3;
             const totalModules = modCount + (quietModules * 2);
 
             const qrCanvas = document.createElement("canvas");
@@ -1975,11 +2015,9 @@ ESTADO: A1 APROBADO`;
             qrCanvas.height = qrCanvasSize;
             const qctx = qrCanvas.getContext("2d");
 
-            // Fondo blanco puro
             qctx.fillStyle = "#ffffff";
             qctx.fillRect(0, 0, qrCanvasSize, qrCanvasSize);
 
-            // Módulos negros sólidos
             qctx.fillStyle = "#0f172a";
             const modPx = qrCanvasSize / totalModules;
             for (let r = 0; r < modCount; r++) {
@@ -2003,10 +2041,9 @@ ESTADO: A1 APROBADO`;
         }
     }
 
-    // 7. SECCIÓN DE FIRMAS Y SELLOS (ALINEACIÓN PERFECTA DE COTA SUPERIOR A INFERIOR SIN LÍNEAS DE CORTE)
-    // Columna Izquierda: QR + Certificación InnovArqZ
+    // 7. SECCIÓN DE FIRMAS Y SELLOS AL FINAL DE LA LISTA (ALINEACIÓN SIMÉTRICA SIN LÍNEAS DIVISORIAS)
     if (embeddedQR) {
-        page.drawImage(embeddedQR, {
+        currentPage.drawImage(embeddedQR, {
             x: qrPosX,
             y: ySignTop - qrSize,
             width: qrSize,
@@ -2015,23 +2052,22 @@ ESTADO: A1 APROBADO`;
     }
 
     const infoTextX = qrPosX + qrSize + 14;
-    page.drawText("CERTIFICACIÓN INSTITUCIONAL", { x: infoTextX, y: ySignTop - 6, size: 8.5, font: fontBold, color: colorCopper });
-    page.drawText("ARQ. JAMES RAMIRO ZUÑIGA CAIPE", { x: infoTextX, y: ySignTop - 20, size: 9, font: fontBold, color: colorDark });
-    page.drawText("Representante Legal", { x: infoTextX, y: ySignTop - 32, size: 8, font: fontRegular, color: colorSlate });
-    page.drawText("INNOVARQZ SOLUCIONES INTEGRALES S.A.S.", { x: infoTextX, y: ySignTop - 44, size: 7.5, font: fontBold, color: colorDark });
-    page.drawText("M.P CPNAA No: A137812026-1122783013", { x: infoTextX, y: ySignTop - 56, size: 7.5, font: fontRegular, color: colorSlate });
-    page.drawText("Hash SHA-256 (Checksum):", { x: infoTextX, y: ySignTop - 70, size: 7, font: fontBold, color: colorDark });
-    page.drawText(`${hashSHA256.substring(0, 28)}...`, { x: infoTextX, y: ySignTop - 81, size: 7, font: fontRegular, color: colorCopper });
-    page.drawText("Sello Digital Notarial CDE • Verificación Offline", { x: infoTextX, y: ySignTop - 93, size: 6.8, font: fontRegular, color: colorSlate });
+    currentPage.drawText("CERTIFICACIÓN INSTITUCIONAL", { x: infoTextX, y: ySignTop - 6, size: 8.5, font: fontBold, color: colorCopper });
+    currentPage.drawText("ARQ. JAMES RAMIRO ZUÑIGA CAIPE", { x: infoTextX, y: ySignTop - 20, size: 9, font: fontBold, color: colorDark });
+    currentPage.drawText("Representante Legal", { x: infoTextX, y: ySignTop - 32, size: 8, font: fontRegular, color: colorSlate });
+    currentPage.drawText("INNOVARQZ SOLUCIONES INTEGRALES S.A.S.", { x: infoTextX, y: ySignTop - 44, size: 7.5, font: fontBold, color: colorDark });
+    currentPage.drawText("M.P CPNAA No: A137812026-1122783013", { x: infoTextX, y: ySignTop - 56, size: 7.5, font: fontRegular, color: colorSlate });
+    currentPage.drawText("Hash SHA-256 (Checksum):", { x: infoTextX, y: ySignTop - 70, size: 7, font: fontBold, color: colorDark });
+    currentPage.drawText(`${hashSHA256.substring(0, 28)}...`, { x: infoTextX, y: ySignTop - 81, size: 7, font: fontRegular, color: colorCopper });
+    currentPage.drawText("Sello Digital Notarial CDE • Verificación Offline", { x: infoTextX, y: ySignTop - 93, size: 6.8, font: fontRegular, color: colorSlate });
 
-    // Columna Derecha: Rúbrica del Cliente (Mismo techo y pie alineados simétricamente)
     const colRightX = rightMargin - 210;
 
     if (datosCliente.signaturePng) {
         try {
             const signatureBytes = UtilitiesBase64ToUint8(datosCliente.signaturePng.split(',')[1]);
             const embeddedSignature = await pdfDoc.embedPng(signatureBytes);
-            page.drawImage(embeddedSignature, {
+            currentPage.drawImage(embeddedSignature, {
                 x: colRightX,
                 y: ySignTop - 50,
                 width: 175,
@@ -2042,25 +2078,40 @@ ESTADO: A1 APROBADO`;
         }
     }
 
-    page.drawText(datosCliente.nombre.toUpperCase(), { x: colRightX, y: ySignTop - 64, size: 9.5, font: fontBold, color: colorDark });
-    page.drawText(`${datosCliente.tipoDoc} No. ${datosCliente.numDoc}`, { x: colRightX, y: ySignTop - 76, size: 8.5, font: fontRegular, color: colorSlate });
-    page.drawText(datosCliente.cargo, { x: colRightX, y: ySignTop - 88, size: 8.5, font: fontBold, color: colorDark });
-    page.drawText(`Verificación CDE: ${currentUser.email || ''}`, { x: colRightX, y: ySignTop - 100, size: 7.5, font: fontRegular, color: colorSlate });
+    currentPage.drawText(datosCliente.nombre.toUpperCase(), { x: colRightX, y: ySignTop - 64, size: 9.5, font: fontBold, color: colorDark });
+    currentPage.drawText(`${datosCliente.tipoDoc} No. ${datosCliente.numDoc}`, { x: colRightX, y: ySignTop - 76, size: 8.5, font: fontRegular, color: colorSlate });
+    currentPage.drawText(datosCliente.cargo, { x: colRightX, y: ySignTop - 88, size: 8.5, font: fontBold, color: colorDark });
+    currentPage.drawText(`Verificación CDE: ${currentUser.email || ''}`, { x: colRightX, y: ySignTop - 100, size: 7.5, font: fontRegular, color: colorSlate });
 
-    // 8. PIE DE PÁGINA CORPORATIVO
+    // 8. PIE DE PÁGINA CORPORATIVO Y NUMERACIÓN (PÁGINA X DE Y) EN TODAS LAS HOJAS DEL DOCUMENTO
+    const allPages = pdfDoc.getPages();
+    const totalPages = allPages.length;
     const yFooterLine = 66;
-    page.drawLine({ start: { x: leftMargin, y: yFooterLine }, end: { x: rightMargin, y: yFooterLine }, thickness: 1, color: colorBorder });
-    page.drawText("InnovArqZ Soluciones Integrales", { x: leftMargin, y: 51, size: 8.5, font: fontBold, color: colorDark });
-    page.drawText('"Construimos juntos el valor de tus espacios', { x: leftMargin, y: 39, size: 7.5, font: fontOblique, color: colorDark });
-    page.drawText('DE PRINCIPIO A FIN"', { x: leftMargin, y: 27, size: 10, font: fontBold, color: colorCopper });
-
     const lineWeb = "Web Oficial: www.innovarqzsas.com";
     const lineEmail = "Email: gerenciabim@innovarqzsas.com";
     const lineTel = "TEL / WA: +57 315 850 5885";
 
-    page.drawText(lineWeb, { x: rightMargin - fontRegular.widthOfTextAtSize(lineWeb, 7.5), y: 51, size: 7.5, font: fontRegular, color: colorDark });
-    page.drawText(lineEmail, { x: rightMargin - fontRegular.widthOfTextAtSize(lineEmail, 7.5), y: 39, size: 7.5, font: fontRegular, color: colorDark });
-    page.drawText(lineTel, { x: rightMargin - fontRegular.widthOfTextAtSize(lineTel, 7.5), y: 27, size: 7.5, font: fontBold, color: colorDark });
+    allPages.forEach((p, idx) => {
+        p.drawLine({ start: { x: leftMargin, y: yFooterLine }, end: { x: rightMargin, y: yFooterLine }, thickness: 1, color: colorBorder });
+        p.drawText("InnovArqZ Soluciones Integrales", { x: leftMargin, y: 51, size: 8.5, font: fontBold, color: colorDark });
+        p.drawText('"Construimos juntos el valor de tus espacios', { x: leftMargin, y: 39, size: 7.5, font: fontOblique, color: colorDark });
+        p.drawText('DE PRINCIPIO A FIN"', { x: leftMargin, y: 27, size: 10, font: fontBold, color: colorCopper });
+
+        // Numeración formal centrada
+        const pageNumText = `Página ${idx + 1} de ${totalPages}`;
+        const pageNumWidth = fontBold.widthOfTextAtSize(pageNumText, 8);
+        p.drawText(pageNumText, {
+            x: (pageWidth - pageNumWidth) / 2,
+            y: 39,
+            size: 8,
+            font: fontBold,
+            color: colorSlate
+        });
+
+        p.drawText(lineWeb, { x: rightMargin - fontRegular.widthOfTextAtSize(lineWeb, 7.5), y: 51, size: 7.5, font: fontRegular, color: colorDark });
+        p.drawText(lineEmail, { x: rightMargin - fontRegular.widthOfTextAtSize(lineEmail, 7.5), y: 39, size: 7.5, font: fontRegular, color: colorDark });
+        p.drawText(lineTel, { x: rightMargin - fontRegular.widthOfTextAtSize(lineTel, 7.5), y: 27, size: 7.5, font: fontBold, color: colorDark });
+    });
 
     return await pdfDoc.saveAsBase64({ dataUri: false });
 }
