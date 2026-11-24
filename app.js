@@ -966,24 +966,40 @@ async function ejecutarSubidaLoteConsolidada() {
             let idArchivoViejo = null;
             let nombreViejoArchivado = null;
 
-            const partesSinExt = item.isoName.split('.').slice(0, -1).join('.').split('_');
+            const extNueva = item.isoName.split('.').pop().toLowerCase();
+            const baseSinExtNueva = item.isoName.substring(0, item.isoName.lastIndexOf('.'));
+            const partesSinExt = baseSinExtNueva.split('_');
+
             if (partesSinExt.length >= 6) {
                 const raizCincoCampos = partesSinExt.slice(0, 5).join('_');
                 const estadoCompletoSexto = partesSinExt[5];
                 const partesGuionSexto = estadoCompletoSexto.split('-');
-                const sufijoNumerico = (partesGuionSexto.length > 1) ? `-${partesGuionSexto[1]}` : "";
+                const sufijoNumerico = (partesGuionSexto.length > 1) ? `-${partesGuionSexto.slice(1).join('-')}` : "";
 
-                let queryFiltro = `${raizCincoCampos}_%`;
-                if (sufijoNumerico) queryFiltro = `${raizCincoCampos}_%${sufijoNumerico}.%`;
-
-                const { data: registrosPrevios } = await supabaseClient
+                // Buscar todos los registros activos en la MISMA carpeta destino con la misma raíz
+                const { data: candidatos } = await supabaseClient
                     .from("audit_logs")
                     .select("*")
                     .eq("proyecto_id", activeProjectId)
+                    .eq("estado_destino", item.targetTab)
                     .eq("activo", true)
-                    .ilike("archivo_nombre", queryFiltro);
+                    .ilike("archivo_nombre", `${raizCincoCampos}_%.${extNueva}`)
+                    .order("id", { ascending: false });
 
-                if (registrosPrevios && registrosPrevios.length > 0) {
+                // Filtrar coincidencia exacta de identidad (misma raíz, mismo consecutivo numérico y no archivado)
+                const registrosPrevios = (candidatos || []).filter(reg => {
+                    const nom = reg.archivo_nombre || "";
+                    if (nom.includes("_OLD_") || nom.includes("_RETIRED_")) return false;
+                    const baseReg = nom.substring(0, nom.lastIndexOf('.'));
+                    const pReg = baseReg.split('_');
+                    if (pReg.length < 6) return false;
+                    if (pReg.slice(0, 5).join('_').toUpperCase() !== raizCincoCampos.toUpperCase()) return false;
+                    const gReg = pReg[5].split('-');
+                    const sufReg = (gReg.length > 1) ? `-${gReg.slice(1).join('-')}` : "";
+                    return sufReg.toUpperCase() === sufijoNumerico.toUpperCase();
+                });
+
+                if (registrosPrevios.length > 0) {
                     const prev = registrosPrevios[0];
                     const matchOld = (prev.drive_file_url || "").match(/[-\w]{25,}/);
                     if (matchOld) idArchivoViejo = matchOld[0];
@@ -994,19 +1010,24 @@ async function ejecutarSubidaLoteConsolidada() {
                         .eq("proyecto_id", activeProjectId)
                         .ilike("archivo_nombre", `${raizCincoCampos}%_OLD_%`);
 
-                    const versionIndex = (count || 0) + 1;
+                    let versionIndex = (count || 0) + 1;
                     const extOld = prev.archivo_nombre.split('.').pop();
                     const baseVieja = prev.archivo_nombre.substring(0, prev.archivo_nombre.lastIndexOf('.'));
                     nombreViejoArchivado = `${baseVieja}_OLD_v${versionIndex}.${extOld}`;
 
-                    await supabaseClient
-                        .from("audit_logs")
-                        .update({
-                            archivo_nombre: nombreViejoArchivado,
-                            estado_origen: prev.estado_destino || item.targetTab,
-                            estado_destino: "04_ARCHIVED"
-                        })
-                        .eq("id", prev.id);
+                    // Archivar el registro vigente y cualquier duplicado previo residual
+                    for (let rIdx = 0; rIdx < registrosPrevios.length; rIdx++) {
+                        const regToArchive = registrosPrevios[rIdx];
+                        const nombreArch = (rIdx === 0) ? nombreViejoArchivado : `${baseVieja}_OLD_v${versionIndex + rIdx}.${extOld}`;
+                        await supabaseClient
+                            .from("audit_logs")
+                            .update({
+                                archivo_nombre: nombreArch,
+                                estado_origen: regToArchive.estado_destino || item.targetTab,
+                                estado_destino: "04_ARCHIVED"
+                            })
+                            .eq("id", regToArchive.id);
+                    }
                 }
             }
 
