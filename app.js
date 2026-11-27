@@ -1929,7 +1929,7 @@ async function generarPDFActaRecibo(datosCliente, nombreActaISO) {
         x: leftMargin, y: yDeclText, size: 9.5, font: fontRegular, color: colorDark, maxWidth: printableWidth, lineHeight: 14
     });
 
-    // 5. RELACIÓN COMPLETA DE ENTREGABLES APROBADOS (MULTIPÁGINA DINÁMICA)
+    // 5. RELACIÓN COMPLETA DE ENTREGABLES APROBADOS (ORDEN CRONOLÓGICO DESCENDENTE COMO LA BITÁCORA)
     const yList = yDeclText - 72;
     currentPage.drawText("RELACIÓN DE ENTREGABLES TÉCNICOS APROBADOS (03_PUBLISHED):", { x: leftMargin, y: yList, size: 10, font: fontBold, color: colorDark });
 
@@ -1938,7 +1938,8 @@ async function generarPDFActaRecibo(datosCliente, nombreActaISO) {
         .select("*")
         .eq("proyecto_id", activeProjectId)
         .eq("estado_destino", "03_PUBLISHED")
-        .eq("activo", true);
+        .eq("activo", true)
+        .order("id", { ascending: false });
 
     const unicosPublishedNombres = [];
     const unicosPublishedMap = new Map();
@@ -1948,17 +1949,24 @@ async function generarPDFActaRecibo(datosCliente, nombreActaISO) {
             if (!f.archivo_nombre.includes("ACTA_") && !f.archivo_nombre.includes("NOTA_TECNICA") && !f.archivo_nombre.includes("CARGA DE ENTREGABLE") && !f.archivo_nombre.includes("PROMOCIÓN_") && !f.archivo_nombre.includes("CARGA_LOTE_ENTREGABLES")) {
                 if (!unicosPublishedMap.has(f.archivo_nombre)) {
                     unicosPublishedMap.set(f.archivo_nombre, f);
-                    unicosPublishedNombres.push(f.archivo_nombre);
                 }
             }
         });
     }
 
+    const todosLosEntregables = Array.from(unicosPublishedMap.values()).sort((a, b) => {
+        const timeA = new Date(a.version).getTime() || 0;
+        const timeB = new Date(b.version).getTime() || 0;
+        if (timeB !== timeA) return timeB - timeA;
+        return (b.id || 0) - (a.id || 0);
+    });
+
+    todosLosEntregables.forEach(f => unicosPublishedNombres.push(f.archivo_nombre));
+
     const yTable = yList - 16;
     dibujarCabeceraTabla(currentPage, yTable, false);
 
     let yRowFile = yTable - 32;
-    const todosLosEntregables = Array.from(unicosPublishedMap.values());
 
     if (todosLosEntregables.length === 0) {
         currentPage.drawText("No se registran contenedores adicionales en esta fase.", {
@@ -4120,7 +4128,7 @@ function cerrarCardPropiedadesIFC() {
 }
 
 // ==============================================================================
-// RENDERIZADO DE ENTREGABLES (ISO 19650 ESTRICTO POR CONTENEDOR CON LOTES)
+// RENDERIZADO DE ENTREGABLES (ORDEN CRONOLÓGICO DESCENDENTE COMO BITÁCORA)
 // ==============================================================================
 async function loadFiles() {
     const tbody = document.getElementById("filesTableBody");
@@ -4216,6 +4224,14 @@ async function loadFiles() {
             return true;
         });
     }
+
+    // Ordenamiento cronológico estricto del más reciente al más antiguo (igual a la Bitácora)
+    listaAProcesar.sort((a, b) => {
+        const timeA = new Date(a.version).getTime() || 0;
+        const timeB = new Date(b.version).getTime() || 0;
+        if (timeB !== timeA) return timeB - timeA;
+        return (b.id || 0) - (a.id || 0);
+    });
 
     if (listaAProcesar.length === 0) {
         tbody.innerHTML = `<tr><td colspan="6">No hay entregables en ${activeTab} ${activeSubfolder !== "TODAS" ? `(${activeSubfolder.replace(/_/g, " ")})` : ''}.</td></tr>`;
